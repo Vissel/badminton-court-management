@@ -1,8 +1,10 @@
 package com.badminton.requestmodel;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
+import com.badminton.constant.ApiConstant;
 import com.badminton.entity.Service;
 import com.badminton.entity.ShuttleBall;
 
@@ -25,7 +27,13 @@ public class SetUpServiceDTO {
 		this.totalCourt = totalCourt2;
 		this.shuttleBalls = listShuttleBall.stream()
 				.map(ball -> new ShuttleBallDTO(ball.getShuttleName(), ball.getCost())).collect(Collectors.toList());
-		this.services = listService.stream().map(ser -> new ServiceDTO(ser.getSerName(), ser.getCost()))
-				.collect(Collectors.toList());
+		this.services = listService.stream().map(ser -> {
+			if (ser.getSerName().equals(ApiConstant.COST_IN_PERNSON)) {
+				setCostInPerson(ser.getCost());
+				return null;
+			}
+			return new ServiceDTO(ser.getSerName(), ser.getCost());
+
+		}).filter(Objects::nonNull).collect(Collectors.toList());
 	}
 }

@@ -11,4 +11,13 @@
 <changeSet id="002" author="thach" >
 	<sqlFile path="db/changelog/changeset-002-update-table.sql"/>
 </changeSet>
+<changeSet id="003" author="thach" >
+	<sqlFile path="db/changelog/changeset-003-update-tableService.sql"/>
+</changeSet>
+<changeSet id="004" author="thach" >
+	<sqlFile path="db/changelog/changeset-004-addUniqueContrains-tableShuttleball.sql"/>
+</changeSet>
+<changeSet id="005" author="thach" >
+	<sqlFile path="db/changelog/changeset-005-addUniqueContrains-tableService.sql"/>
+</changeSet>
 </databaseChangeLog>

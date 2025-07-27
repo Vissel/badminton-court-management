@@ -3,7 +3,7 @@ import React, { createContext, useState, useEffect } from "react";
 
 import axios from "axios";
 import Cookies from "js-cookie";
-import { setCsrfTokenGetter } from "../api";
+import api from "../api";
 
 export const AuthContext = createContext();
 
@@ -18,22 +18,20 @@ export const AuthProvider = ({ children }) => {
   const checkSession = async () => {
     try {
       // Step 1: fetch CSRF token and set it
-      const res = await axios.get(`${localHost}/${context}/csrf`, {
-        withCredentials: true,
-      });
+      const res = await api.get(`/csrf`);
       if (res.status === 200) {
-        const tokenFromCookie = res.data.token;
-        setCsrfToken(tokenFromCookie || Cookies.get("XSRF-TOKEN"));
-
+        const tokenFromCookie = res.data.csrfToken;
+        setCsrfToken(tokenFromCookie);
+        sessionStorage.setItem('csrfToken',tokenFromCookie)
         // Step 2: check session (if already logged in)
         //   await axios.get('http://localhost:8080/api/user', {
         //     withCredentials: true,
         //   });
-        setAuthenticated(true);
+        setAuthenticated(res.data.valid);
       }
     } catch (err) {
       setAuthenticated(false);
-      console.err(err);
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -45,34 +43,29 @@ export const AuthProvider = ({ children }) => {
     } else {
       setAuthenticated(false);
       setCsrfToken(null);
-      setCsrfTokenGetter(null);
     }
     setLoading(false);
   };
   useEffect(() => {
-    // checkSession();
-    checkValidSession();
+    setLoading(true);
+    checkSession();
+    // checkValidSession();
     // Refresh CSRF token every 10 minutes (optional)
     // const interval = setInterval(checkValidSession, 10 * 60 * 1000);
     // return () => clearInterval(interval);
   }, []);
   const logout = async () => {
     console.log("Calling logout.");
-    const res = await axios.post(
-      `${localHost}/${context}/logout`,
-      {},
-      {
-        headers: {
-          "X-XSRF-TOKEN": csrfToken || Cookies.get("XSRF-TOKEN"), // REQUIRED
-        },
-        withCredentials: true,
-      }
+    const res = await api.post(
+      `/logout`,
+      {}
+      
     );
 
     if (res.status === 200) {
       setAuthenticated(false);
       setCsrfToken(null);
-      setCsrfTokenGetter(null);
+      sessionStorage.clear();
       alert("logout is successful.");
     }
   };

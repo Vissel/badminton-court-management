@@ -1,12 +1,14 @@
 // src/LoginPage.js
 import { useState, useContext } from "react";
 import { Form, Row, Col, Button, Container } from "react-bootstrap";
+import Cookies from "js-cookie";
 import axios from "axios";
 import { useNavigate } from "react-router";
 import { AuthContext } from "../context/AuthContext";
+import { setCsrfTokenGetter } from "../api";
 
 function LoginPage() {
-  const { setAuthenticated} = useContext(AuthContext);
+  const { setAuthenticated, csrfToken, setCsrfToken } = useContext(AuthContext);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -18,6 +20,12 @@ function LoginPage() {
     // e.preventDefault();
 
     try {
+      // const token = await axios.get(`${localHost}/${context}/csrf`, {
+      //   withCredentials: true,
+      // });
+      // if (token.status === 200) {
+      //   const loginToken = token.data.token;
+        // setCsrfToken(loginToken);
         const res = await axios.post(
           `${localHost}/${context}/login`,
   
@@ -48,7 +56,7 @@ function LoginPage() {
       // }
     } catch (err) {
       setError("Invalid credentials");
-      alert("Đăng nhập thất bại");
+      alert("Login failed");
     }
   };
 
@@ -63,7 +71,7 @@ function LoginPage() {
       <Form>
         <Form.Group as={Row} className="mb-3" controlId="formPlaintextEmail">
           <Form.Label column sm="2">
-            Tên đăng nhập
+            Username
           </Form.Label>
           <Col sm="5">
             <Form.Control
@@ -78,7 +86,7 @@ function LoginPage() {
 
         <Form.Group as={Row} className="mb-3" controlId="formPlaintextPassword">
           <Form.Label column sm="2">
-            Mật khẩu
+            Password
           </Form.Label>
           <Col sm="5">
             <Form.Control
@@ -92,7 +100,7 @@ function LoginPage() {
           </Col>
         </Form.Group>
         <Button variant="primary" onClick={handleLogin}>
-          Đăng nhập
+          Login
         </Button>
       </Form>
     </Container>

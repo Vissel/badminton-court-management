@@ -17,8 +17,14 @@ code {
   bottom: 0;
   width: 100%;
   text-align: center;
+  overflow: hidden;
 }
 
 .row-space{
   margin-bottom: 15px;
+  margin-top: 5px;
+}
+
+#danger{
+  color: red;
 }

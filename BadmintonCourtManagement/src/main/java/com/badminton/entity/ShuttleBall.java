@@ -8,12 +8,14 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(name = "shuttle_ball")
+@Table(name = "shuttle_ball", uniqueConstraints = {
+		@UniqueConstraint(name = "unique_shuttle_name", columnNames = { "shuttle_name", "is_active" }) })
 @Getter
 @Setter
 @NoArgsConstructor
@@ -22,6 +24,7 @@ public class ShuttleBall {
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private int shuttleId;
 
+	@Column(name = "shuttle_name")
 	private String shuttleName;
 
 	private float cost;
@@ -29,12 +32,14 @@ public class ShuttleBall {
 	@Column(updatable = false, insertable = false)
 	private Timestamp createdDate;
 
+	@Column(name = "is_active")
 	private boolean isActive;
 
 	public ShuttleBall(String name, float cost) {
 		super();
 		this.shuttleName = name;
 		this.cost = cost;
+		this.isActive = true;
 	}
 
 }

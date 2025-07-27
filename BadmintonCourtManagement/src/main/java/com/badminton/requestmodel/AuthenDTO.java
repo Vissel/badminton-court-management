@@ -15,6 +15,8 @@ public class AuthenDTO {
 	public String message;
 	public String username;
 	public String csrfToken;
+	public boolean valid;
+	public long expiresInSeconds;
 
 	@Override
 	public String toString() {

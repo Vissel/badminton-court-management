@@ -1,5 +1,5 @@
 // src/LoginPage.js
-import { useEffect, useState, useRef } from "react";
+import { useContext, useEffect, useState, useRef } from "react";
 
 import {
   Form,
@@ -12,17 +12,24 @@ import {
   Table,
 } from "react-bootstrap";
 import api from "../api/index";
+import { AuthContext } from "../context/AuthContext";
+import axios from "axios";
 
 function SetupPage() {
-  const [errorMess, setErrorMess] = useState(null);
+  const { csrfToken } = useContext(AuthContext);
+
+  const currentHost = `${window.location.protocol}//${window.location.hostname}`;
+  const localHost = "http://localhost:9080";
+  const context = "bad-court-management-dev";
+
   const [totalCourt, setTotalCourt] = useState(7);
   const [costInPerson, setCostInPerson] = useState(12000);
+  // const [shuttleCost, setShuttleCost] = useState("");
   const [shuttleBall, setShuttleBall] = useState([]);
   const [services, setServices] = useState([]);
   const [tableShuttleBalls, setTableShuttleBalls] = useState([]);
   const [tableServices, setTableServices] = useState([]);
   const tableRef = useRef(null);
-  const tableBallRef = useRef(null);
 
   const handleAdd = () => {
     setServices([...services, { id: Date.now(), serviceName: "", cost: "" }]);
@@ -34,10 +41,8 @@ function SetupPage() {
   // for shuttle ball
   const [oneBall, setOneBall] = useState(true);
   const addShuttleBall = () => {
-    if (oneBall === false) {
-      setErrorMess("Chỉ được thêm 1 loại cầu trong 1 lần.")
-      return;
-    }
+    if (oneBall === false) return;
+
     setShuttleBall([
       ...shuttleBall,
       { id: Date.now(), shuttleName: "", shuttleCost: "" },
@@ -84,7 +89,6 @@ function SetupPage() {
       }
     } catch (err) {
       console.error("Error deleting service:", err);
-  setErrorMess(`Có lỗi khi xoá dich vụ:${serviceToDelete.serviceName}`)  ;
     } finally {
       setDeletingRow(false);
     }
@@ -96,80 +100,26 @@ function SetupPage() {
     setSelectedBall(index === selectedBall ? null : index);
   };
   // shuttle ball delete handling
-  const handleDeleteBall = async (ball, idx) => {
+  const handleDeleteBall = async (ballToDelete, index) => {
     try {
       setDeletingBall(true);
       const res = await api.put("/api/deleteShuttleBall", {
-        shuttleName: ball.shuttleName,
-        shuttleCost: ball.shuttleCost,
+        shuttleName: ballToDelete.shuttleName,
+        shuttleCost: ballToDelete.shuttleCost,
       });
 
       if (res.status === 200) {
-        setTableShuttleBalls((prev) => prev.filter((_, i) => i !== idx));
+        setTableShuttleBalls((prev) => prev.filter((_, i) => i !== index));
         setSelectedBall(null);
       }
     } catch (err) {
       console.error("Error deleting shuttle ball:", err);
-      setErrorMess(`Có lỗi khi xoá loại cầu: ${ball.shuttleName}`)
     } finally {
       setDeletingBall(false);
     }
   };
 
-  const existedInTableService = (newService) => {
-    const found = tableServices.some((s) => {
-      return (
-        s.serviceName === newService.serviceName &&
-        s.cost == parseFloat(newService.cost)
-      );
-    });
-    return found;
-  };
-  const existedInTableShuttleBall = (newBall) => {
-    const found = tableShuttleBalls.some((b) => {
-      return (
-        b.shuttleName === newBall.shuttleName &&
-        b.shuttleCost == parseFloat(newBall.shuttleCost)
-      );
-    });
-    return found;
-  };
-
-  // const [isDuplicated, setIsDuplicated] = useState(false);
   const handleSave = async () => {
-    // setIsDuplicated(false);
-    setErrorMess(null);
-
-    const duplicates = [];
-    const duplicatesBall = [];
-    services.forEach((newService) => {
-      if (existedInTableService(newService)) {
-        duplicates.push(newService.serviceName);
-      }
-    });
-    shuttleBall.forEach((newBall) => {
-      if (existedInTableShuttleBall(newBall)) {
-        duplicatesBall.push(newBall.shuttleName);
-      }
-    });
-    let isDuplicated = false;
-    let mess='';
-    if (duplicates.length > 0) {
-      mess=`Tên của Dịch vụ đang trùng lặp: ${duplicates.join(", ")}`;
-      isDuplicated=true;
-    }
-    if (duplicatesBall.length > 0) {
-      mess +="\n."+
-      `Tên quả cầu lông đang trùng lặp: ${duplicatesBall.join(", ")}`
-      ;
-      isDuplicated=true;
-    }
-    if (isDuplicated) {
-      setErrorMess(mess);
-      alert("Không thể lưu thiết lập. Kiểm tra lỗi trùng lặp.");
-      return;
-    }
-
     const payload = {
       totalCourt: totalCourt,
       costInPerson: costInPerson,
@@ -184,12 +134,6 @@ function SetupPage() {
     };
 
     try {
-      // const preRes = await api.get("/csrf");
-      // if(preRes.status!==200){
-      //   alert("pre-condition failure");
-      //   return;
-      // };
-      // sessionStorage.setItem('csrfToken',preRes.data.csrfToken);
       const response = await api.post(`/api/addSetupService`, payload, {});
       if (response.status === 200) {
         alert("Services saved successfully!");
@@ -199,12 +143,9 @@ function SetupPage() {
           ...shuttleBall,
         ]);
         // window.location.reload();
-      }else{
-        setErrorMess(`${response.data.message}`) ;
       }
     } catch (error) {
-      alert("Có lỗi khi lưu thiết lập. Kiểm tra lỗi màu đỏ bên dưới.");
-
+      alert("Failed to save services.");
     }
   };
 
@@ -230,12 +171,6 @@ function SetupPage() {
     const handleClickOutside = (event) => {
       if (tableRef.current && !tableRef.current.contains(event.target)) {
         setSelectedRow(null); // clear selection
-      }
-
-      if (
-        tableBallRef.current &&
-        !tableBallRef.current.contains(event.target)
-      ) {
         setSelectedBall(null);
       }
     };
@@ -251,11 +186,11 @@ function SetupPage() {
     <Container>
       <Row>
         <Col sm={6}>
-          <h1>Trang thiết lâp sân cầu</h1>
+          <h1>Setup page</h1>
         </Col>
         <Col sm={4}>
           <Button variant="primary" onClick={handleSave}>
-            Lưu thiết lập
+            Save setting
           </Button>
         </Col>
       </Row>
@@ -263,7 +198,7 @@ function SetupPage() {
         <Form.Group as={Row} className="md-3">
           <Form.Label column sm="1">
             {" "}
-            Tổng sân:
+            Tong san:
           </Form.Label>
           <Col sm="4">
             <InputGroup className="mb-3">
@@ -273,13 +208,13 @@ function SetupPage() {
                 value={totalCourt}
                 onChange={(e) => setTotalCourt(e.target.value)}
               />
-              <InputGroup.Text>sân</InputGroup.Text>
+              <InputGroup.Text>san</InputGroup.Text>
             </InputGroup>
           </Col>
         </Form.Group>
         <Form.Group as={Row} className="mb-3">
           <Form.Label column sm="1">
-            Tiền sân:
+            Tien san:
           </Form.Label>
           <Col sm="4">
             <InputGroup className="mb-3">
@@ -289,19 +224,16 @@ function SetupPage() {
                 value={costInPerson}
                 onChange={(e) => setCostInPerson(e.target.value)}
               />
-              <InputGroup.Text>vnd/người</InputGroup.Text>
+              <InputGroup.Text>vnd/nguoi</InputGroup.Text>
             </InputGroup>
           </Col>
         </Form.Group>
-        {/* Error message */}
-        <Row>
-          <Col>{errorMess && <p id="danger">{errorMess}</p>}</Col>
-        </Row>
+
         {/* Add shuttleBall */}
         <Row className="row-space">
           <Col>
             <Button variant="success" onClick={addShuttleBall} className="me-2">
-              + Thêm loại cầu
+              + Add Shuttle ball
             </Button>
           </Col>
         </Row>
@@ -313,7 +245,7 @@ function SetupPage() {
             className="align-items-center mb-2 row-space"
           >
             <Form.Label column sm="1">
-              Loại cầu:
+              Loai cau:
             </Form.Label>
             <Col sm={3}>
               <Form.Control
@@ -335,7 +267,7 @@ function SetupPage() {
                     handleBallChange(ball.id, "shuttleCost", e.target.value)
                   }
                 />
-                <InputGroup.Text>vnd/trái</InputGroup.Text>
+                <InputGroup.Text>vnd/trai</InputGroup.Text>
               </InputGroup>
             </Col>
             <Col md={1}>
@@ -351,14 +283,14 @@ function SetupPage() {
         {/* Table existed shuttle balss */}
         {tableShuttleBalls.length !== 0 && (
           <>
-            <Row className="justify-content-start" id="cus-table">
+            <Row className="justify-content-start">
               <Col xs={6}>
-                <h3>Danh sách Loại cầu</h3>
-                <Table striped bordered hover size="sm" ref={tableBallRef}>
+                <h3>Loai cau</h3>
+                <Table striped bordered hover size="sm" ref={tableRef}>
                   <thead>
                     <tr>
-                      <th>Loại cầu</th>
-                      <th>Giá</th>
+                      <th>Loai cau</th>
+                      <th>Gia</th>
                       <th style={{ width: "50px" }}></th>
                     </tr>
                   </thead>
@@ -371,7 +303,7 @@ function SetupPage() {
                         style={{ cursor: "pointer" }}
                       >
                         <td>{ball.shuttleName}</td>
-                        <td>{ball.shuttleCost} vnd/trái</td>
+                        <td>{ball.shuttleCost} vnd/trai</td>
                         <td>
                           {selectedBall === idx && (
                             <button
@@ -409,14 +341,14 @@ function SetupPage() {
         <Row className="row-space">
           <Col>
             <Button variant="success" onClick={handleAdd} className="me-2">
-              + Thêm dich vụ
+              + Add Service
             </Button>
           </Col>
         </Row>
         {services.map((service, index) => (
           <Row key={service.id} className="align-items-center mb-2 row-space">
             <Form.Label column sm="1">
-              Dịch vụ:
+              Dich vu:
             </Form.Label>
             <Col sm={3}>
               <Form.Control
@@ -454,12 +386,12 @@ function SetupPage() {
           <>
             <Row className="justify-content-start" id="cus-table">
               <Col xs={6}>
-                <h3>Danh sách Dịch vụ</h3>
+                <FormLabel>Dich vu</FormLabel>
                 <Table striped bordered hover size="sm" ref={tableRef}>
                   <thead>
                     <tr>
-                      <th>Dịch vụ</th>
-                      <th>Giá</th>
+                      <th>Service name</th>
+                      <th>Service cost</th>
                       <th style={{ width: "50px" }}></th>
                     </tr>
                   </thead>
@@ -488,7 +420,7 @@ function SetupPage() {
                                 width="16"
                                 height="16"
                                 fill="currentColor"
-                                class="bi bi-trash"
+                                className="bi bi-trash"
                                 viewBox="0 0 16 16"
                               >
                                 <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z" />
@@ -508,7 +440,7 @@ function SetupPage() {
         <Row className="row-space">
           <Col sm={4}>
             <Button variant="primary" onClick={handleSave}>
-              Lưu thiết lập
+              Save setting
             </Button>
           </Col>
         </Row>

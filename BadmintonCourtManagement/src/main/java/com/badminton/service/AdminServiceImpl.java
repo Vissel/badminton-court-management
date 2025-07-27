@@ -2,23 +2,26 @@ package com.badminton.service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
 
+import com.badminton.constant.ApiConstant;
 import com.badminton.constant.CommonConstant;
 import com.badminton.entity.Court;
+import com.badminton.entity.Service;
 import com.badminton.entity.ShuttleBall;
 import com.badminton.repository.CourtRepositoty;
 import com.badminton.repository.ServiceRepositoty;
 import com.badminton.repository.ShuttleBallRepositoty;
+import com.badminton.requestmodel.ServiceDTO;
 import com.badminton.requestmodel.SetUpServiceDTO;
 import com.badminton.requestmodel.ShuttleBallDTO;
 
 import lombok.extern.slf4j.Slf4j;
 
-@Service
+@org.springframework.stereotype.Service
 @Slf4j
 public class AdminServiceImpl implements AdminService {
 
@@ -40,16 +43,33 @@ public class AdminServiceImpl implements AdminService {
 			// save shuttle infor
 			if (!setupServiceDTO.getShuttleBalls().isEmpty()) {
 				ShuttleBallDTO ballDTO = setupServiceDTO.getShuttleBalls().get(0);
-				shuttleRepo.save(new ShuttleBall(ballDTO.getShuttleName(), ballDTO.getShuttleCost()));
+				if (!ballDTO.getShuttleName().isBlank() && ballDTO.getShuttleCost() != 0.0f) {
+					shuttleRepo.save(new ShuttleBall(ballDTO.getShuttleName(), ballDTO.getShuttleCost()));
+				}
 			}
 
 			if (!setupServiceDTO.getServices().isEmpty()) {
 				// save services
-				List<com.badminton.entity.Service> listServices = setupServiceDTO.getServices().stream()
-						.map(serDTO -> new com.badminton.entity.Service(serDTO.getServiceName(), serDTO.getCost()))
+				List<Service> listServices = setupServiceDTO.getServices().stream()
+						.filter(s -> !s.getServiceName().isBlank() && s.getCost() != 0.0f)
+						.map(serDTO -> new Service(serDTO.getServiceName(), serDTO.getCost()))
 						.collect(Collectors.toList());
 				serviceRepo.saveAll(listServices);
 			}
+			if (setupServiceDTO.getCostInPerson() != 0) {
+				Optional<Service> optSer = serviceRepo.findBySerName(ApiConstant.COST_IN_PERNSON);
+//				listServices.add(new (ApiConstant.COST_IN_PERNSON,
+//						setupServiceDTO.getCostInPerson()));
+				Service savedService;
+				if (optSer.isPresent()) {
+					savedService = optSer.get();
+					savedService.setCost(setupServiceDTO.getCostInPerson());
+				} else {
+					savedService = new Service(ApiConstant.COST_IN_PERNSON, setupServiceDTO.getCostInPerson());
+				}
+				serviceRepo.save(savedService);
+			}
+
 			return true;
 		} catch (Exception e) {
 			return false;
@@ -90,7 +110,7 @@ public class AdminServiceImpl implements AdminService {
 		SetUpServiceDTO result = null;
 		int totalCourt = courtRepo.findAllByIsActive(true).size();
 		List<ShuttleBall> listShuttleBall = shuttleRepo.findAllByIsActive(true);
-		List<com.badminton.entity.Service> listService = serviceRepo.findAll();
+		List<com.badminton.entity.Service> listService = serviceRepo.findAllByIsActive(true);
 		if (totalCourt != 0 || listShuttleBall.size() != 0 || listService.size() != 0) {
 			result = new SetUpServiceDTO();
 			result.convertToDTO(totalCourt, listShuttleBall, listService);
@@ -98,4 +118,23 @@ public class AdminServiceImpl implements AdminService {
 		return result;
 	}
 
+	@Override
+	public boolean deleteService(ServiceDTO serviceDTO) {
+		Optional<Service> optSer = serviceRepo.findBySerName(serviceDTO.getServiceName());
+		if (optSer.isPresent()) {
+			optSer.get().setActive(false);
+			return !serviceRepo.save(optSer.get()).isActive();
+		}
+		return false;
+	}
+
+	@Override
+	public boolean deleteShuttleBall(ShuttleBallDTO shuttleBallDTO) {
+		Optional<ShuttleBall> optBall = shuttleRepo.findByShuttleNameAndIsActive(shuttleBallDTO.getShuttleName(), true);
+		if (optBall.isPresent()) {
+			optBall.get().setActive(false);
+			return !shuttleRepo.save(optBall.get()).isActive();
+		}
+		return false;
+	}
 }

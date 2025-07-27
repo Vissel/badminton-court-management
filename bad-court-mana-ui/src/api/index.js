@@ -16,7 +16,7 @@ const api = axios.create({
   withCredentials: true,
 });
 api.interceptors.request.use((config) => {
-  const csrfToken = Cookies.get("XSRF-TOKEN");
+  const csrfToken = sessionStorage.getItem('csrfToken');
   if (csrfToken) {
     config.headers["X-XSRF-TOKEN"] = csrfToken;
   }

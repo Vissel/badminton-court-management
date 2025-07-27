@@ -1,0 +1,5 @@
+[0;39m [2m:[0;39m [CsrfLoggerFilter] Incoming CSRF Header: ePmmjtmtV4vP9LN5o23eejp_KXC79qgy7_FU2M9H1Atcnu4IG5uV6-ifZe3ix9UdlEDqTVsZBBGNl5Af2slj7Pd_sG5t_I9t
+[2m2025-07-20T16:09:43.305+07:00[0;39m [32m INFO[0;39m [35m6994[0;39m [2m--- [nio-9080-exec-8] [0;39m[36mcom.badminton.CsrfLoggerFilter          [0;39m [2m:[0;39m [CsrfLoggerFilter] Expected CSRF Token: 3qny2icbXstLIsSYFeCPFss-qwHdWqASOKC6G1HcHXxXySvivcvBvxYpbK1mEaL8Is27IapYhmDrO5g_DZiNL2nkeRlmq0qH
+
+
+2025-July-27: complete setting page in back-end and front-end

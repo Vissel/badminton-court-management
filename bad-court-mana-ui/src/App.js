@@ -16,7 +16,7 @@ function App() {
       <Router>
         <div>
           <Header />
-          <main className="flex-grow-1 py-4">
+          <main className="flex-grow-1 py-4 row-space">
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               {/* Protected routes */}

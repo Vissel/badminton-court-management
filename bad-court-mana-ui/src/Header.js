@@ -5,19 +5,19 @@ import { useContext } from "react";
 import { AuthContext } from "./context/AuthContext";
 import { useNavigate } from "react-router";
 function Header() {
-  const { setAuthenticated, csrfToken, logout } = useContext(AuthContext);
+  const {  logout } = useContext(AuthContext);
   let navigate = useNavigate();
 
   return (
     <Navbar bg="dark" variant="dark" expand="lg">
       <Container>
-        <Navbar.Brand href="/">My Service App</Navbar.Brand>
+        <Navbar.Brand href="/"> Quản lý sân cầu lông Tân Châu </Navbar.Brand>
         <Navbar.Toggle aria-controls="basic-navbar-nav" />
         <Navbar.Collapse id="basic-navbar-nav">
           <Nav className="ms-auto">
-            <Nav.Link href="/">Home</Nav.Link>
-            <Nav.Link onClick={() => navigate("/setup")}>Settings</Nav.Link>
-            <Nav.Link onClick={logout}>Logout</Nav.Link>
+            <Nav.Link href="/">Trang chủ</Nav.Link>
+            <Nav.Link onClick={() => navigate("/setup")}>Cài đặt</Nav.Link>
+            <Nav.Link onClick={logout}>Đăng xuất</Nav.Link>
           </Nav>
         </Navbar.Collapse>
       </Container>
