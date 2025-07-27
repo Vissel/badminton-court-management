@@ -36,3 +36,69 @@
     transform: rotate(360deg);
   }
 }
+/* court area */
+.court-container {
+  background: #f0f0f0;
+}
+
+.court-wrapper {
+  position: relative;
+  height: 250px;
+  overflow: hidden;
+}
+
+/* Add this to your App.css */
+.col-10 .p-3 .overflow-auto { /* Target the court area div */
+  scroll-padding-bottom: 50px; /* Adjust this value as needed */
+}
+.court-area {
+  position: absolute;
+  width: 45%;
+  height: auto;
+  border: 2px dashed transparent;
+  transition: background-color 0.2s ease;
+}
+
+.court-area-a {
+  top: 5%;
+  left: 5%;
+}
+.court-area-b {
+  top: 5%;
+  right: 5%;
+}
+.court-area-c {
+  bottom: 5%;
+  left: 5%;
+}
+.court-area-d {
+  bottom: 5%;
+  right: 5%;
+}
+
+.bg-highlight {
+  background-color: rgba(0, 123, 255, 0.2);
+}
+
+.small-card {
+  font-size: 0.9rem;
+  padding: 0.3rem;
+}
+
+/* Updated Player Area Styling */
+.player-list-scroll { /* Add this new class */
+  flex-grow: 1; /* Allows it to take up available vertical space */
+  border: 1px solid #dee2e6; /* Add a border for visual separation */
+  border-radius: 0.25rem; /* Bootstrap's default rounded corners */
+  padding: 0.5rem; /* Some padding inside */
+  overflow-y: auto; /* Enable vertical scrolling */
+  max-height: calc(100vh - 150px); /* Adjust this value as needed based on your header/footer/input */
+                                  /* Example: 100vh minus approximate height of input and other elements above it */
+
+                                }
+
+/* Ensure the parent of the player-list-scroll is a flex column */
+.d-flex .flex-column {
+  height: 100%; /* Important for flex-grow to work correctly */
+}
+

@@ -3,3 +3,29 @@
 
 
 2025-July-27: complete setting page in back-end and front-end
+Dsajdajdkdsa
+
+Nguyễn ngọc thạch	
+
+2025-July-27: developing HomePage
+<img src="./bad-court.webp" />
+
+ height: "50px",
+        border: "1px dashed gray",
+        margin: "5px",
+        backgroundColor: getBackgroundColor(),
+        textAlign: "center",
+        lineHeight: "50px",
+        transition: "background-color 0.3s ease",
+
+
+opacity: isDragging ? 0.5 : 1,
+        padding: "10px",
+        margin: "10px",
+        backgroundColor: "white",
+        border: "1px solid #ccc",
+        textAlign: "center",
+        cursor: "move",
+        transition: "all 0.3s ease",
+      }}
+      title={`Currently placed in: ${name}`}

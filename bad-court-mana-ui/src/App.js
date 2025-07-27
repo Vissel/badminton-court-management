@@ -9,6 +9,8 @@ import Footer from "./Footer";
 import Header from "./Header";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./context/ProtectedRoute";
+import HomePage2 from "./page/HomePage_mess";
+import HomePageError from "./page/HomePage_error";
 
 function App() {
   return (
@@ -26,6 +28,22 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <HomePage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/home-2"
+                element={
+                  <ProtectedRoute>
+                    <HomePage2 />
+                  </ProtectedRoute>
+                }
+              />
+               <Route
+                path="/home-3"
+                element={
+                  <ProtectedRoute>
+                    <HomePageError />
                   </ProtectedRoute>
                 }
               />
