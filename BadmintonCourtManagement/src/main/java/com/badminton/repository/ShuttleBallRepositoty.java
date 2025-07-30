@@ -13,4 +13,6 @@ public interface ShuttleBallRepositoty extends JpaRepository<ShuttleBall, Intege
 	List<ShuttleBall> findAllByIsActive(boolean isActive);
 
 	Optional<ShuttleBall> findByShuttleNameAndIsActive(String shuttleName, boolean isActive);
+
+	List<ShuttleBall> findAllByShuttleName(String shuttleName);
 }

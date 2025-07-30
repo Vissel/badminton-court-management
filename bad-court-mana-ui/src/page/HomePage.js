@@ -1,13 +1,16 @@
 import React, { useEffect, useRef, useState } from "react";
+import { Col, Row, Container } from "react-bootstrap";
 import { DndProvider, useDrag, useDrop } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
+import "../App.css"
 
 const ItemTypes = {
   PLAYER: "player",
 };
 
 const playersInitial = ["Player A", "Player B", "Player C"];
-const courtIds = [8, 7, 6, 5, 4, 3, 2, 1];
+const courtIds = [1, 2, 3, 4, 5, 6, 7];
+// [  6,7, 4, 5, 2, 3, 1, -1]
 const areaKeys = ["A", "B", "C", "D"];
 
 function DraggablePlayer({ name, isLocked }) {
@@ -106,85 +109,98 @@ function Court({
   const readyToStart = filledPlayers.length === 4;
   return (
     <div
-      style={{ width: "45%", margin: "10px", position: "relative" }}
+      style={{ width: "100%",  position: "relative" }}
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
     >
-      <h5>
-        court{id} {isLocked && "(In-Progress)"}{" "}
-      </h5>
-      <div
-        style={{
-          backgroundColor: "#006f4a",
-          backgroundImage: 'url("/bad-court2.jpg")',
-          backgroundSize: "cover",
-          height: "180px",
-          display: "grid",
-          gridTemplateColumns: "repeat(2, 1fr)",
-          gridTemplateRows: "repeat(2, 1fr)",
-          gap: "5px",
-          padding: "10px",
-          position: "relative",
-          transition: "all 2s ease",
-        }}
-      >
-        {areaKeys.map((areaKey) => (
-          <DropZone
-            key={areaKey}
-            courtId={id}
-            areaKey={areaKey}
-            player={players[areaKey]}
-            onDropPlayer={onDropPlayer}
-            isLocked={isLocked}
-          />
-        ))}
-        {/* Start button */}
-        {!isLocked && hovering && (
-          <button
-            onClick={() => onStart(id)}
+      <div>
+        <div class="d-flex flex-row">
+          <div
+            class="p-2 bd-highlight"
             style={{
-              position: "absolute",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              padding: "10px 20px",
-              backgroundColor: "#007bff",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              zIndex: 1,
-              transition: "opacity 2s ease",
+              left: "0%",
             }}
           >
-            Start
-          </button>
-        )}
-        {/* Finish and Cancel buttons */}
-        {isLocked && hovering && (
+            court{id} {isLocked && "(In-Progress)"}{" "}
+          </div>
+
+          {/* Finish and Cancel buttons */}
+          {isLocked && (
+            <div
+              style={{
+                position: "absolute",
+                // top: "50%",
+                // left: "50%",
+                right: "0%",
+                // transform: "translate(-50%, -50%)",
+                display: "flex",
+                gap: "10px",
+                zIndex: 2,
+                transition: "opacity 2s ease",
+              }}
+            >
+              <button className="btn btn-success" onClick={() => onFinish(id)}>
+                Finish
+              </button>
+              <button
+                className="btn btn-outline-secondary"
+                onClick={() => onCancel(id)}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
+        <div>
           <div
             style={{
-              position: "absolute",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              display: "flex",
-              gap: "10px",
-              zIndex: 2,
-              transition: "opacity 2s ease",
+              backgroundColor: "#006f4a",
+              backgroundImage: 'url("/bad-court2.jpg")',
+              backgroundSize: "cover",
+              height: "180px",
+              display: "grid",
+              gridTemplateColumns: "repeat(2, 1fr)",
+              gridTemplateRows: "repeat(2, 1fr)",
+              gap: "5px",
+              padding: "10px",
+              position: "relative",
+              transition: "all 2s ease",
             }}
           >
-            <button className="btn btn-danger" onClick={() => onFinish(id)}>
-              Finish
-            </button>
-            <button
-              className="btn btn-outline-danger"
-              onClick={() => onCancel(id)}
-            >
-              Cancel
-            </button>
+            {areaKeys.map((areaKey) => (
+              <DropZone
+                key={areaKey}
+                courtId={id}
+                areaKey={areaKey}
+                player={players[areaKey]}
+                onDropPlayer={onDropPlayer}
+                isLocked={isLocked}
+              />
+            ))}
+            {/* Start button */}
+            {!isLocked && hovering && (
+              <button
+                onClick={() => onStart(id)}
+                style={{
+                  position: "absolute",
+                  top: "50%",
+                  left: "50%",
+                  transform: "translate(-50%, -50%)",
+                  padding: "10px 20px",
+                  backgroundColor: "#4198f7",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  zIndex: 1,
+                  transition: "opacity 2s ease",
+                }}
+              >
+                Start
+              </button>
+            )}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
@@ -332,6 +348,17 @@ function HomePage() {
     onFinish(courtId);
     alert(`On Cancel court ${courtId}`);
   };
+   // Sort images for the right column (1, 2, 3) to display from bottom-up visually
+  // We need to reverse the order for rendering to achieve "right-end > up"
+  const rightColumn = courtIds
+    .filter((id) => id >= 1 && id <= 3)
+    .sort((a, b) => a - b); // Ensure 1, 2, 3 order, then reverse for display
+    
+  // Sort images for the left column (4, 5, 6, 7)
+  const leftColumn = courtIds
+    .filter((id) => id >= 4 && id <= 7)
+    .sort((a, b) => a - b);
+
   return (
     <DndProvider backend={HTML5Backend}>
       <div style={{ display: "flex", height: "100vh" }}>
@@ -342,19 +369,15 @@ function HomePage() {
           newPlayer={newPlayer}
           setNewPlayer={setNewPlayer}
         />
-        <div
-          ref={scrollRef}
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            width: "80%",
-            padding: "20px",
-            gap: "20px",
-            overflowY: "scroll",
-          }}
-        >
-          {courtIds.map((id) => (
-            <Court
+
+{/* Court display html and css */}
+<div className="court-container" ref={scrollRef}>
+      <div className="column left-column">
+        {leftColumn.slice().reverse().map((id) => (
+          <div key={id} className="image-card">
+           {/* <h1>Item{id}</h1> */}
+           <Court
+              class="col-md-12"
               key={id}
               id={id}
               players={courts[id]}
@@ -364,9 +387,59 @@ function HomePage() {
               onFinish={onFinish}
               onCancel={onCancel}
             />
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
+      <div className="column right-column">
+        {/* Render in reverse order to achieve "right-end > up" visual stacking */}
+        {rightColumn.slice().reverse().map((id) => (
+          <div key={id} className="image-card">
+            {/* <h1>Item{id}</h1> */}
+            <Court
+              class="col-md-12"
+              key={id}
+              id={id}
+              players={courts[id]}
+              onDropPlayer={onDropPlayer}
+              isLocked={lockedCourts[id]}
+              onStart={onStart}
+              onFinish={onFinish}
+              onCancel={onCancel}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+
+
+        {/* <div
+          class="row d-flex"
+          ref={scrollRef}
+          style={{
+            // display: "flex",
+            // flexWrap: "wrap",
+            width: "100%",
+            // padding: "20px",
+            // gap: "20px",
+            overflowY: "scroll",
+          }}
+        > */}
+
+          {/* {courtIds.map((id) => (
+            <Court
+              class="col-md-6"
+              key={id}
+              id={id}
+              players={courts[id]}
+              onDropPlayer={onDropPlayer}
+              isLocked={lockedCourts[id]}
+              onStart={onStart}
+              onFinish={onFinish}
+              onCancel={onCancel}
+            />
+          ))} */}
+        </div>
+      {/* </div> */}
     </DndProvider>
   );
 }

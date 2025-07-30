@@ -2,16 +2,20 @@ package com.badminton.service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import com.badminton.SecurityConfig;
 import com.badminton.constant.ApiConstant;
 import com.badminton.constant.CommonConstant;
 import com.badminton.entity.Court;
 import com.badminton.entity.Service;
 import com.badminton.entity.ShuttleBall;
+import com.badminton.exception.GlobalExceptionHandler;
 import com.badminton.repository.CourtRepositoty;
 import com.badminton.repository.ServiceRepositoty;
 import com.badminton.repository.ShuttleBallRepositoty;
@@ -25,6 +29,12 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class AdminServiceImpl implements AdminService {
 
+	private final SecurityConfig securityConfig;
+
+	private final UrlBasedCorsConfigurationSource corsConfigurationSource;
+
+	private final GlobalExceptionHandler globalExceptionHandler;
+
 	@Autowired
 	private CourtRepositoty courtRepo;
 	@Autowired
@@ -33,6 +43,13 @@ public class AdminServiceImpl implements AdminService {
 	private ServiceRepositoty serviceRepo;
 
 	private static final String COURT_STR = "Court ";
+
+	AdminServiceImpl(GlobalExceptionHandler globalExceptionHandler,
+			UrlBasedCorsConfigurationSource corsConfigurationSource, SecurityConfig securityConfig) {
+		this.globalExceptionHandler = globalExceptionHandler;
+		this.corsConfigurationSource = corsConfigurationSource;
+		this.securityConfig = securityConfig;
+	}
 
 	@Override
 	public boolean setUpService(SetUpServiceDTO setupServiceDTO) {
@@ -43,17 +60,20 @@ public class AdminServiceImpl implements AdminService {
 			// save shuttle infor
 			if (!setupServiceDTO.getShuttleBalls().isEmpty()) {
 				ShuttleBallDTO ballDTO = setupServiceDTO.getShuttleBalls().get(0);
-				if (!ballDTO.getShuttleName().isBlank() && ballDTO.getShuttleCost() != 0.0f) {
-					shuttleRepo.save(new ShuttleBall(ballDTO.getShuttleName(), ballDTO.getShuttleCost()));
+				if (!ballDTO.getShuttleName().isBlank()) {
+					ShuttleBall savedBall = findSavedShuttleBall(ballDTO.getShuttleName(), ballDTO.getShuttleCost());
+					if (savedBall != null) {
+						shuttleRepo.save(savedBall);
+					}
 				}
 			}
 
 			if (!setupServiceDTO.getServices().isEmpty()) {
-				// save services
+
+				// saved services
 				List<Service> listServices = setupServiceDTO.getServices().stream()
-						.filter(s -> !s.getServiceName().isBlank() && s.getCost() != 0.0f)
-						.map(serDTO -> new Service(serDTO.getServiceName(), serDTO.getCost()))
-						.collect(Collectors.toList());
+						.map(serDTO -> findSavedService(serDTO.getServiceName(), serDTO.getCost()))
+						.filter(Objects::nonNull).collect(Collectors.toList());
 				serviceRepo.saveAll(listServices);
 			}
 			if (setupServiceDTO.getCostInPerson() != 0) {
@@ -74,6 +94,60 @@ public class AdminServiceImpl implements AdminService {
 		} catch (Exception e) {
 			return false;
 		}
+	}
+
+	private ShuttleBall findSavedShuttleBall(String shuttleName, float shuttleCost) {
+		List<ShuttleBall> shuttleBalls = shuttleRepo.findAllByShuttleName(shuttleName);
+		// not existed => create new one => return
+		if (shuttleBalls.isEmpty()) {
+			return new ShuttleBall(shuttleName, shuttleCost);
+		}
+
+		List<ShuttleBall> list = new ArrayList<>();
+		shuttleBalls.stream().forEach(b -> {
+			if (b.getShuttleName().equals(shuttleName)) {
+				list.add(b);
+				if (b.getCost() == shuttleCost) {
+					list.remove(b);
+				}
+			}
+		});
+		// existing shuttle ball with the same name and different cost => get > update
+		// new cost => return
+		if (!list.isEmpty()) {
+			list.get(0).setCost(shuttleCost);
+			list.get(0).setActive(true);
+			return list.get(0);
+		}
+		// existing shuttle ball with the same name and cost => return null
+		return null;
+	}
+
+	public Service findSavedService(String serviceName, float serviceCost) {
+		if (!serviceName.isBlank()) {
+			List<Service> dbService = serviceRepo.findAllBySerName(serviceName);
+			if (dbService.isEmpty()) {
+				return new Service(serviceName, serviceCost);
+			}
+			List<Service> list = new ArrayList<>();
+			dbService.stream().forEach(s -> {
+				// add to list if there is exit with name
+				if (s.getSerName().equals(serviceName)) {
+					list.add(s);
+					// remove out list if there is the same cost => don't need this
+					if (s.getCost() == serviceCost) {
+						list.remove(s);
+					}
+				}
+			});
+			;
+			if (!list.isEmpty()) {
+				list.get(0).setCost(serviceCost);
+				list.get(0).setActive(true);
+				return list.get(0);
+			}
+		}
+		return null;
 	}
 
 	private void checkAndCreateCourt(int totalCourt) {
@@ -120,20 +194,37 @@ public class AdminServiceImpl implements AdminService {
 
 	@Override
 	public boolean deleteService(ServiceDTO serviceDTO) {
-		Optional<Service> optSer = serviceRepo.findBySerName(serviceDTO.getServiceName());
-		if (optSer.isPresent()) {
-			optSer.get().setActive(false);
-			return !serviceRepo.save(optSer.get()).isActive();
+		List<Service> services = serviceRepo.findAllBySerName(serviceDTO.getServiceName());
+		if (!services.isEmpty()) {
+			if (services.size() > 1) {
+				List<Service> removedList = services.stream().filter(s -> !s.isActive()).collect(Collectors.toList());
+				serviceRepo.deleteAll(removedList);
+			}
+
+			Service equService = services.stream().filter(s -> s.getSerName().equals(serviceDTO.getServiceName()))
+					.findFirst().orElse(null);
+			if (equService != null) {
+				equService.setActive(false);
+				return !serviceRepo.save(equService).isActive();
+			}
 		}
 		return false;
 	}
 
 	@Override
 	public boolean deleteShuttleBall(ShuttleBallDTO shuttleBallDTO) {
-		Optional<ShuttleBall> optBall = shuttleRepo.findByShuttleNameAndIsActive(shuttleBallDTO.getShuttleName(), true);
-		if (optBall.isPresent()) {
-			optBall.get().setActive(false);
-			return !shuttleRepo.save(optBall.get()).isActive();
+		List<ShuttleBall> balls = shuttleRepo.findAllByShuttleName(shuttleBallDTO.getShuttleName());
+		if (!balls.isEmpty()) {
+			if (balls.size() > 1) {
+				List<ShuttleBall> removedList = balls.stream().filter(b -> !b.isActive()).collect(Collectors.toList());
+				shuttleRepo.deleteAll(removedList);
+			}
+
+			ShuttleBall equBall = balls.stream().filter(b -> b.isActive()).findFirst().orElse(null);
+			if (equBall != null) {
+				equBall.setActive(false);
+				return !shuttleRepo.save(equBall).isActive();
+			}
 		}
 		return false;
 	}

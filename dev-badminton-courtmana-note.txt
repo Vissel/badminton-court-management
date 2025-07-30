@@ -29,3 +29,4 @@ opacity: isDragging ? 0.5 : 1,
         transition: "all 0.3s ease",
       }}
       title={`Currently placed in: ${name}`}
+

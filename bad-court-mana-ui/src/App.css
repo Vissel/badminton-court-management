@@ -102,3 +102,56 @@
   height: 100%; /* Important for flex-grow to work correctly */
 }
 
+/* App.css NEW*/
+
+.court-container {
+  display: flex; /* Use flexbox for the two columns */
+  justify-content: center; /* Center the columns if there's extra space */
+  gap: 2px; /* Space between the two columns */
+  padding: 20px;
+  box-sizing: border-box; /* Include padding in element's total width and height */
+  height: 100vh; /* Take full viewport height for demonstration */
+  align-items: flex-start; /* Align columns to the top */
+  width: 100%;
+  overflow-y: scroll,
+}
+
+.column {
+  display: flex;
+  flex-direction: column; /* Stack image cards vertically */
+   gap: 1.5px; /*Space between image cards within a column */
+  /* Optional: Add some padding or background to distinguish columns */
+  /* background-color: #f0f0f0; */
+  padding: 10px;
+  border-radius: 8px;
+  width: 50%;
+}
+
+.image-card {
+  display: flex;
+  align-items: center; /* Vertically align image and text */
+  gap: 10px; /* Space between the image and the text */
+  padding: 10px 15px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Subtle shadow */
+  background-color: #fff;
+  min-width: 200px; /* Adjust as needed */
+}
+
+.image-icon {
+  width: 40px; /* Size of your gear image */
+  height: 40px;
+  object-fit: contain; /* Ensure the image fits within the bounds */
+}
+
+.image-label {
+  font-size: 16px;
+  font-weight: bold;
+  color: #333;
+}
+
+/* Specific styling for the right column to handle the "right-end > up" layout */
+.right-column {
+    justify-content: flex-end; /* Pushes content to the bottom of the column */
+}

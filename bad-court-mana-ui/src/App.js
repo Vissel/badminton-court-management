@@ -11,6 +11,7 @@ import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./context/ProtectedRoute";
 import HomePage2 from "./page/HomePage_mess";
 import HomePageError from "./page/HomePage_error";
+import HomeEmptyPage from "./page/HomeEmptyPage";
 
 function App() {
   return (

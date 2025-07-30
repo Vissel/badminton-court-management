@@ -12,5 +12,7 @@ import com.badminton.entity.Service;
 public interface ServiceRepositoty extends JpaRepository<Service, Integer> {
 	Optional<Service> findBySerName(String serName);
 
+	List<Service> findAllBySerName(String serName);
+
 	List<Service> findAllByIsActive(boolean isActive);
 }

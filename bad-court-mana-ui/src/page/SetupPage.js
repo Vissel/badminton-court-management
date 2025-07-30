@@ -35,7 +35,7 @@ function SetupPage() {
   const [oneBall, setOneBall] = useState(true);
   const addShuttleBall = () => {
     if (oneBall === false) {
-      setErrorMess("Chỉ được thêm 1 loại cầu trong 1 lần.")
+      setErrorMess("Chỉ được thêm 1 loại cầu trong 1 lần.");
       return;
     }
     setShuttleBall([
@@ -84,7 +84,7 @@ function SetupPage() {
       }
     } catch (err) {
       console.error("Error deleting service:", err);
-  setErrorMess(`Có lỗi khi xoá dich vụ:${serviceToDelete.serviceName}`)  ;
+      setErrorMess(`Có lỗi khi xoá dich vụ:${serviceToDelete.serviceName}`);
     } finally {
       setDeletingRow(false);
     }
@@ -110,7 +110,7 @@ function SetupPage() {
       }
     } catch (err) {
       console.error("Error deleting shuttle ball:", err);
-      setErrorMess(`Có lỗi khi xoá loại cầu: ${ball.shuttleName}`)
+      setErrorMess(`Có lỗi khi xoá loại cầu: ${ball.shuttleName}`);
     } finally {
       setDeletingBall(false);
     }
@@ -153,16 +153,15 @@ function SetupPage() {
       }
     });
     let isDuplicated = false;
-    let mess='';
+    let mess = "";
     if (duplicates.length > 0) {
-      mess=`Tên của Dịch vụ đang trùng lặp: ${duplicates.join(", ")}`;
-      isDuplicated=true;
+      mess = `Tên của Dịch vụ đang trùng lặp: ${duplicates.join(", ")}`;
+      isDuplicated = true;
     }
     if (duplicatesBall.length > 0) {
-      mess +="\n."+
-      `Tên quả cầu lông đang trùng lặp: ${duplicatesBall.join(", ")}`
-      ;
-      isDuplicated=true;
+      mess +=
+        "\n." + `Tên quả cầu lông đang trùng lặp: ${duplicatesBall.join(", ")}`;
+      isDuplicated = true;
     }
     if (isDuplicated) {
       setErrorMess(mess);
@@ -184,27 +183,23 @@ function SetupPage() {
     };
 
     try {
-      // const preRes = await api.get("/csrf");
-      // if(preRes.status!==200){
-      //   alert("pre-condition failure");
-      //   return;
-      // };
-      // sessionStorage.setItem('csrfToken',preRes.data.csrfToken);
       const response = await api.post(`/api/addSetupService`, payload, {});
       if (response.status === 200) {
-        alert("Services saved successfully!");
+        alert("Lưu thiết lập thành công!");
         setTableServices((prevServices) => [...prevServices, ...services]);
         setTableShuttleBalls((prevShuttleBalls) => [
           ...prevShuttleBalls,
           ...shuttleBall,
         ]);
-        // window.location.reload();
-      }else{
-        setErrorMess(`${response.data.message}`) ;
+        // remove input fields of shuttle_ball and service
+        setShuttleBall([]);
+        setOneBall(true);
+        setServices([]);
+      } else {
+        setErrorMess(`${response.data.message}`);
       }
     } catch (error) {
       alert("Có lỗi khi lưu thiết lập. Kiểm tra lỗi màu đỏ bên dưới.");
-
     }
   };
 

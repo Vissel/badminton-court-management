@@ -15,7 +15,7 @@ function Header() {
         <Navbar.Toggle aria-controls="basic-navbar-nav" />
         <Navbar.Collapse id="basic-navbar-nav">
           <Nav className="ms-auto">
-            <Nav.Link href="/">Trang chủ</Nav.Link>
+            <Nav.Link onClick={() => navigate("/home")}>Trang chủ</Nav.Link>
             <Nav.Link onClick={() => navigate("/setup")}>Cài đặt</Nav.Link>
             <Nav.Link onClick={logout}>Đăng xuất</Nav.Link>
           </Nav>
