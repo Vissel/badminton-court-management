@@ -8,14 +8,12 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(name = "shuttle_ball", uniqueConstraints = {
-		@UniqueConstraint(name = "unique_shuttle_name", columnNames = { "shuttle_name", "is_active" }) })
+@Table(name = "shuttle_ball")
 @Getter
 @Setter
 @NoArgsConstructor

@@ -30,3 +30,4 @@ opacity: isDragging ? 0.5 : 1,
       }}
       title={`Currently placed in: ${name}`}
 
+Asasasasasas

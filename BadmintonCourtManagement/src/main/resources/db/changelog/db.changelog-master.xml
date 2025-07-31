@@ -20,4 +20,7 @@
 <changeSet id="005" author="thach" >
 	<sqlFile path="db/changelog/changeset-005-addUniqueContrains-tableService.sql"/>
 </changeSet>
+<changeSet id="006" author="thach" >
+	<sqlFile path="db/changelog/changeset-006-removeUniqueContrains.sql"/>
+</changeSet>
 </databaseChangeLog>
