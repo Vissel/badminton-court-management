@@ -1,199 +1,516 @@
-import React, { useState } from "react";
-import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
-import "bootstrap/dist/css/bootstrap.min.css";
-import "../App.css"; // Assume this contains styles for court layout and positioning
+import React, { useEffect, useRef, useState } from "react";
+import { Col, Row, Container } from "react-bootstrap";
+import { DndProvider, useDrag, useDrop } from "react-dnd";
+import { HTML5Backend } from "react-dnd-html5-backend";
+import "../App.css";
+import api from "../api/index";
 
-const initialPlayers = ["Player A", "Player B", "Player C"];
+import { ItemTypes } from "./ItemTypes";
+import DraggableService from "./dragNdrop/DraggableService";
+import PlayerDropZone from "./dragNdrop/ServiceDropZone";
 
-const generateCourtAreas = (courtId) => {
-  return ["A", "B", "C", "D"].map((area) => `${courtId}-area${area}`);
-};
+const playersInitial = ["Player A", "Player B", "Player C"];
+const courtIds = [1, 2, 3, 4, 5, 6, 7];
+// [  6,7, 4, 5, 2, 3, 1, -1]
+const areaKeys = ["A", "B", "C", "D"];
 
-const HomePage = () => {
-  const [players, setPlayers] = useState(initialPlayers);
-  const [playerInput, setPlayerInput] = useState("");
-  const [courtStatus, setCourtStatus] = useState({}); // { court1: "idle" | "in-progress" }
-  const [courtPlayers, setCourtPlayers] = useState({}); // { court1: [players] }
+function DraggablePlayer({ name, isLocked }) {
+  const [{ isDragging }, drag] = useDrag(
+    () => ({
+      type: ItemTypes.PLAYER,
+      item: { name },
+      canDrag: !isLocked,
+      collect: (monitor) => ({ isDragging: !!monitor.isDragging() }),
+    }),
+    [isLocked]
+  );
 
-  const onDragEnd = (result) => {
-    const { source, destination, draggableId } = result;
-    if (!destination) return;
+  return (
+    <div
+      ref={drag}
+      style={{
+        opacity: isDragging ? 0.5 : 1,
+        padding: "3px",
+        margin: "5px",
+        backgroundColor: "white",
+        border: "1px solid gray",
+        textAlign: "center",
+        cursor: isLocked ? "not-allowed" : "move",
+        transition: "all 2s ease",
+      }}
+      title={`Currently placed in: ${name}`}
+    >
+      {name}
+    </div>
+  );
+}
 
-    // Moving player from pool to court area
-    if (source.droppableId === "player-pool" && destination.droppableId.includes("court")) {
-      const courtId = destination.droppableId.split("-")[0];
-      if (courtStatus[courtId] === "in-progress") return;
+function DropZone({ courtId, areaKey, player, onDropPlayer, isLocked }) {
+  const [hasDropped, setHasDropped] = useState(!!player);
 
-      setPlayers((prev) => prev.filter((p) => p !== draggableId));
-      setCourtPlayers((prev) => {
-        const newList = prev[courtId] ? [...prev[courtId], draggableId] : [draggableId];
-        return { ...prev, [courtId]: newList };
-      });
-    }
+  const [{ isOver }, drop] = useDrop(
+    () => ({
+      accept: ItemTypes.PLAYER,
+      drop: (item) => {
+        if (!isLocked) {
+          onDropPlayer(item.name, courtId, areaKey);
+          setHasDropped(true);
+        }
+      },
+      collect: (monitor) => ({ isOver: !!monitor.isOver() }),
+      canDrop: () => !isLocked,
+    }),
+    [player, isLocked]
+  );
 
-    // Moving player back to player_area (only allowed if court is not in-progress)
-    if (destination.droppableId === "player-pool" && source.droppableId.includes("court")) {
-      const courtId = source.droppableId.split("-")[0];
-      if (courtStatus[courtId] === "in-progress") return;
+  useEffect(() => {
+    if (!player) setHasDropped(false);
+  }, [player]);
 
-      setCourtPlayers((prev) => {
-        const updated = (prev[courtId] || []).filter((p) => p !== draggableId);
-        return { ...prev, [courtId]: updated };
-      });
-      setPlayers((prev) => [...prev, draggableId]);
-    }
+  const getBackgroundColor = () => {
+    if (hasDropped) return "white";
+    if (isOver) return "#def";
+    return "rgb(255 255 255 / 39%)";
   };
 
-  const handleAddPlayer = (e) => {
-    e.preventDefault();
-    if (playerInput && !players.includes(playerInput)) {
-      setPlayers([...players, playerInput]);
-      setPlayerInput("");
-    }
-  };
+  return (
+    <div
+      ref={drop}
+      style={{
+        // height: "50px",
+        border: "1px dashed gray",
+        margin: "5px",
+        backgroundColor: getBackgroundColor(),
+        textAlign: "center",
+        lineHeight: "50px",
+        transition: "background-color 2s ease",
+      }}
+      title={
+        player
+          ? `Player: ${player}`
+          : `Drop here - Court ${courtId}, Area ${areaKey}`
+      }
+    >
+      {player && <DraggablePlayer name={player} isLocked={isLocked} />}
+    </div>
+  );
+}
 
-  const handleStart = (courtId) => {
-    setCourtStatus((prev) => ({ ...prev, [courtId]: "in-progress" }));
-  };
+function Court({
+  id,
+  players,
+  onDropPlayer,
+  isLocked,
+  onStart,
+  onFinish,
+  onCancel,
+}) {
+  const [hovering, setHovering] = useState(false);
+  const filledPlayers = Object.values(players).filter(Boolean);
+  const readyToStart = filledPlayers.length === 4;
+  return (
+    <div
+      style={{ width: "100%", position: "relative" }}
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={() => setHovering(false)}
+    >
+      <div class="d-flex">
+        <div
+          style={{
+            left: "0%",
+            height: "45px",
+          }}
+        >
+          court{id} {isLocked && "(In-Progress)"}{" "}
+        </div>
 
-  const handleFinish = (courtId) => {
-    setPlayers((prev) => [...prev, ...(courtPlayers[courtId] || [])]);
-    setCourtPlayers((prev) => ({ ...prev, [courtId]: [] }));
-    setCourtStatus((prev) => ({ ...prev, [courtId]: "idle" }));
-  };
-
-  const handleCancel = (courtId) => {
-    const cancelledPlayers = (courtPlayers[courtId] || []).map((p) => p + " (C)");
-    setPlayers((prev) => [...prev, ...cancelledPlayers]);
-    setCourtPlayers((prev) => ({ ...prev, [courtId]: [] }));
-    setCourtStatus((prev) => ({ ...prev, [courtId]: "idle" }));
-  };
-
-  const renderCourt = (courtId, index) => {
-    const playersInCourt = courtPlayers[courtId] || [];
-    const isReadyToStart = playersInCourt.length === 4 && courtStatus[courtId] !== "in-progress";
-    const inProgress = courtStatus[courtId] === "in-progress";
-    return (
-      <div
-        key={courtId}
-        className="court-wrapper position-relative m-2"
-        onMouseEnter={() => {}}
-      >
-        <img
-          src="./bad-court.webp"
-          alt="court"
-          className="img-fluid"
-          style={{ maxWidth: "100%" }}
-        />
-
-        {generateCourtAreas(courtId).map((areaId) => (
-          <Droppable key={areaId} droppableId={areaId}>
-            {(provided) => (
-              <div
-                className="court-area"
-                ref={provided.innerRef}
-                {...provided.droppableProps}
-              >
-                {(courtPlayers[courtId] || [])
-                  .filter((_, idx) => areaId.endsWith(String.fromCharCode(65 + idx)))
-                  .map((player, idx) => (
-                    <Draggable key={player} draggableId={player} index={idx}>
-                      {(provided) => (
-                        <div
-                          ref={provided.innerRef}
-                          {...provided.draggableProps}
-                          {...provided.dragHandleProps}
-                          className="badge bg-primary m-1"
-                        >
-                          {player}
-                        </div>
-                      )}
-                    </Draggable>
-                  ))}
-                {provided.placeholder}
-              </div>
-            )}
-          </Droppable>
-        ))}
-
-        <div className="position-absolute top-0 start-0 p-2">
-          {isReadyToStart && (
+        {/* Finish and Cancel buttons */}
+        {isLocked && (
+          <div
+            style={{
+              position: "absolute",
+              // top: "50%",
+              // left: "50%",
+              right: "0%",
+              // transform: "translate(-50%, -50%)",
+              display: "flex",
+              gap: "10px",
+              zIndex: 2,
+              transition: "opacity 2s ease",
+            }}
+          >
+            <button className="btn btn-success" onClick={() => onFinish(id)}>
+              Finish
+            </button>
             <button
-              className="btn btn-success btn-sm"
-              onClick={() => handleStart(courtId)}
+              className="btn btn-outline-secondary"
+              onClick={() => onCancel(id)}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+      </div>
+      <div>
+        <div
+          style={{
+            backgroundColor: "white",
+            backgroundImage: 'url("/bad-court2.jpg")',
+            backgroundSize: "cover",
+            backgroundRepeat: "no-repeat",
+            backgroundPosition: "center",
+            height: "250px",
+            display: "grid",
+            gridTemplateColumns: "repeat(2, 1fr)",
+            gridTemplateRows: "repeat(2, 1fr)",
+            gap: "5px",
+            padding: "10px",
+            position: "relative",
+            transition: "all 2s ease",
+          }}
+        >
+          {areaKeys.map((areaKey) => (
+            <DropZone
+              key={areaKey}
+              courtId={id}
+              areaKey={areaKey}
+              player={players[areaKey]}
+              onDropPlayer={onDropPlayer}
+              isLocked={isLocked}
+            />
+          ))}
+          {/* Start button */}
+          {!isLocked && hovering && (
+            <button
+              onClick={() => onStart(id)}
+              style={{
+                position: "absolute",
+                top: "50%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+                padding: "10px 20px",
+                backgroundColor: "#4198f7",
+                color: "white",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                zIndex: 1,
+                transition: "opacity 2s ease",
+              }}
             >
               Start
             </button>
           )}
-          {inProgress && (
-            <>
-              <span className="badge bg-warning">In-progress</span>
-              <button
-                className="btn btn-danger btn-sm ms-1"
-                onClick={() => handleFinish(courtId)}
-              >
-                Finish
-              </button>
-              <button
-                className="btn btn-outline-danger btn-sm ms-1"
-                onClick={() => handleCancel(courtId)}
-              >
-                Cancel
-              </button>
-            </>
-          )}
         </div>
       </div>
-    );
+    </div>
+  );
+}
+
+function PlayerArea({
+  availablePlayers,
+  onDropPlayerBack,
+  onAddPlayer,
+  newPlayer,
+  setNewPlayer,
+}) {
+  const [{ isOver }, drop] = useDrop(() => ({
+    accept: ItemTypes.PLAYER,
+    drop: (item) => onDropPlayerBack(item.name),
+    collect: (monitor) => ({ isOver: !!monitor.isOver() }),
+  }));
+
+  const handleAdd = () => {
+    if (
+      newPlayer.trim() !== "" &&
+      !availablePlayers.includes(newPlayer.trim())
+    ) {
+      onAddPlayer(newPlayer.trim());
+      setNewPlayer("");
+    }
   };
 
   return (
-    <div className="container-fluid p-2">
-      <DragDropContext onDragEnd={onDragEnd}>
-        <div className="court_area d-flex flex-wrap justify-content-center align-items-end">
-          {[...Array(8)].map((_, idx) => renderCourt(`court${idx + 1}`, idx))}
-        </div>
-
-        <div className="player_area sticky-bottom bg-light p-3 mt-3">
-          <form onSubmit={handleAddPlayer} className="d-flex mb-2">
-            <input
-              value={playerInput}
-              onChange={(e) => setPlayerInput(e.target.value)}
-              className="form-control me-2"
-              placeholder="Add new player"
-            />
-            <button className="btn btn-primary">Add</button>
-          </form>
-
-          <Droppable droppableId="player-pool" direction="horizontal">
-            {(provided) => (
-              <div
-                ref={provided.innerRef}
-                {...provided.droppableProps}
-                className="d-flex flex-wrap"
-              >
-                {players.map((p, idx) => (
-                  <Draggable key={p} draggableId={p} index={idx}>
-                    {(provided) => (
-                      <div
-                        className="badge bg-secondary m-1"
-                        ref={provided.innerRef}
-                        {...provided.draggableProps}
-                        {...provided.dragHandleProps}
-                      >
-                        {p}
-                      </div>
-                    )}
-                  </Draggable>
-                ))}
-                {provided.placeholder}
-              </div>
-            )}
-          </Droppable>
-        </div>
-      </DragDropContext>
+    <div
+      ref={drop}
+      style={{
+        width: "100%",
+        padding: "20px",
+        backgroundColor: isOver ? "#eef" : "#f8f9fa",
+        borderRight: "1px solid #ccc",
+        transition: "background-color 2s ease",
+      }}
+    >
+      <div class="player-area-header">Total player: 10</div>
+      <input
+        type="text"
+        placeholder="Player A"
+        value={newPlayer}
+        onChange={(e) => setNewPlayer(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+        style={{
+          width: "100%",
+          padding: "10px",
+          marginBottom: "15px",
+          boxSizing: "border-box",
+        }}
+      />
+      <PlayerDropZone >
+      {availablePlayers.map((p) => (
+        <DraggablePlayer key={p} name={p} isLocked={false} />
+      ))}
+      </PlayerDropZone>
     </div>
   );
-};
+}
 
-export default HomePage;
+/* HomePage_mess */
+function HomePage_mess() {
+  const [availablePlayers, setAvailablePlayers] = useState(playersInitial);
+  const [newPlayer, setNewPlayer] = useState("");
+  const scrollRef = useRef(null);
+  const [courts, setCourts] = useState(() => {
+    const initialCourts = {};
+    courtIds.forEach((id) => {
+      initialCourts[id] = { A: null, B: null, C: null, D: null };
+    });
+    return initialCourts;
+  });
+
+  const onDropPlayer = (playerName, courtId, areaKey) => {
+    setCourts((prev) => {
+      const updated = { ...prev };
+      for (const id in updated) {
+        for (const key in updated[id]) {
+          if (updated[id][key] === playerName) updated[id][key] = null;
+        }
+      }
+      updated[courtId][areaKey] = playerName;
+      return updated;
+    });
+    setAvailablePlayers((prev) => prev.filter((p) => p !== playerName));
+  };
+
+  const onDropPlayerBack = (playerName) => {
+    setCourts((prev) => {
+      const updated = { ...prev };
+      for (const id in updated) {
+        for (const key in updated[id]) {
+          if (updated[id][key] === playerName) updated[id][key] = null;
+        }
+      }
+      return updated;
+    });
+    setAvailablePlayers((prev) =>
+      prev.includes(playerName) ? prev : [...prev, playerName]
+    );
+  };
+
+  const onAddPlayer = (name) => {
+    setAvailablePlayers((prev) => [...prev, name]);
+  };
+
+  /* On Start*/
+  const [lockedCourts, setLockedCourts] = useState({});
+  const onStart = (courtId) => {
+    setLockedCourts((prev) => ({ ...prev, [courtId]: true }));
+  };
+
+  /** On Finish */
+  const onFinish = (courtId) => {
+    setCourts((prev) => {
+      const updated = { ...prev };
+      const playersToReturn = Object.values(updated[courtId]).filter(Boolean);
+      courtIds.forEach((id) => {
+        for (const key in updated[id]) {
+          if (playersToReturn.includes(updated[id][key]))
+            updated[id][key] = null;
+        }
+      });
+      return updated;
+    });
+    setAvailablePlayers((prev) => [
+      ...prev,
+      ...Object.values(courts[courtId]).filter(Boolean),
+    ]);
+    setLockedCourts((prev) => {
+      const updated = { ...prev };
+      delete updated[courtId];
+      return updated;
+    });
+
+    alert(`On finish of court ${courtId}`);
+  };
+  /**On Cancel */
+  const onCancel = (courtId) => {
+    onFinish(courtId);
+    alert(`On Cancel court ${courtId}`);
+  };
+  // Sort images for the right column (1, 2, 3) to display from bottom-up visually
+  // We need to reverse the order for rendering to achieve "right-end > up"
+  const rightColumn = courtIds
+    .filter((id) => id >= 1 && id <= 3)
+    .sort((a, b) => a - b); // Ensure 1, 2, 3 order, then reverse for display
+
+  // Sort images for the left column (4, 5, 6, 7)
+  const leftColumn = courtIds
+    .filter((id) => id >= 4 && id <= 7)
+    .sort((a, b) => a - b);
+
+  // shuttle_ball selection
+  const [selectedBall, setSelectedBall] = useState("");
+  const [ballOptions, setBallOptions] = useState([]);
+
+  // HomePage_mess useEffect
+  useEffect(() => {
+    const fetchCourtInfor = async () => {
+      try {
+        // fetch shuttle_balls
+        const ballResponse = await api.get("/court-mana/getShuttleBalls");
+        if (ballResponse.status === 200) {
+          const listBall = ballResponse.data;
+          setBallOptions(
+            listBall.map((b) => `${b.shuttleName} - ${b.shuttleCost}`)
+          );
+        } else {
+          console.error(ballResponse.message);
+          setBallOptions([
+            "Vinastar - 28000",
+            "Cau 88 - 29000",
+            "Sunlight Hall - 31000",
+          ]);
+        }
+        setSelectedBall(ballOptions[0]);
+
+        // fetch services
+      } catch (error) {
+        console.error(error);
+      }
+    };
+
+    fetchCourtInfor();
+    // scrolling to the end
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, []);
+
+  return (
+    <DndProvider backend={HTML5Backend}>
+      <div style={{ display: "flex", flexDirection: "row", height: "100vh" }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            width: "20%",
+            padding: "20px",
+            backgroundColor: "#eef",
+            borderRight: "1px solid #ccc",
+            transition: "background-color 2s ease",
+          }}
+        >
+          <div>CostInPerson: 14000</div>
+          <select
+            value={selectedBall}
+            onChange={(e) => setSelectedBall(e.target.value)}
+            className="court-select"
+          >
+            {ballOptions.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+
+          <div className="p-2 service-area">
+<h4>List of Service</h4>
+  {["Service A", "Service B", "Service C"].map((s) => (
+    <DraggableService key={s} name={s} />
+  ))}
+          </div>
+        </div>
+        <div className="court-container" ref={scrollRef}>
+          <div className="column court-bar">
+            <PlayerArea
+              availablePlayers={availablePlayers}
+              onDropPlayerBack={onDropPlayerBack}
+              onAddPlayer={onAddPlayer}
+              newPlayer={newPlayer}
+              setNewPlayer={setNewPlayer}
+            />
+          </div>
+          <div className="column left-column">
+            {leftColumn
+              .slice()
+              .reverse()
+              .map((id) => (
+                <div key={id} className="image-card">
+                  {/* <h1>Item{id}</h1> */}
+                  <Court
+                    key={id}
+                    id={id}
+                    players={courts[id]}
+                    onDropPlayer={onDropPlayer}
+                    isLocked={lockedCourts[id]}
+                    onStart={onStart}
+                    onFinish={onFinish}
+                    onCancel={onCancel}
+                  />
+                </div>
+              ))}
+          </div>
+          <div className="column right-column">
+            {/* Render in reverse order to achieve "right-end > up" visual stacking */}
+            {rightColumn
+              .slice()
+              .reverse()
+              .map((id) => (
+                <div key={id} className="image-card">
+                  {/* <h1>Item{id}</h1> */}
+                  <Court
+                    key={id}
+                    id={id}
+                    players={courts[id]}
+                    onDropPlayer={onDropPlayer}
+                    isLocked={lockedCourts[id]}
+                    onStart={onStart}
+                    onFinish={onFinish}
+                    onCancel={onCancel}
+                  />
+                </div>
+              ))}
+          </div>
+
+          {/* <div
+          class="row d-flex"
+          ref={scrollRef}
+          style={{
+            // display: "flex",
+            // flexWrap: "wrap",
+            width: "100%",
+            // padding: "20px",
+            // gap: "20px",
+            overflowY: "scroll",
+          }}
+        > */}
+
+          {/* {courtIds.map((id) => (
+            <Court
+              class="col-md-6"
+              key={id}
+              id={id}
+              players={courts[id]}
+              onDropPlayer={onDropPlayer}
+              isLocked={lockedCourts[id]}
+              onStart={onStart}
+              onFinish={onFinish}
+              onCancel={onCancel}
+            />
+          ))} */}
+        </div>
+      </div>
+    </DndProvider>
+  );
+}
+
+export default HomePage_mess;

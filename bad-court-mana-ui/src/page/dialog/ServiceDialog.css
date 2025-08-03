@@ -1,0 +1,73 @@
+/* Dialog container */
+.dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+/* Dialog box */
+.dialog-box {
+  background: #fff;
+  border-radius: 10px;
+  padding: 20px 25px;
+  width: 500px;
+  height: 300px;
+  max-width: 90%;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+/* Heading */
+.dialog-box h3 {
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+
+/* Service list */
+.service-list {
+  list-style: none;
+  padding-left: 0;
+  margin: 10px 0 20px;
+}
+
+.service-list li {
+  padding: 5px 0;
+  border-bottom: 1px solid #eee;
+}
+
+
+/* Actions */
+.dialog-actions {
+  display: flex;
+  justify-self: flex-start;
+  gap: 20px;/* impact dialog-cancel */
+  margin-bottom: 0%;
+}
+
+.dialog-cancel {
+  margin-left: 215px;
+}
+
+.close-button {
+  position: absolute;
+
+}
+
+/* Animation */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

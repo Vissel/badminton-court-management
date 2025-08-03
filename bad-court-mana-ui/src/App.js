@@ -12,6 +12,7 @@ import ProtectedRoute from "./context/ProtectedRoute";
 import HomePage2 from "./page/HomePage_mess";
 import HomePageError from "./page/HomePage_error";
 import HomeEmptyPage from "./page/HomeEmptyPage";
+import DateTimeBar from "./DateTimeBar";
 
 function App() {
   return (
@@ -19,7 +20,8 @@ function App() {
       <Router>
         <div>
           <Header />
-          <main className="flex-grow-1 py-4 row-space">
+          <main className="flex-grow-1 py-2 row-space">
+            <DateTimeBar />
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               {/* Protected routes */}

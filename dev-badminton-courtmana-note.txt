@@ -30,4 +30,23 @@ opacity: isDragging ? 0.5 : 1,
       }}
       title={`Currently placed in: ${name}`}
 
-Asasasasasas
+2025-Aug-03
+PROMPT:
+Add the ServiceDialog.js component that:
+
+Renders dynamically based on clicked player.
+
+Receives and displays their mapped service list.
+
+Add logic to drag/drop services into players (currently missing in your uploaded code).
+
+Add styling or animation (optional).
+
+Would you like me to generate the missing:
+
+ServiceDialog.js file, and
+
+Code to enable dragging services into players
+
+css: service
+opacity: 1; padding: 5px 10px; margin: 5px; background-color: rgb(204, 221, 238); border-radius: 4px; cursor: move; border: 1px solid rgb(170, 170, 204);

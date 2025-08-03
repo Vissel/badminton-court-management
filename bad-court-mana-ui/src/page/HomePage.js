@@ -2,18 +2,19 @@ import React, { useEffect, useRef, useState } from "react";
 import { Col, Row, Container } from "react-bootstrap";
 import { DndProvider, useDrag, useDrop } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
-import "../App.css"
+import "../App.css";
+import api from "../api/index";
 
-const ItemTypes = {
-  PLAYER: "player",
-};
+import { ItemTypes } from "./ItemTypes";
+import DraggableService from "./dragNdrop/DraggableService";
+import ServiceDialog from "./dialog/ServiceDialog";
 
 const playersInitial = ["Player A", "Player B", "Player C"];
 const courtIds = [1, 2, 3, 4, 5, 6, 7];
 // [  6,7, 4, 5, 2, 3, 1, -1]
 const areaKeys = ["A", "B", "C", "D"];
 
-function DraggablePlayer({ name, isLocked }) {
+function DraggablePlayer({ name, isLocked, onDropService, onClick }) {
   const [{ isDragging }, drag] = useDrag(
     () => ({
       type: ItemTypes.PLAYER,
@@ -23,13 +24,21 @@ function DraggablePlayer({ name, isLocked }) {
     }),
     [isLocked]
   );
+  const [, drop] = useDrop(
+    () => ({
+      accept: ItemTypes.SERVICE,
+      drop: (item) => onDropService(name, item.serviceName, item.cost),
+    }),
+    [name]
+  );
 
   return (
     <div
-      ref={drag}
+      ref={(node) => drag(drop(node))}
+      onClick={() => onClick?.(name)}
       style={{
         opacity: isDragging ? 0.5 : 1,
-        padding: "3px",
+        padding: "5px",
         margin: "5px",
         backgroundColor: "white",
         border: "1px solid gray",
@@ -44,7 +53,14 @@ function DraggablePlayer({ name, isLocked }) {
   );
 }
 
-function DropZone({ courtId, areaKey, player, onDropPlayer, isLocked }) {
+function DropZone({
+  courtId,
+  areaKey,
+  player,
+  onDropPlayer,
+  isLocked,
+  onDropService,
+}) {
   const [hasDropped, setHasDropped] = useState(!!player);
 
   const [{ isOver }, drop] = useDrop(
@@ -90,7 +106,13 @@ function DropZone({ courtId, areaKey, player, onDropPlayer, isLocked }) {
           : `Drop here - Court ${courtId}, Area ${areaKey}`
       }
     >
-      {player && <DraggablePlayer name={player} isLocked={isLocked} />}
+      {player && (
+        <DraggablePlayer
+          name={player}
+          isLocked={isLocked}
+          onDropService={onDropService}
+        />
+      )}
     </div>
   );
 }
@@ -103,103 +125,105 @@ function Court({
   onStart,
   onFinish,
   onCancel,
+  onDropService,
 }) {
   const [hovering, setHovering] = useState(false);
   const filledPlayers = Object.values(players).filter(Boolean);
   const readyToStart = filledPlayers.length === 4;
   return (
     <div
-      style={{ width: "100%",  position: "relative" }}
+      style={{ width: "100%", position: "relative" }}
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
     >
-      <div>
-        <div class="d-flex flex-row">
+      <div class="d-flex">
+        <div
+          style={{
+            left: "0%",
+            height: "45px",
+          }}
+        >
+          court{id} {isLocked && "(In-Progress)"}{" "}
+        </div>
+
+        {/* Finish and Cancel buttons */}
+        {isLocked && (
           <div
-            class="p-2 bd-highlight"
             style={{
-              left: "0%",
+              position: "absolute",
+              // top: "50%",
+              // left: "50%",
+              right: "0%",
+              // transform: "translate(-50%, -50%)",
+              display: "flex",
+              gap: "10px",
+              zIndex: 2,
+              transition: "opacity 2s ease",
             }}
           >
-            court{id} {isLocked && "(In-Progress)"}{" "}
+            <button className="btn btn-success" onClick={() => onFinish(id)}>
+              Finish
+            </button>
+            <button
+              className="btn btn-outline-secondary"
+              onClick={() => onCancel(id)}
+            >
+              Cancel
+            </button>
           </div>
-
-          {/* Finish and Cancel buttons */}
-          {isLocked && (
-            <div
+        )}
+      </div>
+      <div>
+        <div
+          style={{
+            backgroundColor: "white",
+            backgroundImage: 'url("/bad-court2.jpg")',
+            backgroundSize: "cover",
+            backgroundRepeat: "no-repeat",
+            backgroundPosition: "center",
+            height: "250px",
+            display: "grid",
+            gridTemplateColumns: "repeat(2, 1fr)",
+            gridTemplateRows: "repeat(2, 1fr)",
+            gap: "5px",
+            padding: "10px",
+            position: "relative",
+            transition: "all 2s ease",
+          }}
+        >
+          {areaKeys.map((areaKey) => (
+            <DropZone
+              key={areaKey}
+              courtId={id}
+              areaKey={areaKey}
+              player={players[areaKey]}
+              onDropPlayer={onDropPlayer}
+              isLocked={isLocked}
+              onDropService={onDropService}
+            />
+          ))}
+          {/* Start button */}
+          {!isLocked && hovering && (
+            <button
+              onClick={() => onStart(id)}
               style={{
                 position: "absolute",
-                // top: "50%",
-                // left: "50%",
-                right: "0%",
-                // transform: "translate(-50%, -50%)",
-                display: "flex",
-                gap: "10px",
-                zIndex: 2,
+                top: "50%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+                padding: "10px 20px",
+                backgroundColor: "#4198f7",
+                color: "white",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                zIndex: 1,
                 transition: "opacity 2s ease",
               }}
             >
-              <button className="btn btn-success" onClick={() => onFinish(id)}>
-                Finish
-              </button>
-              <button
-                className="btn btn-outline-secondary"
-                onClick={() => onCancel(id)}
-              >
-                Cancel
-              </button>
-            </div>
+              Start
+            </button>
           )}
-        </div>
-        <div>
-          <div
-            style={{
-              backgroundColor: "#006f4a",
-              backgroundImage: 'url("/bad-court2.jpg")',
-              backgroundSize: "cover",
-              height: "180px",
-              display: "grid",
-              gridTemplateColumns: "repeat(2, 1fr)",
-              gridTemplateRows: "repeat(2, 1fr)",
-              gap: "5px",
-              padding: "10px",
-              position: "relative",
-              transition: "all 2s ease",
-            }}
-          >
-            {areaKeys.map((areaKey) => (
-              <DropZone
-                key={areaKey}
-                courtId={id}
-                areaKey={areaKey}
-                player={players[areaKey]}
-                onDropPlayer={onDropPlayer}
-                isLocked={isLocked}
-              />
-            ))}
-            {/* Start button */}
-            {!isLocked && hovering && (
-              <button
-                onClick={() => onStart(id)}
-                style={{
-                  position: "absolute",
-                  top: "50%",
-                  left: "50%",
-                  transform: "translate(-50%, -50%)",
-                  padding: "10px 20px",
-                  backgroundColor: "#4198f7",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  zIndex: 1,
-                  transition: "opacity 2s ease",
-                }}
-              >
-                Start
-              </button>
-            )}
-          </div>
         </div>
       </div>
     </div>
@@ -212,6 +236,8 @@ function PlayerArea({
   onAddPlayer,
   newPlayer,
   setNewPlayer,
+  onDropService,
+  onClickPlayer,
 }) {
   const [{ isOver }, drop] = useDrop(() => ({
     accept: ItemTypes.PLAYER,
@@ -233,13 +259,13 @@ function PlayerArea({
     <div
       ref={drop}
       style={{
-        width: "20%",
-        padding: "20px",
+        width: "100%",
+        padding: "2px",
         backgroundColor: isOver ? "#eef" : "#f8f9fa",
-        borderRight: "1px solid #ccc",
         transition: "background-color 2s ease",
       }}
     >
+      <div class="player-area-header">Total player: {availablePlayers.length}</div>
       <input
         type="text"
         placeholder="Player A"
@@ -248,13 +274,19 @@ function PlayerArea({
         onKeyDown={(e) => e.key === "Enter" && handleAdd()}
         style={{
           width: "100%",
-          padding: "10px",
+          padding: "5px",
           marginBottom: "15px",
           boxSizing: "border-box",
         }}
       />
       {availablePlayers.map((p) => (
-        <DraggablePlayer key={p} name={p} isLocked={false} />
+        <DraggablePlayer
+          key={p}
+          name={p}
+          isLocked={false}
+          onDropService={onDropService}
+          onClick={onClickPlayer}
+        />
       ))}
     </div>
   );
@@ -272,12 +304,6 @@ function HomePage() {
     });
     return initialCourts;
   });
-  //   For scrolling to the end
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, []);
 
   const onDropPlayer = (playerName, courtId, areaKey) => {
     setCourts((prev) => {
@@ -348,98 +374,201 @@ function HomePage() {
     onFinish(courtId);
     alert(`On Cancel court ${courtId}`);
   };
-   // Sort images for the right column (1, 2, 3) to display from bottom-up visually
+  // Sort images for the right column (1, 2, 3) to display from bottom-up visually
   // We need to reverse the order for rendering to achieve "right-end > up"
   const rightColumn = courtIds
     .filter((id) => id >= 1 && id <= 3)
     .sort((a, b) => a - b); // Ensure 1, 2, 3 order, then reverse for display
-    
+
   // Sort images for the left column (4, 5, 6, 7)
   const leftColumn = courtIds
     .filter((id) => id >= 4 && id <= 7)
     .sort((a, b) => a - b);
 
+  // Handle Drop service
+  const [playerServiceMap, setPlayerServiceMap] = useState({});
+  const [selectedPlayer, setSelectedPlayer] = useState(null);
+  const [showDialog, setShowDialog] = useState(false);
+
+  const handleDropService = (playerName, serviceName, cost) => {
+    if (!playerName) return;
+    // player: Array[Services]
+    setPlayerServiceMap((prev) => {
+      const existing = prev[playerName] || [];
+      // if (existing.includes(serviceName)) return prev;
+      return {
+        ...prev,
+        [playerName]: [...existing, serviceName.concat("-", cost)],
+      };
+    });
+  };
+
+  // Handle clicking on player
+  const handleClickPlayer = (p) => {
+    console.log(`Click on player:${p}`);
+    setSelectedPlayer(p);
+    setShowDialog(true);
+  };
+
+  // shuttle_ball selection
+  const [selectedBall, setSelectedBall] = useState("");
+  const [ballOptions, setBallOptions] = useState([]);
+  const [services, setServices] = useState([]);
+  const [costInPerson, setCostInPerson] = useState();
+  // HomePage useEffect
+  useEffect(() => {
+    const fetchCourtInfor = async () => {
+      try {
+        // fetch shuttle_balls
+        const ballResponse = await api.get("/court-mana/getShuttleBalls");
+        if (ballResponse.status === 200) {
+          const listBall = ballResponse.data;
+          setBallOptions(
+            listBall.map((b) => `${b.shuttleName} - ${b.shuttleCost}`)
+          );
+        } else {
+          console.error(ballResponse.message);
+          setBallOptions([
+            "Vinastar - 28000",
+            "Cau 88 - 29000",
+            "Sunlight Hall - 31000",
+          ]);
+        }
+        setSelectedBall(ballOptions[0]);
+
+        // fetch services
+        const servicesResponse = await api.get("/court-mana/getServices");
+        console.log(
+          `Getting service response status:${servicesResponse.status}`
+        );
+        if (servicesResponse.status === 200) {
+          const listService = servicesResponse.data;
+          // set cost in person and remainning services
+          setCostInPerson(
+            listService.find((s) => s.serviceName === "costInPerson").cost
+          );
+          setServices(
+            listService.filter((s) => s.serviceName !== "costInPerson")
+          );
+        }
+      } catch (error) {
+        console.error(error);
+      }
+    };
+
+    fetchCourtInfor();
+    // scrolling to the end
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, []);
+
   return (
     <DndProvider backend={HTML5Backend}>
-      <div style={{ display: "flex", height: "100vh" }}>
-        <PlayerArea
-          availablePlayers={availablePlayers}
-          onDropPlayerBack={onDropPlayerBack}
-          onAddPlayer={onAddPlayer}
-          newPlayer={newPlayer}
-          setNewPlayer={setNewPlayer}
-        />
-
-{/* Court display html and css */}
-<div className="court-container" ref={scrollRef}>
-      <div className="column left-column">
-        {leftColumn.slice().reverse().map((id) => (
-          <div key={id} className="image-card">
-           {/* <h1>Item{id}</h1> */}
-           <Court
-              class="col-md-12"
-              key={id}
-              id={id}
-              players={courts[id]}
-              onDropPlayer={onDropPlayer}
-              isLocked={lockedCourts[id]}
-              onStart={onStart}
-              onFinish={onFinish}
-              onCancel={onCancel}
-            />
-          </div>
-        ))}
-      </div>
-      <div className="column right-column">
-        {/* Render in reverse order to achieve "right-end > up" visual stacking */}
-        {rightColumn.slice().reverse().map((id) => (
-          <div key={id} className="image-card">
-            {/* <h1>Item{id}</h1> */}
-            <Court
-              class="col-md-12"
-              key={id}
-              id={id}
-              players={courts[id]}
-              onDropPlayer={onDropPlayer}
-              isLocked={lockedCourts[id]}
-              onStart={onStart}
-              onFinish={onFinish}
-              onCancel={onCancel}
-            />
-          </div>
-        ))}
-      </div>
-    </div>
-
-
-        {/* <div
-          class="row d-flex"
-          ref={scrollRef}
+      <div style={{ display: "flex", flexDirection: "row", height: "100vh" }}>
+        <div
           style={{
-            // display: "flex",
-            // flexWrap: "wrap",
-            width: "100%",
-            // padding: "20px",
-            // gap: "20px",
-            overflowY: "scroll",
+            display: "flex",
+            flexDirection: "column",
+            width: "20%",
+            padding: "3px",
+            backgroundColor: "#eef",
+            borderRight: "1px solid #ccc",
+            transition: "background-color 2s ease",
           }}
-        > */}
+        >
+          <div style={{ margin: "5px 0 5px 5px" }}>
+            CostInPerson: {costInPerson} vnd
+          </div>
+          <select
+            value={selectedBall}
+            onChange={(e) => setSelectedBall(e.target.value)}
+            className="court-select"
+          >
+            {ballOptions.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
 
-          {/* {courtIds.map((id) => (
-            <Court
-              class="col-md-6"
-              key={id}
-              id={id}
-              players={courts[id]}
-              onDropPlayer={onDropPlayer}
-              isLocked={lockedCourts[id]}
-              onStart={onStart}
-              onFinish={onFinish}
-              onCancel={onCancel}
-            />
-          ))} */}
+          <div className="service-area">
+            <h5 style={{ margin: "15px 0 0 5px" }}>List of Service</h5>
+            {services.map((s) => (
+              <DraggableService
+                key={s.serviceName}
+                serviceName={s.serviceName}
+                cost={s.cost}
+              />
+            ))}
+          </div>
         </div>
-      {/* </div> */}
+        <div className="court-container" ref={scrollRef}>
+          <div className="column court-bar">
+            <PlayerArea
+              availablePlayers={availablePlayers}
+              onDropPlayerBack={onDropPlayerBack}
+              onAddPlayer={onAddPlayer}
+              newPlayer={newPlayer}
+              setNewPlayer={setNewPlayer}
+              onDropService={handleDropService}
+              onClickPlayer={handleClickPlayer}
+            />
+            {(playerServiceMap["Player A"] || []).join(", ")}
+          </div>
+          {showDialog && (
+            <ServiceDialog
+              playerName={selectedPlayer}
+              services={playerServiceMap[selectedPlayer] || []}
+              onClose={() => setShowDialog(false)}
+              onPay={() => alert("payment")}
+            />
+          )}
+          <div className="column left-column">
+            {leftColumn
+              .slice()
+              .reverse()
+              .map((id) => (
+                <div key={id} className="image-card">
+                  {/* <h1>Item{id}</h1> */}
+                  <Court
+                    key={id}
+                    id={id}
+                    players={courts[id]}
+                    onDropPlayer={onDropPlayer}
+                    isLocked={lockedCourts[id]}
+                    onStart={onStart}
+                    onFinish={onFinish}
+                    onCancel={onCancel}
+                    onDropService={handleDropService}
+                  />
+                </div>
+              ))}
+          </div>
+          <div className="column right-column">
+            {/* Render in reverse order to achieve "right-end > up" visual stacking */}
+            {rightColumn
+              .slice()
+              .reverse()
+              .map((id) => (
+                <div key={id} className="image-card">
+                  {/* <h1>Item{id}</h1> */}
+                  <Court
+                    key={id}
+                    id={id}
+                    players={courts[id]}
+                    onDropPlayer={onDropPlayer}
+                    isLocked={lockedCourts[id]}
+                    onStart={onStart}
+                    onFinish={onFinish}
+                    onCancel={onCancel}
+                    onDropService={handleDropService}
+                  />
+                </div>
+              ))}
+          </div>
+        </div>
+      </div>
     </DndProvider>
   );
 }

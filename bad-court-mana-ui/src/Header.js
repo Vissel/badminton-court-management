@@ -14,7 +14,7 @@ function Header() {
         <Navbar.Brand href="/"> Quản lý sân cầu lông Tân Châu </Navbar.Brand>
         <Navbar.Toggle aria-controls="basic-navbar-nav" />
         <Navbar.Collapse id="basic-navbar-nav">
-          <Nav className="ms-auto">
+          <Nav className="ms-auto" style={{gap:"20px"}}>
             <Nav.Link onClick={() => navigate("/home")}>Trang chủ</Nav.Link>
             <Nav.Link onClick={() => navigate("/setup")}>Cài đặt</Nav.Link>
             <Nav.Link onClick={logout}>Đăng xuất</Nav.Link>

@@ -1,0 +1,15 @@
+.date-time-bar {
+    background-color: inherit;
+    /* Dark background */
+    color: black;
+    /* White text */
+    /* padding: 10px 20px; Some padding */
+    text-align: right;
+    /* Center the text */
+    font-size: 0.9em;
+    /* Slightly larger text */
+    /* position: fixed; Fix it to the top of the viewport */
+    width: 100%;
+    /* Take full width */
+    border-bottom: 1px solid rgb(204, 204, 204);
+}

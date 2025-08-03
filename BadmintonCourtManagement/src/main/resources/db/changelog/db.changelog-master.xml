@@ -23,4 +23,7 @@
 <changeSet id="006" author="thach" >
 	<sqlFile path="db/changelog/changeset-006-removeUniqueContrains.sql"/>
 </changeSet>
+<changeSet id="007" author="thach" >
+	<sqlFile path="db/changelog/changeset-007-add-attrbutes-gameandteamtable.sql"/>
+</changeSet>
 </databaseChangeLog>

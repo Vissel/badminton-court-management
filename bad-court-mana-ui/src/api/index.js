@@ -6,11 +6,6 @@ const currentHost = `${window.location.protocol}//${window.location.hostname}`;
 const localHost = "http://localhost:9080";
 const context = "bad-court-management-dev";
 
-let getCsrfToken = () => null; // placeholder
-
-export const setCsrfTokenGetter = (getterFn) => {
-  getCsrfToken = getterFn;
-};
 const api = axios.create({
   baseURL: `${localHost}/${context}`, // Update with your backend base URL
   withCredentials: true,

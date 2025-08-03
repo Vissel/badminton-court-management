@@ -32,10 +32,12 @@
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }
 }
+
 /* court area */
 .court-container {
   background: #f0f0f0;
@@ -48,9 +50,12 @@
 }
 
 /* Add this to your App.css */
-.col-10 .p-3 .overflow-auto { /* Target the court area div */
-  scroll-padding-bottom: 50px; /* Adjust this value as needed */
+.col-10 .p-3 .overflow-auto {
+  /* Target the court area div */
+  scroll-padding-bottom: 50px;
+  /* Adjust this value as needed */
 }
+
 .court-area {
   position: absolute;
   width: 45%;
@@ -63,14 +68,17 @@
   top: 5%;
   left: 5%;
 }
+
 .court-area-b {
   top: 5%;
   right: 5%;
 }
+
 .court-area-c {
   bottom: 5%;
   left: 5%;
 }
+
 .court-area-d {
   bottom: 5%;
   right: 5%;
@@ -86,63 +94,85 @@
 }
 
 /* Updated Player Area Styling */
-.player-list-scroll { /* Add this new class */
-  flex-grow: 1; /* Allows it to take up available vertical space */
-  border: 1px solid #dee2e6; /* Add a border for visual separation */
-  border-radius: 0.25rem; /* Bootstrap's default rounded corners */
-  padding: 0.5rem; /* Some padding inside */
-  overflow-y: auto; /* Enable vertical scrolling */
-  max-height: calc(100vh - 150px); /* Adjust this value as needed based on your header/footer/input */
-                                  /* Example: 100vh minus approximate height of input and other elements above it */
+.player-list-scroll {
+  /* Add this new class */
+  flex-grow: 1;
+  /* Allows it to take up available vertical space */
+  border: 1px solid #dee2e6;
+  /* Add a border for visual separation */
+  border-radius: 0.25rem;
+  /* Bootstrap's default rounded corners */
+  padding: 0.5rem;
+  /* Some padding inside */
+  overflow-y: auto;
+  /* Enable vertical scrolling */
+  max-height: calc(100vh - 150px);
+  /* Adjust this value as needed based on your header/footer/input */
+  /* Example: 100vh minus approximate height of input and other elements above it */
 
-                                }
+}
 
 /* Ensure the parent of the player-list-scroll is a flex column */
 .d-flex .flex-column {
-  height: 100%; /* Important for flex-grow to work correctly */
+  height: 100%;
+  /* Important for flex-grow to work correctly */
 }
 
 /* App.css NEW*/
 
 .court-container {
-  display: flex; /* Use flexbox for the two columns */
-  justify-content: center; /* Center the columns if there's extra space */
-  gap: 2px; /* Space between the two columns */
-  padding: 20px;
-  box-sizing: border-box; /* Include padding in element's total width and height */
-  height: 100vh; /* Take full viewport height for demonstration */
-  align-items: flex-start; /* Align columns to the top */
+  display: flex;
+  /* Use flexbox for the two columns */
+  justify-content: center;
+  /* Center the columns if there's extra space */
+  gap: 2px;
+  /* Space between the two columns */
+  padding: 10px;
+  box-sizing: border-box;
+  /* Include padding in element's total width and height */
+  height: 100vh;
+  /* Take full viewport height for demonstration */
+  align-items: flex-start;
+  /* Align columns to the top */
   width: 100%;
-  overflow-y: scroll,
+  overflow-y: scroll
 }
 
 .column {
   display: flex;
-  flex-direction: column; /* Stack image cards vertically */
-   gap: 1.5px; /*Space between image cards within a column */
+  flex-direction: column;
+  /* Stack image cards vertically */
+  gap: 1.5px;
+  /*Space between image cards within a column */
   /* Optional: Add some padding or background to distinguish columns */
   /* background-color: #f0f0f0; */
-  padding: 10px;
+  padding: 5px;
   border-radius: 8px;
   width: 50%;
 }
 
 .image-card {
   display: flex;
-  align-items: center; /* Vertically align image and text */
-  gap: 10px; /* Space between the image and the text */
+  align-items: center;
+  /* Vertically align image and text */
+  gap: 10px;
+  /* Space between the image and the text */
   padding: 10px 15px;
   border: 1px solid #ccc;
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Subtle shadow */
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  /* Subtle shadow */
   background-color: #fff;
-  min-width: 200px; /* Adjust as needed */
+  min-width: 200px;
+  /* Adjust as needed */
 }
 
 .image-icon {
-  width: 40px; /* Size of your gear image */
+  width: 40px;
+  /* Size of your gear image */
   height: 40px;
-  object-fit: contain; /* Ensure the image fits within the bounds */
+  object-fit: contain;
+  /* Ensure the image fits within the bounds */
 }
 
 .image-label {
@@ -153,5 +183,34 @@
 
 /* Specific styling for the right column to handle the "right-end > up" layout */
 .right-column {
-    justify-content: flex-end; /* Pushes content to the bottom of the column */
+  justify-content: flex-end;
+  /* Pushes content to the bottom of the column */
+}
+
+.court-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: #f8f9fa;
+  /* display: flex; */
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #dee2e6;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  width: 30%;
+}
+
+.court-info {
+  font-weight: bold;
+}
+
+.court-select {
+  padding: 5px 10px;
+  font-size: 14px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+}
+
+.service-area{
+  font-size: 14px;
 }
