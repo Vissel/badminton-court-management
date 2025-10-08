@@ -1,6 +1,5 @@
 package com.badminton.entity;
 
-import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -24,21 +23,25 @@ public class Team {
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private int teamId;
 
-	@ManyToOne(cascade = CascadeType.DETACH)
+	@ManyToOne
 	@JoinColumn(name = "player_id1")
-	private Player playerOne;
+	private AvailablePlayer playerOne;
 
 	@Column(name = "expense_1")
 	private float expenseOne;
 
-	@ManyToOne(cascade = CascadeType.DETACH)
+	@ManyToOne
 	@JoinColumn(name = "player_id2")
-	private Player playerTwo;
+	private AvailablePlayer playerTwo;
 
 	@Column(name = "expense_2")
 	private float expenseTwo;
 
+	@Column(name = "is_status")
+	private boolean win;
+
 	@OneToOne
 	@JoinColumn(name = "game_id", nullable = false)
 	private Game game;
+
 }

@@ -1,7 +1,11 @@
 import React from "react";
 import "./ServiceDialog.css";
 
-const ServiceDialog = ({ playerName, services, onClose, onPay }) => {
+const ServiceDialog = ({ playerName, services, onClose, onPay, onDelete }) => {
+  const handleDelete =()=>{
+    onDelete(playerName);
+    onClose(false);
+  }
   return (
     <div className="dialog-overlay">
       <div className="dialog-box">
@@ -31,14 +35,9 @@ const ServiceDialog = ({ playerName, services, onClose, onPay }) => {
           <button className="btn btn-primary" onClick={onPay}>
             Pay
           </button>
-          <button className="btn btn-outline-danger" onClick={onPay}>
-            Remove
+          <button className="btn btn-outline-danger" onClick={handleDelete}>
+            Delete
           </button>
-          <div className="dialog-cancel">
-            <button className="btn btn-secondary" onClick={onClose}>
-              Close
-            </button>
-          </div>
         </div>
       </div>
     </div>

@@ -1,302 +1,29 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Col, Row, Container } from "react-bootstrap";
-import { DndProvider, useDrag, useDrop } from "react-dnd";
+import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import "../App.css";
 import api from "../api/index";
 
-import { ItemTypes } from "./ItemTypes";
 import DraggableService from "./dragNdrop/DraggableService";
+import Court from "./dragNdrop/Court";
+import PlayerArea from "./dragNdrop/PlayerArea";
 import ServiceDialog from "./dialog/ServiceDialog";
-
-const playersInitial = ["Player A", "Player B", "Player C"];
-const courtIds = [1, 2, 3, 4, 5, 6, 7];
-// [  6,7, 4, 5, 2, 3, 1, -1]
-const areaKeys = ["A", "B", "C", "D"];
-
-function DraggablePlayer({ name, isLocked, onDropService, onClick }) {
-  const [{ isDragging }, drag] = useDrag(
-    () => ({
-      type: ItemTypes.PLAYER,
-      item: { name },
-      canDrag: !isLocked,
-      collect: (monitor) => ({ isDragging: !!monitor.isDragging() }),
-    }),
-    [isLocked]
-  );
-  const [, drop] = useDrop(
-    () => ({
-      accept: ItemTypes.SERVICE,
-      drop: (item) => onDropService(name, item.serviceName, item.cost),
-    }),
-    [name]
-  );
-
-  return (
-    <div
-      ref={(node) => drag(drop(node))}
-      onClick={() => onClick?.(name)}
-      style={{
-        opacity: isDragging ? 0.5 : 1,
-        padding: "5px",
-        margin: "5px",
-        backgroundColor: "white",
-        border: "1px solid gray",
-        textAlign: "center",
-        cursor: isLocked ? "not-allowed" : "move",
-        transition: "all 2s ease",
-      }}
-      title={`Currently placed in: ${name}`}
-    >
-      {name}
-    </div>
-  );
-}
-
-function DropZone({
-  courtId,
-  areaKey,
-  player,
-  onDropPlayer,
-  isLocked,
-  onDropService,
-}) {
-  const [hasDropped, setHasDropped] = useState(!!player);
-
-  const [{ isOver }, drop] = useDrop(
-    () => ({
-      accept: ItemTypes.PLAYER,
-      drop: (item) => {
-        if (!isLocked) {
-          onDropPlayer(item.name, courtId, areaKey);
-          setHasDropped(true);
-        }
-      },
-      collect: (monitor) => ({ isOver: !!monitor.isOver() }),
-      canDrop: () => !isLocked,
-    }),
-    [player, isLocked]
-  );
-
-  useEffect(() => {
-    if (!player) setHasDropped(false);
-  }, [player]);
-
-  const getBackgroundColor = () => {
-    if (hasDropped) return "white";
-    if (isOver) return "#def";
-    return "rgb(255 255 255 / 39%)";
-  };
-
-  return (
-    <div
-      ref={drop}
-      style={{
-        // height: "50px",
-        border: "1px dashed gray",
-        margin: "5px",
-        backgroundColor: getBackgroundColor(),
-        textAlign: "center",
-        lineHeight: "50px",
-        transition: "background-color 2s ease",
-      }}
-      title={
-        player
-          ? `Player: ${player}`
-          : `Drop here - Court ${courtId}, Area ${areaKey}`
-      }
-    >
-      {player && (
-        <DraggablePlayer
-          name={player}
-          isLocked={isLocked}
-          onDropService={onDropService}
-        />
-      )}
-    </div>
-  );
-}
-
-function Court({
-  id,
-  players,
-  onDropPlayer,
-  isLocked,
-  onStart,
-  onFinish,
-  onCancel,
-  onDropService,
-}) {
-  const [hovering, setHovering] = useState(false);
-  const filledPlayers = Object.values(players).filter(Boolean);
-  const readyToStart = filledPlayers.length === 4;
-  return (
-    <div
-      style={{ width: "100%", position: "relative" }}
-      onMouseEnter={() => setHovering(true)}
-      onMouseLeave={() => setHovering(false)}
-    >
-      <div class="d-flex">
-        <div
-          style={{
-            left: "0%",
-            height: "45px",
-          }}
-        >
-          court{id} {isLocked && "(In-Progress)"}{" "}
-        </div>
-
-        {/* Finish and Cancel buttons */}
-        {isLocked && (
-          <div
-            style={{
-              position: "absolute",
-              // top: "50%",
-              // left: "50%",
-              right: "0%",
-              // transform: "translate(-50%, -50%)",
-              display: "flex",
-              gap: "10px",
-              zIndex: 2,
-              transition: "opacity 2s ease",
-            }}
-          >
-            <button className="btn btn-success" onClick={() => onFinish(id)}>
-              Finish
-            </button>
-            <button
-              className="btn btn-outline-secondary"
-              onClick={() => onCancel(id)}
-            >
-              Cancel
-            </button>
-          </div>
-        )}
-      </div>
-      <div>
-        <div
-          style={{
-            backgroundColor: "white",
-            backgroundImage: 'url("/bad-court2.jpg")',
-            backgroundSize: "cover",
-            backgroundRepeat: "no-repeat",
-            backgroundPosition: "center",
-            height: "250px",
-            display: "grid",
-            gridTemplateColumns: "repeat(2, 1fr)",
-            gridTemplateRows: "repeat(2, 1fr)",
-            gap: "5px",
-            padding: "10px",
-            position: "relative",
-            transition: "all 2s ease",
-          }}
-        >
-          {areaKeys.map((areaKey) => (
-            <DropZone
-              key={areaKey}
-              courtId={id}
-              areaKey={areaKey}
-              player={players[areaKey]}
-              onDropPlayer={onDropPlayer}
-              isLocked={isLocked}
-              onDropService={onDropService}
-            />
-          ))}
-          {/* Start button */}
-          {!isLocked && hovering && (
-            <button
-              onClick={() => onStart(id)}
-              style={{
-                position: "absolute",
-                top: "50%",
-                left: "50%",
-                transform: "translate(-50%, -50%)",
-                padding: "10px 20px",
-                backgroundColor: "#4198f7",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                zIndex: 1,
-                transition: "opacity 2s ease",
-              }}
-            >
-              Start
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function PlayerArea({
-  availablePlayers,
-  onDropPlayerBack,
-  onAddPlayer,
-  newPlayer,
-  setNewPlayer,
-  onDropService,
-  onClickPlayer,
-}) {
-  const [{ isOver }, drop] = useDrop(() => ({
-    accept: ItemTypes.PLAYER,
-    drop: (item) => onDropPlayerBack(item.name),
-    collect: (monitor) => ({ isOver: !!monitor.isOver() }),
-  }));
-
-  const handleAdd = () => {
-    if (
-      newPlayer.trim() !== "" &&
-      !availablePlayers.includes(newPlayer.trim())
-    ) {
-      onAddPlayer(newPlayer.trim());
-      setNewPlayer("");
-    }
-  };
-
-  return (
-    <div
-      ref={drop}
-      style={{
-        width: "100%",
-        padding: "2px",
-        backgroundColor: isOver ? "#eef" : "#f8f9fa",
-        transition: "background-color 2s ease",
-      }}
-    >
-      <div class="player-area-header">Total player: {availablePlayers.length}</div>
-      <input
-        type="text"
-        placeholder="Player A"
-        value={newPlayer}
-        onChange={(e) => setNewPlayer(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-        style={{
-          width: "100%",
-          padding: "5px",
-          marginBottom: "15px",
-          boxSizing: "border-box",
-        }}
-      />
-      {availablePlayers.map((p) => (
-        <DraggablePlayer
-          key={p}
-          name={p}
-          isLocked={false}
-          onDropService={onDropService}
-          onClick={onClickPlayer}
-        />
-      ))}
-    </div>
-  );
-}
 
 /* HomePage */
 function HomePage() {
-  const [availablePlayers, setAvailablePlayers] = useState(playersInitial);
-  const [newPlayer, setNewPlayer] = useState("");
-  const scrollRef = useRef(null);
+  const courtIds = [1, 2, 3, 4, 5, 6, 7];
+
+  // Sort images for the right column (1, 2, 3) to display from bottom-up visually
+  // We need to reverse the order for rendering to achieve "right-end > up"
+  const rightColumn = courtIds
+    .filter((id) => id >= 1 && id <= 3)
+    .sort((a, b) => a - b); // Ensure 1, 2, 3 order, then reverse for display
+
+  // Sort images for the left column (4, 5, 6, 7)
+  const leftColumn = courtIds
+    .filter((id) => id >= 4 && id <= 7)
+    .sort((a, b) => a - b);
+
   const [courts, setCourts] = useState(() => {
     const initialCourts = {};
     courtIds.forEach((id) => {
@@ -305,7 +32,112 @@ function HomePage() {
     return initialCourts;
   });
 
-  const onDropPlayer = (playerName, courtId, areaKey) => {
+  // shuttle_ball selection
+  const [selectedBall, setSelectedBall] = useState("");
+  const selectedBallRef = useRef("");
+
+  const [ballOptions, setBallOptions] = useState([]);
+  const [services, setServices] = useState([]);
+  const [costInPerson, setCostInPerson] = useState();
+  const [availablePlayers, setAvailablePlayers] = useState([]);
+  const [newPlayer, setNewPlayer] = useState("");
+  const scrollRef = useRef(null);
+  // const [courts, setCourts] = useState();
+
+  const responseSuccess = (response) => {
+    return response.status === 200 && !response.data && response.data === true;
+  };
+  const removePlayerFromCourtApi = (playerName, courtId, areaKey) => {
+    const courtPayload = {
+      courtId: courtId,
+      courtAreas: [
+        {
+          area: areaKey,
+          playerInArea: {
+            playerName: playerName,
+          },
+        },
+      ],
+    };
+    api.post(`/court-mana/removePlayerFromCourt`, courtPayload);
+    // .then((res) => {
+    //   if (responseSuccess(res)) {
+
+    //   }
+    // })
+    // .catch((error) => {
+    //   console.error(`Error while onDropPlayerBack - ${playerName}, ${courtId}, ${areaKey}, ${error} `);
+    // });
+    setCourts((prev) => {
+      const updated = { ...prev };
+      for (const id in updated) {
+        for (const key in updated[id]) {
+          if (updated[id][key] === playerName) updated[id][key] = null;
+        }
+      }
+      return updated;
+    });
+    setAvailablePlayerBack(playerName);
+  };
+
+  const onDropPlayerOntoCourt = (
+    playerName,
+    courtId,
+    areaKey,
+    fromCourtId,
+    fromArea
+  ) => {
+    const selectedBallValue = selectedBallRef.current;
+
+    if (!selectedBallValue) {
+      alert("Please select a shuttle ball before dropping a player.");
+      return;
+    }
+    //
+    // 1. If the player was already in another court → remove first
+    if (fromCourtId != null && fromArea != null) {
+      console.info(
+        `Moving player from court ${fromCourtId}-${fromArea} to another court.`
+      );
+      removePlayerFromCourtApi(playerName, fromCourtId, fromArea);
+    }
+
+    // 2. api to add player to court area
+    console.info(
+      `Calling post api to add player:${playerName} to court:${courtId}-${areaKey}, selectedBallValue ${selectedBallValue}`
+    );
+    const ball = selectedBallValue
+      .slice(0, selectedBallValue.lastIndexOf("-"))
+      .trim();
+    const cost = selectedBallValue
+      .slice(selectedBallValue.lastIndexOf("-") + 1)
+      .trim();
+    const gameDTO = {
+      playerName: playerName,
+      court: {
+        courtId: courtId,
+        courtName: "San 2",
+        courtAreas: [
+          {
+            area: areaKey,
+            playerInArea: {},
+          },
+        ],
+      },
+      shuttleBall: {
+        shuttleName: ball,
+        shuttleCost: parseFloat(cost),
+      },
+    };
+    api.post(`/court-mana/addPlayerToCourt`, gameDTO);
+    // .then((res) => {
+    //   if (responseSuccess(res)) {
+    //     console.log()
+    //   }
+    // })
+    // .catch((error) => {
+    //   console.error(`Error while onDropPlayerOntoCourt - ${playerName}, ${courtId}, ${areaKey}, ${error} `);
+    // });
     setCourts((prev) => {
       const updated = { ...prev };
       for (const id in updated) {
@@ -319,33 +151,90 @@ function HomePage() {
     setAvailablePlayers((prev) => prev.filter((p) => p !== playerName));
   };
 
-  const onDropPlayerBack = (playerName) => {
-    setCourts((prev) => {
-      const updated = { ...prev };
-      for (const id in updated) {
-        for (const key in updated[id]) {
-          if (updated[id][key] === playerName) updated[id][key] = null;
+  const setAvailablePlayerBack = (playerName) => {
+    if (!availablePlayers.includes(playerName)) {
+      // 2) add back to available list — ALWAYS return a NEW array reference
+      setAvailablePlayers((prev) => {
+        if (prev.includes(playerName)) {
+          // force a new array so React re-renders and react-dnd unhides the item
+          return [...prev];
         }
-      }
-      return updated;
-    });
-    setAvailablePlayers((prev) =>
-      prev.includes(playerName) ? prev : [...prev, playerName]
+        return [...prev, playerName];
+      });
+    }
+  };
+
+  const occupied = () => {};
+  const onDropPlayerBack = (playerName, courtId, areaKey) => {
+    console.log(availablePlayers);
+    removePlayerFromCourtApi(playerName, courtId, areaKey);
+  };
+
+  const onAddPlayer = async (name) => {
+    const addedPlayer = await api.post("/court-mana/addPlayer", name);
+    if (addedPlayer.status === 200) {
+      console.log("Adding new player successfully.");
+      setAvailablePlayers((prev) => [...prev, name]);
+      // set costInPerson
+      handleDropService(name, "costInPerson", costInPerson);
+    } else {
+      console.error("Error while adding player to available session.");
+      alert("Có lỗi khi thêm người chơi. Refresh lại trang này!");
+    }
+  };
+
+  const handleDeletePlayer = async (selectedPlayer) => {
+    console.log(availablePlayers);
+
+    const deletedPlayer = await api.post(
+      "/court-mana/removePlayer",
+      selectedPlayer
     );
+    if (deletedPlayer.status === 200) {
+      console.log("Deleting player successfully.");
+      setAvailablePlayers((prev) => prev.filter((p) => p !== selectedPlayer));
+    } else {
+      console.error("Error while deleting player to available session.");
+      alert("Có lỗi khi xoa người chơi. Refresh lại trang này!");
+    }
   };
-
-  const onAddPlayer = (name) => {
-    setAvailablePlayers((prev) => [...prev, name]);
-  };
-
   /* On Start*/
   const [lockedCourts, setLockedCourts] = useState({});
-  const onStart = (courtId) => {
-    setLockedCourts((prev) => ({ ...prev, [courtId]: true }));
+  const onStart = async (courtId) => {
+    await api
+      .post(`/court-mana/changeGameState`, {
+        court: {
+          courtId: courtId,
+        },
+        gameState: "Start",
+      })
+      .then((response) => {
+        if (response.status === 200) {
+          console.log(
+            `Response: ${response.data}. court [${courtId}] has been started.`
+          );
+          if (response.data === true) {
+            setLockedCourts((prev) => ({ ...prev, [courtId]: true }));
+          } else {
+            alert(" Không thể bắt đầu. Số lượng người chơi mới không hợp lệ .");
+          }
+        }
+      });
   };
 
   /** On Finish */
-  const onFinish = (courtId) => {
+  const onFinish = async (courtId) => {
+    const res = await api.post(`/court-mana/changeGameState`, {
+      court: {
+        courtId: courtId,
+      },
+      gameState: "Finish",
+    });
+    if (res.status !== 200 && res.data === false) {
+      alert("Hành động thất bại. Load lại trang và thử lại. ");
+      return;
+    }
+
     setCourts((prev) => {
       const updated = { ...prev };
       const playersToReturn = Object.values(updated[courtId]).filter(Boolean);
@@ -370,20 +259,43 @@ function HomePage() {
     alert(`On finish of court ${courtId}`);
   };
   /**On Cancel */
-  const onCancel = (courtId) => {
-    onFinish(courtId);
+  const onCancel = async (courtId) => {
+    const res = await api.post(`/court-mana/changeGameState`, {
+      court: {
+        courtId: courtId,
+      },
+      gameState: "Cancel",
+    });
+    if (res.status !== 200 && res.data === false) {
+      alert("Hành động thất bại. Load lại trang và thử lại. ");
+      return;
+    }
+
+    setCourts((prev) => {
+      const updated = { ...prev };
+      const playersToReturn = Object.values(updated[courtId]).filter(Boolean);
+      courtIds.forEach((id) => {
+        for (const key in updated[id]) {
+          if (playersToReturn.includes(updated[id][key]))
+            updated[id][key] = null;
+        }
+      });
+      return updated;
+    });
+
+    setAvailablePlayerBack(courts[courtId]);
+
+    // setAvailablePlayers((prev) => [
+    //   ...prev,
+    //   ...Object.values(courts[courtId]).filter(Boolean),
+    // ]);
+    setLockedCourts((prev) => {
+      const updated = { ...prev };
+      delete updated[courtId];
+      return updated;
+    });
     alert(`On Cancel court ${courtId}`);
   };
-  // Sort images for the right column (1, 2, 3) to display from bottom-up visually
-  // We need to reverse the order for rendering to achieve "right-end > up"
-  const rightColumn = courtIds
-    .filter((id) => id >= 1 && id <= 3)
-    .sort((a, b) => a - b); // Ensure 1, 2, 3 order, then reverse for display
-
-  // Sort images for the left column (4, 5, 6, 7)
-  const leftColumn = courtIds
-    .filter((id) => id >= 4 && id <= 7)
-    .sort((a, b) => a - b);
 
   // Handle Drop service
   const [playerServiceMap, setPlayerServiceMap] = useState({});
@@ -392,6 +304,9 @@ function HomePage() {
 
   const handleDropService = (playerName, serviceName, cost) => {
     if (!playerName) return;
+    // add to db
+    saveServiceToPlayer(playerName, serviceName, cost);
+
     // player: Array[Services]
     setPlayerServiceMap((prev) => {
       const existing = prev[playerName] || [];
@@ -409,23 +324,59 @@ function HomePage() {
     setSelectedPlayer(p);
     setShowDialog(true);
   };
+  const saveServiceToPlayer = async (playerName, serviceName, cost) => {
+    const res = await api.post(
+      `/court-mana/addServiceToPlayer?playerName=${playerName}`,
+      {
+        serviceName: serviceName,
+        cost: parseFloat(cost),
+      }
+    );
+    if (res.status === 200 && res.data === true) {
+      console.info(`Added ${serviceName} - ${cost} to ${playerName}`);
+    } else {
+      console.error(`Failed to add ${serviceName} - ${cost} to ${playerName}`);
+    }
+  };
 
-  // shuttle_ball selection
-  const [selectedBall, setSelectedBall] = useState("");
-  const [ballOptions, setBallOptions] = useState([]);
-  const [services, setServices] = useState([]);
-  const [costInPerson, setCostInPerson] = useState();
+  // helper setter — ALWAYS use this to set selectedBall
+  const setSelectedBallAndRef = (value) => {
+    selectedBallRef.current = value; // update ref immediately
+    setSelectedBall(value); // update state as well
+    console.debug("setSelectedBallAndRef ->", value);
+  };
+
   // HomePage useEffect
   useEffect(() => {
     const fetchCourtInfor = async () => {
       try {
+        // check available session
+        const avaSession = await api.get("/session/checkAvailable");
+        if (avaSession.status === 200) {
+          if (avaSession.data === true) {
+            console.info("Session is available.");
+          } else {
+            // create new one
+            await api.post("/session/createNewSession");
+            console.info("New session is created.");
+            // await api.post('/session/deleteSession');
+          }
+        } else {
+          // TODO
+          console.error("Error while checking available session.");
+          return;
+        }
+
         // fetch shuttle_balls
         const ballResponse = await api.get("/court-mana/getShuttleBalls");
-        if (ballResponse.status === 200) {
+        if (ballResponse.status === 200 && ballResponse.data !== "") {
           const listBall = ballResponse.data;
           setBallOptions(
             listBall.map((b) => `${b.shuttleName} - ${b.shuttleCost}`)
           );
+          // choose a sensible default (first item if exists)
+          const defaultBall = `${listBall[0].shuttleName} -  ${listBall[0].shuttleCost}`;
+          setSelectedBallAndRef(defaultBall);
         } else {
           console.error(ballResponse.message);
           setBallOptions([
@@ -434,14 +385,13 @@ function HomePage() {
             "Sunlight Hall - 31000",
           ]);
         }
-        setSelectedBall(ballOptions[0]);
 
         // fetch services
         const servicesResponse = await api.get("/court-mana/getServices");
         console.log(
           `Getting service response status:${servicesResponse.status}`
         );
-        if (servicesResponse.status === 200) {
+        if (servicesResponse.status === 200 && servicesResponse.data !== "") {
           const listService = servicesResponse.data;
           // set cost in person and remainning services
           setCostInPerson(
@@ -451,6 +401,44 @@ function HomePage() {
             listService.filter((s) => s.serviceName !== "costInPerson")
           );
         }
+
+        // fetch game DTO
+        const resCourtMana = await api.get(`/court-mana/getCourtManagement`);
+        if (resCourtMana.status === 200 && resCourtMana.data !== "") {
+          const resGames = resCourtMana.data.gameDTOs;
+          // const resCourts = resCourtMana.data.remainCourts;
+          if (resGames !== "") {
+            setCourts((prev) => {
+              const currCourts = { ...prev };
+              resGames.forEach((g) => {
+                const id = parseInt(g.court.courtId);
+                g.court.courtAreas.forEach((courtArea) => {
+                  // set player onto area of court
+                  currCourts[id][courtArea.area] =
+                    courtArea.playerInArea.playerName;
+                });
+                // set lock court if gameState is Start
+                if(g.gameState === 'Start'){
+                  setLockedCourts((prev) => ({ ...prev, [g.court.courtId]: true }));
+                }
+              });
+              return currCourts;
+            });
+          }
+          console.info(`Courts:${courts}`);
+
+          const resAvaPlayers = resCourtMana.data.availablePlayerDTOs;
+          if (resAvaPlayers !== "") {
+            setAvailablePlayers(resAvaPlayers.map((p) => p.playerName));
+          }
+        } else {
+          console.error(`Cannot get court management data.`);
+        }
+        // fetch available players in current session
+        // const avaPlayers = await api.get("/court-mana/getAvailablePlayers");
+        // if (avaPlayers.status === 200) {
+        //   setAvailablePlayers(avaPlayers.data.map((p) => p.playerName));
+        // }
       } catch (error) {
         console.error(error);
       }
@@ -480,6 +468,7 @@ function HomePage() {
           <div style={{ margin: "5px 0 5px 5px" }}>
             CostInPerson: {costInPerson} vnd
           </div>
+          <div>value: {selectedBall}</div>
           <select
             value={selectedBall}
             onChange={(e) => setSelectedBall(e.target.value)}
@@ -514,7 +503,6 @@ function HomePage() {
               onDropService={handleDropService}
               onClickPlayer={handleClickPlayer}
             />
-            {(playerServiceMap["Player A"] || []).join(", ")}
           </div>
           {showDialog && (
             <ServiceDialog
@@ -522,6 +510,7 @@ function HomePage() {
               services={playerServiceMap[selectedPlayer] || []}
               onClose={() => setShowDialog(false)}
               onPay={() => alert("payment")}
+              onDelete={handleDeletePlayer}
             />
           )}
           <div className="column left-column">
@@ -535,7 +524,8 @@ function HomePage() {
                     key={id}
                     id={id}
                     players={courts[id]}
-                    onDropPlayer={onDropPlayer}
+                    onDropPlayer={onDropPlayerOntoCourt}
+                    occupied={occupied}
                     isLocked={lockedCourts[id]}
                     onStart={onStart}
                     onFinish={onFinish}
@@ -557,7 +547,8 @@ function HomePage() {
                     key={id}
                     id={id}
                     players={courts[id]}
-                    onDropPlayer={onDropPlayer}
+                    onDropPlayer={onDropPlayerOntoCourt}
+                    occupied={occupied}
                     isLocked={lockedCourts[id]}
                     onStart={onStart}
                     onFinish={onFinish}

@@ -1,19 +1,12 @@
 package com.badminton.entity;
 
-import java.sql.Timestamp;
-
-import jakarta.persistence.CascadeType;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.OneToOne;
-import jakarta.persistence.Table;
+import com.badminton.constant.GameState;
+import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+
+import java.sql.Timestamp;
 
 @Entity
 @Table(name = "game")
@@ -21,30 +14,45 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 public class Game {
-	@Id
-	@GeneratedValue(strategy = GenerationType.IDENTITY)
-	private int gameId;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private int gameId;
 
-	private String courtId;
+    @ManyToOne(cascade = CascadeType.DETACH)
+    @JoinColumn(name = "court_id", nullable = false)
+    private Court court;
 
-	private String shuttleId;
+    @ManyToOne(cascade = CascadeType.DETACH)
+    @JoinColumn(name = "shuttle_id", nullable = false)
+    private ShuttleBall shuttleBall;
 
-	private int shuttleNumber;
+    private int shuttleNumber;
 
-	@OneToOne(cascade = CascadeType.ALL)
-	@JoinColumn(name = "team_id1", nullable = false)
-	private Team teamOne;
+    @OneToOne(cascade = CascadeType.ALL)
+    @JoinColumn(name = "team_id1", nullable = true)
+    private Team teamOne;
 
-	@OneToOne(cascade = CascadeType.ALL)
-	@JoinColumn(name = "team_id2", nullable = false)
-	private Team teamTwo;
+    @OneToOne(cascade = CascadeType.ALL)
+    @JoinColumn(name = "team_id2", nullable = true)
+    private Team teamTwo;
 
-	@Column(updatable = false, insertable = false)
-	private Timestamp createdDate;
+    @Column(updatable = false, insertable = false)
+    private Timestamp createdDate;
 
-	@Column(nullable = true)
-	private Timestamp endedDate;
+    @Column(nullable = true)
+    private Timestamp endedDate;
 
-	private String state;
+    /**
+     * Follow GameState
+     */
+    private String state;
 
+    public Game(Court court, ShuttleBall shuttleBall) {
+        this.court = court;
+        this.shuttleBall = shuttleBall;
+        // default quantity is 1
+        this.shuttleNumber = 1;
+        // default Not start
+        this.state = GameState.NOT_START.getValue();
+    }
 }

@@ -26,4 +26,19 @@
 <changeSet id="007" author="thach" >
 	<sqlFile path="db/changelog/changeset-007-add-attrbutes-gameandteamtable.sql"/>
 </changeSet>
+<changeSet id="008" author="thach" >
+	<sqlFile path="db/changelog/changeset-008-add-tables-session-availableplayers.sql"/>
+</changeSet>
+<changeSet id="009" author="thach" >
+	<sqlFile path="db/changelog/changeset-009-update-tables-availableplayers.sql"/>
+</changeSet>
+<changeSet id="010" author="thach" >
+	<sqlFile path="db/changelog/changeset-010-add-column-availableplayers.sql"/>
+</changeSet>
+<!-- <changeSet id="012" author="thach" >
+	<sqlFile path="db/changelog/changeset-012-update-team-table.sql"/>
+</changeSet> -->
+<changeSet id="012.1" author="thach" >
+	<sqlFile path="db/changelog/changeset-012.1-update-team-table.sql"/>
+</changeSet>
 </databaseChangeLog>

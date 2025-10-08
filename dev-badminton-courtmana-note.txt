@@ -50,3 +50,18 @@ Code to enable dragging services into players
 
 css: service
 opacity: 1; padding: 5px 10px; margin: 5px; background-color: rgb(204, 221, 238); border-radius: 4px; cursor: move; border: 1px solid rgb(170, 170, 204);
+==============================
+Aug 7th: 
+Timstamp:
+Return from DB: 2025-08-07 02:04:24.0
+Display in DB: 2025-08-06 19:04:24
+
+Aug 9th:
+DB return to instant: 2025-08-09T19:35:33Z
+utc:	2025-08-09T05:49:45.912Z
+Current: 2025-08-09T12:49:45.912Z
+
+JSESSIONID=3B90671799AAAC1B6103B06AC38CBE5E;XSRF-TOKEN=5f01f3bb-b1b4-484a-8b4a-d54132ccb11c
+
+Aug 17th:
+rjyQ_w80Vsh3F8zfrTVoevdf-PT-sJnA8InkW3G048438-OBmA2nnmsDYataIa2-lRhcQsBs1ZWb1fjtyOzSOhOD2_cAxtO3

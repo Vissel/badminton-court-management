@@ -1,0 +1,29 @@
+.player-box {
+  position: relative;
+}
+
+.player-highlight {
+  animation: pulseHighlight 0.6s ease;
+  border-color: #4caf50 !important;
+  box-shadow: 0 0 10px rgba(76, 175, 80, 0.7);
+  font-weight: bold;
+}
+
+@keyframes pulseHighlight {
+  0% {
+    transform: scale(1);
+    background-color: #fff;
+  }
+  30% {
+    transform: scale(1.05);
+    background-color: #e8fbe8;
+  }
+  60% {
+    transform: scale(0.98);
+    background-color: #f0fff0;
+  }
+  100% {
+    transform: scale(1);
+    background-color: #fff;
+  }
+}
