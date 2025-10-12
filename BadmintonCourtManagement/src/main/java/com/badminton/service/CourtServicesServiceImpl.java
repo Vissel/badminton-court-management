@@ -13,7 +13,6 @@ import com.badminton.util.ServiceUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 
-import java.sql.Timestamp;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -292,7 +291,7 @@ public class CourtServicesServiceImpl {
                     game.setState(stateChange);
                     // update ended time for FINISH & CANCEL state
                     if (ServiceUtil.isEndedState(changeGameState)) {
-                        game.setEndedDate(new Timestamp(System.currentTimeMillis()));
+                        game.setEndedDate(ServiceUtil.getCurrentTimeStamp());
                     }
                     gameRepo.save(game);
                     return true;

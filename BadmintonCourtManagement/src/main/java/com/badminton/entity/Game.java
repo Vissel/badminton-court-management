@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.sql.Timestamp;
+import java.util.List;
 
 @Entity
 @Table(name = "game")
@@ -27,6 +28,10 @@ public class Game {
     private ShuttleBall shuttleBall;
 
     private int shuttleNumber;
+
+    @OneToMany(mappedBy = "game")
+    @JoinColumn(name = "game_shuttle_id")
+    private List<GameShuttleMap> shuttleMap;
 
     @OneToOne(cascade = CascadeType.ALL)
     @JoinColumn(name = "team_id1", nullable = true)
