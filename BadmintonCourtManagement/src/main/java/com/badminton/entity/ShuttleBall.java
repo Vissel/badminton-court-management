@@ -1,18 +1,11 @@
 package com.badminton.entity;
 
-import java.sql.Timestamp;
-import java.util.Set;
-
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.OneToMany;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+
+import java.sql.Timestamp;
 
 @Entity
 @Table(name = "shuttle_ball")
@@ -20,28 +13,25 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 public class ShuttleBall {
-	@Id
-	@GeneratedValue(strategy = GenerationType.IDENTITY)
-	private int shuttleId;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private int shuttleId;
 
-	@Column(name = "shuttle_name")
-	private String shuttleName;
+    @Column(name = "shuttle_name")
+    private String shuttleName;
 
-	private float cost;
+    private float cost;
 
-	@Column(updatable = false, insertable = false)
-	private Timestamp createdDate;
+    @Column(updatable = false, insertable = false)
+    private Timestamp createdDate;
 
-	@Column(name = "is_active")
-	private boolean isActive;
+    @Column(name = "is_active")
+    private boolean isActive;
 
-	public ShuttleBall(String name, float cost) {
-		super();
-		this.shuttleName = name;
-		this.cost = cost;
-		this.isActive = true;
-	}
-
-	@OneToMany(mappedBy = "shuttleBall")
-	private Set<Game> games;
+    public ShuttleBall(String name, float cost) {
+        super();
+        this.shuttleName = name;
+        this.cost = cost;
+        this.isActive = true;
+    }
 }

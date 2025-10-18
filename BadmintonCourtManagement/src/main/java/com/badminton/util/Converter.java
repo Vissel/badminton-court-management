@@ -34,10 +34,14 @@ public class Converter {
 
     private static TeamResult convertorToTeamResult(Team team) {
         TeamResult teamResult = new TeamResult();
-        teamResult.setPlayerOneName(team.getPlayerOne().getPlayer().getPlayerName());
-        teamResult.setExpenseTwo(team.getExpenseOne());
-        teamResult.setPlayerTwoName(team.getPlayerTwo().getPlayer().getPlayerName());
-        teamResult.setExpenseTwo(team.getExpenseTwo());
+        if (team.getPlayerOne() != null && team.getPlayerOne().getPlayer() != null) {
+            teamResult.setPlayerOneName(team.getPlayerOne().getPlayer().getPlayerName());
+            teamResult.setExpenseTwo(team.getExpenseOne());
+        }
+        if (team.getPlayerTwo() != null && team.getPlayerTwo().getPlayer() != null) {
+            teamResult.setPlayerTwoName(team.getPlayerTwo().getPlayer().getPlayerName());
+            teamResult.setExpenseTwo(team.getExpenseTwo());
+        }
         teamResult.setWin(team.isWin() ? GameConstant.WIN : GameConstant.LOSE);
         return teamResult;
     }

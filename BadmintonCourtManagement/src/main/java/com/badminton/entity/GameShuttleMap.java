@@ -2,8 +2,11 @@ package com.badminton.entity;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
+@NoArgsConstructor
+@Entity()
 public class GameShuttleMap {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -18,4 +21,10 @@ public class GameShuttleMap {
     private ShuttleBall shuttleBall;
 
     private int shuttleNumber;
+
+    public GameShuttleMap(Game game, ShuttleBall shuttleBall, int shuttleNumber) {
+        this.game = game;
+        this.shuttleBall = shuttleBall;
+        this.shuttleNumber = shuttleNumber;
+    }
 }

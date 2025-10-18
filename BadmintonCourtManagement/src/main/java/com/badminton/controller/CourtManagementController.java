@@ -72,7 +72,7 @@ public class CourtManagementController {
     }
 
     @PostMapping(value = "/removePlayer")
-    public ResponseEntity<Boolean> removePlayeroutAvailableSession(@RequestBody String name) {
+    public ResponseEntity<Boolean> removePlayerOutAvailableSession(@RequestBody String name) {
         log.info("Removing player:{}", name);
         Boolean res = courtService
                 .deactivePlayerOutCurrentSession(name.replace(CommonConstant.DOUBLE_QUOTES, CommonConstant.EMPTY));
@@ -114,12 +114,10 @@ public class CourtManagementController {
     public ResponseEntity<Boolean> changeGameState(@RequestBody GameDTO gameDTO) {
         if (gameDTO != null && StringUtils.isNoneBlank(gameDTO.getGameState(), gameDTO.getCourt().getCourtId())) {
             Boolean res = courtService.changeGameState(gameDTO.getGameState(), gameDTO.getCourt().getCourtId());
-
             // Error cases are not handled
             return ResponseEntity.ok(res);
-
         }
-
         return ResponseEntity.badRequest().body(Boolean.FALSE);
     }
+
 }

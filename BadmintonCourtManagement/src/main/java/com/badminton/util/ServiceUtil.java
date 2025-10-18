@@ -2,6 +2,7 @@ package com.badminton.util;
 
 import com.badminton.constant.CommonConstant;
 import com.badminton.constant.GameState;
+import com.badminton.entity.Team;
 
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
@@ -42,5 +43,13 @@ public class ServiceUtil {
 
     public static Timestamp getCurrentTimeStamp() {
         return new Timestamp(System.currentTimeMillis());
+    }
+
+    public static String getPlayerOneNameBy(Team team) {
+        return team.getPlayerOne().getPlayer().getPlayerName();
+    }
+
+    public static String getPlayerTwoNameBy(Team team) {
+        return team.getPlayerTwo().getPlayer().getPlayerName();
     }
 }

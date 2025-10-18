@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.sql.Timestamp;
+import java.util.ArrayList;
 import java.util.List;
 
 @Entity
@@ -23,14 +24,13 @@ public class Game {
     @JoinColumn(name = "court_id", nullable = false)
     private Court court;
 
-    @ManyToOne(cascade = CascadeType.DETACH)
-    @JoinColumn(name = "shuttle_id", nullable = false)
-    private ShuttleBall shuttleBall;
-
-    private int shuttleNumber;
+//    @ManyToOne(cascade = CascadeType.DETACH)
+//    @JoinColumn(name = "shuttle_id", nullable = false)
+//    private ShuttleBall shuttleBall;
+//
+//    private int shuttleNumber;
 
     @OneToMany(mappedBy = "game")
-    @JoinColumn(name = "game_shuttle_id")
     private List<GameShuttleMap> shuttleMap;
 
     @OneToOne(cascade = CascadeType.ALL)
@@ -54,10 +54,15 @@ public class Game {
 
     public Game(Court court, ShuttleBall shuttleBall) {
         this.court = court;
-        this.shuttleBall = shuttleBall;
-        // default quantity is 1
-        this.shuttleNumber = 1;
+//        this.shuttleBall = shuttleBall;
+//        this.shuttleNumber = 1;
+
         // default Not start
         this.state = GameState.NOT_START.getValue();
+
+        // Add game shuttle map with default quantity is 1
+        shuttleMap = new ArrayList<>();
+        GameShuttleMap gameBallMap = new GameShuttleMap(this, shuttleBall, 1);
+        shuttleMap.add(gameBallMap);
     }
 }

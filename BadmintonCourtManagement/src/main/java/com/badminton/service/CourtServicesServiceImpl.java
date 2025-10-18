@@ -9,6 +9,7 @@ import com.badminton.exception.BusinessException;
 import com.badminton.exception.ElementNotExistException;
 import com.badminton.repository.*;
 import com.badminton.requestmodel.*;
+import com.badminton.service.calculator.GameExpenseCalculator;
 import com.badminton.util.ServiceUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +27,8 @@ public class CourtServicesServiceImpl {
     private ServiceRepositoty serviceRepo;
     @Autowired
     private SessionServiceImpl session;
+    @Autowired
+    GameExpenseCalculator gameCalculator;
 
     @Autowired
     private UserRepository userRepo;
@@ -292,6 +295,8 @@ public class CourtServicesServiceImpl {
                     // update ended time for FINISH & CANCEL state
                     if (ServiceUtil.isEndedState(changeGameState)) {
                         game.setEndedDate(ServiceUtil.getCurrentTimeStamp());
+                        // calculate and save the expense of game.
+                        gameCalculator.calculateGameResult(game);
                     }
                     gameRepo.save(game);
                     return true;

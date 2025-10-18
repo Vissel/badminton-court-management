@@ -129,6 +129,7 @@ function HomePage() {
         shuttleCost: parseFloat(cost),
       },
     };
+
     api.post(`/court-mana/addPlayerToCourt`, gameDTO);
     // .then((res) => {
     //   if (responseSuccess(res)) {
@@ -418,8 +419,11 @@ function HomePage() {
                     courtArea.playerInArea.playerName;
                 });
                 // set lock court if gameState is Start
-                if(g.gameState === 'Start'){
-                  setLockedCourts((prev) => ({ ...prev, [g.court.courtId]: true }));
+                if (g.gameState === "Start") {
+                  setLockedCourts((prev) => ({
+                    ...prev,
+                    [g.court.courtId]: true,
+                  }));
                 }
               });
               return currCourts;
