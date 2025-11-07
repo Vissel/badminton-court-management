@@ -30,7 +30,7 @@ public class Game {
 //
 //    private int shuttleNumber;
 
-    @OneToMany(mappedBy = "game")
+    @OneToMany(mappedBy = "game", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<GameShuttleMap> shuttleMap;
 
     @OneToOne(cascade = CascadeType.ALL)
@@ -52,6 +52,14 @@ public class Game {
      */
     private String state;
 
+    private String gtype;
+
+    /**
+     * constructor init a game
+     *
+     * @param court
+     * @param shuttleBall
+     */
     public Game(Court court, ShuttleBall shuttleBall) {
         this.court = court;
 //        this.shuttleBall = shuttleBall;

@@ -10,10 +10,20 @@ import com.badminton.util.ServiceUtil;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @Service
 public class GameExpenseCalculator {
+    /**
+     * get total cost by shuttle ball in game
+     *
+     * @param ballResMap
+     * @return
+     */
+    public Float getTotalBallCost(Map<ShuttleBallResult, Integer> ballResMap) {
+        return ballResMap.entrySet().stream().map(
+                e -> (float) e.getKey().getCost() * e.getValue()
+        ).reduce(0f, Float::sum);
+    }
 
     public GameResult calculateGameResult(Game game) {
         GameResult gameResult = new GameResult();
@@ -26,29 +36,23 @@ public class GameExpenseCalculator {
     }
 
     private void calculateTeamExpensesOfGameByBallUsed(GameResult gameResult, Game game) {
-        Map<ShuttleBallResult, Integer> ballResMap = game.getShuttleMap().stream().collect(Collectors.toMap(
-                map -> new ShuttleBallResult(map.getShuttleBall().getShuttleName(), map.getShuttleBall().getCost()),
-                map -> Integer.valueOf("1"),
-                Integer::sum // merge function — sum counts if duplicates exist
-        ));
+        Map<ShuttleBallResult, Integer> ballResMap = ServiceUtil.retrievedShuttleBallMap(game.getShuttleMap());
         gameResult.setBallResultMap(ballResMap);
         // normal divided cost to both
-        float totalBallCost = ballResMap.entrySet().stream().map(
-                e -> (float) e.getKey().getCost() * e.getValue()
-        ).reduce(0f, Float::sum);
+        float totalBallCost = getTotalBallCost(ballResMap);
         boolean teamOneWin = GameConstant.WIN.equals(game.getState());
 
         TeamResult teamOneRes = new TeamResult();
         teamOneRes.setPlayerOneName(ServiceUtil.getPlayerOneNameBy(game.getTeamOne()));
-        teamOneRes.setPlayerTwoName(ServiceUtil.getPlayerOneNameBy(game.getTeamOne()));
+        teamOneRes.setPlayerTwoName(ServiceUtil.getPlayerTwoNameBy(game.getTeamOne()));
         TeamResult teamTwoRes = new TeamResult();
         teamTwoRes.setPlayerOneName(ServiceUtil.getPlayerOneNameBy(game.getTeamTwo()));
-        teamTwoRes.setPlayerTwoName(ServiceUtil.getPlayerOneNameBy(game.getTeamTwo()));
+        teamTwoRes.setPlayerTwoName(ServiceUtil.getPlayerTwoNameBy(game.getTeamTwo()));
         if (teamOneWin) {
-            dividedExpenseTo(teamTwoRes, totalBallCost, 2f);
+            dividedExpenseTo(teamTwoRes, totalBallCost, GameConstant.BISECT);
             teamTwoRes.setWin(GameConstant.LOSE);
         } else {
-            dividedExpenseTo(teamOneRes, totalBallCost, 2f);
+            dividedExpenseTo(teamOneRes, totalBallCost, GameConstant.BISECT);
             teamOneRes.setWin(GameConstant.LOSE);
         }
 

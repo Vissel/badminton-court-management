@@ -8,6 +8,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -18,8 +19,12 @@ import java.util.stream.Collectors;
 public class GameDTO extends ResponseDTO {
     private String playerName;
     private CourtDTO court;
-    private ShuttleBallDTO shuttleBall;
-    private int ballQuantity;
+    private List<ShuttleBallDTO> shuttleBalls;
+//    private int ballQuantity;
+    /**
+     * this variable is used to display value from backend to frontend only.
+     * Opposite side may have risks and not apply. << TODO
+     */
     @JsonIgnore
     private Map<ShuttleBallDTO, Integer> shuttleMap;
     private String gameState;

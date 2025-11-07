@@ -1,26 +1,29 @@
 package com.badminton.controller;
 
+import com.badminton.requestmodel.GameDTO;
 import com.badminton.response.result.GameResult;
+import com.badminton.service.GameService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @Slf4j
 @RestController
 @RequestMapping("/gameResult")
 public class GameResultController {
 
-    @GetMapping("/getGameResult")
-    public ResponseEntity<GameResult> getGameResult() {
+    @Autowired
+    GameService gameService;
 
-        return ResponseEntity.ok(null);
+    @GetMapping("/getGameResult")
+    public ResponseEntity<GameResult> getGameResult(@RequestParam(name = "courtId") String courtId) {
+        GameResult gameRes = gameService.getGameResult(Integer.valueOf(courtId));
+        return ResponseEntity.ok(gameRes);
     }
 
     @PostMapping("/confirmGameResult")
-    public ResponseEntity<GameResult> confirmGameResult() {
+    public ResponseEntity<GameResult> confirmGameResult(@RequestBody GameDTO gameDTO) {
 
         return ResponseEntity.ok(null);
     }

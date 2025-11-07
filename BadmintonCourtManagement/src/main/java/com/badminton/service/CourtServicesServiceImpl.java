@@ -13,6 +13,7 @@ import com.badminton.service.calculator.GameExpenseCalculator;
 import com.badminton.util.ServiceUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -189,7 +190,9 @@ public class CourtServicesServiceImpl {
      * @param courtDTO
      * @return
      */
-    public Boolean addAvailablePlayerToCourtArea(String playerName, CourtDTO courtDTO, ShuttleBallDTO shuttleBallDTO) {
+    @Transactional(rollbackFor = Exception.class)
+    public Boolean addAvailablePlayerToCourtArea(String playerName, CourtDTO courtDTO, ShuttleBallDTO shuttleBallDTO)
+            throws Exception {
         log.info("addAvailablePlayerToCourtArea {}", CommonConstant.START);
         // create game if there is new, update otherwise
         Optional<Court> courtOpt = courtRepo.findById(Integer.valueOf(courtDTO.getCourtId()));
@@ -218,13 +221,17 @@ public class CourtServicesServiceImpl {
         }
 
         // create team 1 or 2 if there is new, update otherwise
+        return addAvailablePlayerIntoGame(game, playerName, courtDTO.getCourtAreas().getFirst().getArea());
+    }
+
+    private boolean addAvailablePlayerIntoGame(Game game, String playerName, String area) throws Exception {
         try {
-            Team team = getTeam(game, courtDTO.getCourtAreas().getFirst().getArea());
+            Team team = getTeam(game, area);
 
             AvailablePlayer player = avaPlayerRepo
                     .findAvailablePlayerInSessionByName(session.findListCurrentSession().getFirst(), playerName);
             // Determine team for
-            switch (courtDTO.getCourtAreas().getFirst().getArea()) {
+            switch (area) {
                 case GameState.Player.PLAYER_A, GameState.Player.PLAYER_C:
                     team.setPlayerOne(player);
                     log.info("added {} to player one.", playerName);
@@ -242,7 +249,7 @@ public class CourtServicesServiceImpl {
             // game.getTeamOne is null or team.getTeamTwo is null
             if (updateGame) {
 
-                if (areaOfTeamOne(courtDTO.getCourtAreas().getFirst().getArea())) {
+                if (areaOfTeamOne(area)) {
                     game.setTeamOne(team);
                 } else {
                     game.setTeamTwo(team);
@@ -254,8 +261,6 @@ public class CourtServicesServiceImpl {
             return true;
         } catch (NullPointerException e) {
             log.error("addAvailablePlayerToCourtArea has null exception:{}", e.getMessage());
-        } catch (Exception e) {
-            log.error("addAvailablePlayerToCourtArea has error:{}", e.getMessage());
         } finally {
             log.info("addAvailablePlayerToCourtArea {}", CommonConstant.END);
         }

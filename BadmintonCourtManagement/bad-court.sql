@@ -17,12 +17,14 @@ values (current_time(),true);
 
 -- available players
 select * from available_player 
-where session_id not in (1) and leave_time is null;
+where session_id = 14 and leave_time is null;
+
+select * from available_player ;
 
 -- update 
 update `session`
 set is_active = false, to_time = CURRENT_TIME()
-where session_id = 13;
+where session_id = 16;
 
 SELECT * FROM mysql.time_zone_name;
 SELECT @@global.time_zone, @@session.time_zone;
@@ -34,6 +36,7 @@ SET time_zone = '+07:00';
 select * from court;
 select * from shuttle_ball;
 select * from game;
+select * from game_shuttle_map;
 select * from team;
 
 SELECT constraint_name, constraint_type FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
@@ -42,10 +45,14 @@ where table_name ='team';
 select * from game;
 
 select * from game
-where ended_date is null;
+where ended_date is null and court_id = 5;
 
-select * from team
-where team_id in (17,18,22,23,24,25);
+select * from game_shuttle_map;
+
+select * from team 
+where team_id in (26, 27);
+select * from available_player a inner join player p on a.player_id = p.player_id
+where a.ava_id in (9, 10);
 
 update game
 set state = 'Cancel',

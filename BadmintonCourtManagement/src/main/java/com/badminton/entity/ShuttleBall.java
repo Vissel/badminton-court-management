@@ -1,5 +1,6 @@
 package com.badminton.entity;
 
+import com.badminton.requestmodel.ShuttleBallDTO;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -33,5 +34,15 @@ public class ShuttleBall {
         this.shuttleName = name;
         this.cost = cost;
         this.isActive = true;
+    }
+
+    /**
+     * check this ShuttleBall has the same to ball DTO but name, and cost.
+     *
+     * @param ballDTO
+     * @return
+     */
+    public boolean theSameDTO(ShuttleBallDTO ballDTO) {
+        return this.shuttleName.equals(ballDTO.getShuttleName()) && this.cost == ballDTO.getShuttleCost();
     }
 }

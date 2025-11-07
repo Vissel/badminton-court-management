@@ -8,6 +8,8 @@ import DraggableService from "./dragNdrop/DraggableService";
 import Court from "./dragNdrop/Court";
 import PlayerArea from "./dragNdrop/PlayerArea";
 import ServiceDialog from "./dialog/ServiceDialog";
+import GameDialog from "./dialog/GameDialog";
+import ShuttleBallDialog from "./dialog/ShuttleBallDialog";
 
 /* HomePage */
 function HomePage() {
@@ -44,9 +46,16 @@ function HomePage() {
   const scrollRef = useRef(null);
   // const [courts, setCourts] = useState();
 
+  const [showGameDialog, setShowGameDialog] = useState(false);
+  const [gameDialogData, setGameDialogData] = useState("");
+
   const responseSuccess = (response) => {
-    return response.status === 200 && !response.data && response.data === true;
+    return response.status === 200 && response.data != null;
   };
+  const responseDataTrue = (response) => {
+    return responseSuccess(response.status) && response.data === true;
+  };
+
   const removePlayerFromCourtApi = (playerName, courtId, areaKey) => {
     const courtPayload = {
       courtId: courtId,
@@ -116,7 +125,7 @@ function HomePage() {
       playerName: playerName,
       court: {
         courtId: courtId,
-        courtName: "San 2",
+        courtName: "",
         courtAreas: [
           {
             area: areaKey,
@@ -124,10 +133,12 @@ function HomePage() {
           },
         ],
       },
-      shuttleBall: {
-        shuttleName: ball,
-        shuttleCost: parseFloat(cost),
-      },
+      shuttleBalls: [
+        {
+          shuttleName: ball,
+          shuttleCost: parseFloat(cost),
+        },
+      ],
     };
 
     api.post(`/court-mana/addPlayerToCourt`, gameDTO);
@@ -199,6 +210,54 @@ function HomePage() {
       alert("Có lỗi khi xoa người chơi. Refresh lại trang này!");
     }
   };
+
+  // Add shuttle ball area.
+  const [showShuttleDialog, setShowShuttleDialog] = useState(false);
+  const [courtProcessing, setCourtProcessing] = useState(0);
+  const saveBallOntoCourt = (courtId, ballQuantityMap) => {
+    // let listBall = [];
+    // for (const key of Array.prototype.keys.call(ballQuantityMap)) {
+    //   console.log(`[${key}:${ballQuantityMap[key]}]`);
+    //   listBall.push({
+    //     shuttleName: key.slice(0, key.lastIndexOf("-")).trim(),
+    //     shuttleCost: key.slice(key.lastIndexOf("-") + 1).trim(),
+    //     ballQuantity: ballQuantityMap[key],
+    //   });
+    // }
+
+    // Build List<ShuttleBallDTO>
+    const shuttleBallDTOList = Object.entries(ballQuantityMap).map(
+      ([name, quantity]) => ({
+        shuttleName: name.slice(0, name.lastIndexOf("-")).trim(),
+        shuttleCost: Number(name.slice(name.lastIndexOf("-") + 1).trim()),
+        ballQuantity: quantity,
+      })
+    );
+
+    api
+      .post(
+        `/court-mana/addListBallIntoCourt?courtId=${courtId}`,
+        shuttleBallDTOList
+      )
+      .then((res) => {
+        if (responseDataTrue(res)) {
+          setShowShuttleDialog(false);
+        }
+      })
+      .catch((err) => console.error("Error fetching shuttle balls:", err));
+    setShowShuttleDialog(false);
+  };
+
+  const handleCancel = () => {
+    setShowShuttleDialog(false);
+  };
+
+  // Add ball into court by id.
+  const showAddedBallDialog = (courtId) => {
+    setCourtProcessing(courtId);
+    setShowShuttleDialog(true);
+  };
+
   /* On Start*/
   const [lockedCourts, setLockedCourts] = useState({});
   const onStart = async (courtId) => {
@@ -225,40 +284,73 @@ function HomePage() {
 
   /** On Finish */
   const onFinish = async (courtId) => {
-    const res = await api.post(`/court-mana/changeGameState`, {
-      court: {
-        courtId: courtId,
-      },
-      gameState: "Finish",
-    });
-    if (res.status !== 200 && res.data === false) {
-      alert("Hành động thất bại. Load lại trang và thử lại. ");
-      return;
+    const gameRes = await api.get(
+      `/gameResult/getGameResult?courtId=${courtId}`
+    );
+    if (responseSuccess(gameRes)) {
+      setGameDialogData(gameRes.data);
+      setShowGameDialog(true);
     }
-
-    setCourts((prev) => {
-      const updated = { ...prev };
-      const playersToReturn = Object.values(updated[courtId]).filter(Boolean);
-      courtIds.forEach((id) => {
-        for (const key in updated[id]) {
-          if (playersToReturn.includes(updated[id][key]))
-            updated[id][key] = null;
-        }
-      });
-      return updated;
-    });
-    setAvailablePlayers((prev) => [
-      ...prev,
-      ...Object.values(courts[courtId]).filter(Boolean),
-    ]);
-    setLockedCourts((prev) => {
-      const updated = { ...prev };
-      delete updated[courtId];
-      return updated;
-    });
-
-    alert(`On finish of court ${courtId}`);
   };
+  const confirmGameRes = async (formData) => {
+    console.log("Confirmed action with data:", formData);
+    // gameDialogData.state = "Finish";
+    // const gameDTO = {
+    //   playerName: "",
+    //   court: {
+    //     courtId: courtId,
+    //     courtName: "San 2",
+    //     courtAreas: [
+    //       {
+    //         area: "",
+    //         playerInArea: {},
+    //       },
+    //     ],
+    //   },
+    //   shuttleBall: {
+    //     shuttleName: "",
+    //     shuttleCost: parseFloat(0),
+    //   },
+    // };
+    // const res = await api.post(`/gameResult/confirmGameResult`, gameDialogData);
+
+    // if (!responseSuccess(res)) {
+    //   alert("Hành động thất bại. Load lại trang và thử lại. ");
+    //   return;
+    // }
+
+    // setCourts((prev) => {
+    //   const updated = { ...prev };
+    //   const playersToReturn = Object.values(updated[courtId]).filter(Boolean);
+    //   courtIds.forEach((id) => {
+    //     for (const key in updated[id]) {
+    //       if (playersToReturn.includes(updated[id][key]))
+    //         updated[id][key] = null;
+    //     }
+    //   });
+    //   return updated;
+    // });
+
+    // const courtId = gameDialogData.courtResult.courtId;
+    // setAvailablePlayers((prev) => [
+    //   ...prev,
+    //   ...Object.values(courts[courtId]).filter(Boolean),
+    // ]);
+    // setLockedCourts((prev) => {
+    //   const updated = { ...prev };
+    //   delete updated[courtId];
+    //   return updated;
+    // });
+
+    // alert(`On finish of court ${courtId}`);
+    setShowGameDialog(false);
+  };
+
+  const cancelGameRes = () => {
+    console.log("Cancel game");
+    setShowGameDialog(false);
+  };
+
   /**On Cancel */
   const onCancel = async (courtId) => {
     const res = await api.post(`/court-mana/changeGameState`, {
@@ -532,6 +624,7 @@ function HomePage() {
                     occupied={occupied}
                     isLocked={lockedCourts[id]}
                     onStart={onStart}
+                    showAddedBallDialog={showAddedBallDialog}
                     onFinish={onFinish}
                     onCancel={onCancel}
                     onDropService={handleDropService}
@@ -555,6 +648,7 @@ function HomePage() {
                     occupied={occupied}
                     isLocked={lockedCourts[id]}
                     onStart={onStart}
+                    showAddedBallDialog={showAddedBallDialog}
                     onFinish={onFinish}
                     onCancel={onCancel}
                     onDropService={handleDropService}
@@ -562,6 +656,22 @@ function HomePage() {
                 </div>
               ))}
           </div>
+
+          {/* Show add shuttle ball dialog */}
+          <ShuttleBallDialog
+            courtProcessing={courtProcessing}
+            show={showShuttleDialog}
+            onSaveBallOntoCourt={saveBallOntoCourt}
+            onCancel={handleCancel}
+          />
+
+          {/* Show game dialog */}
+          <GameDialog
+            show={showGameDialog}
+            data={gameDialogData}
+            onConfirm={confirmGameRes}
+            onCancel={cancelGameRes}
+          />
         </div>
       </div>
     </DndProvider>

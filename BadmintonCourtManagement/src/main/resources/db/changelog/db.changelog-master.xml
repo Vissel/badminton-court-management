@@ -42,7 +42,13 @@
         <sqlFile path="db/changelog/changeset-012.1-update-team-table.sql"/>
     </changeSet>
 
-    <changeSet id="013.1" author="thach">
-        <sqlFile path="db/changelog/changeset-013.1-game-shuttle-map-table.sql"/>
+    <!--    <changeSet id="013.1" author="thach">-->
+    <!--        <sqlFile path="db/changelog/changeset-013.1-game-shuttle-map-table.sql"/>-->
+    <!--    </changeSet>-->
+    <!--    <changeSet id="013.2" author="thach">-->
+    <!--        <sqlFile path="db/changelog/changeset-013.2-game-shuttle-map-table.sql"/>-->
+    <!--    </changeSet>-->
+    <changeSet id="013.3" author="thach">
+        <sqlFile path="db/changelog/changeset-013.3-game-shuttle-map-table.sql"/>
     </changeSet>
 </databaseChangeLog>

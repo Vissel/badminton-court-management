@@ -33,6 +33,12 @@ public class CourtManagementController {
         return ResponseEntity.ok().body(res);
     }
 
+    @PostMapping(value = "/addListBallIntoCourt")
+    public ResponseEntity<Boolean> addListBallIntoCourt(@RequestParam String courtId, @RequestBody List<ShuttleBallDTO> listBall) {
+        Boolean res = ballService.addListOfShuttleBallIntoCourt(Integer.valueOf(courtId), listBall);
+        return ResponseEntity.ok().body(res);
+    }
+
     @GetMapping(value = "/getServices")
     public ResponseEntity<List<ServiceDTO>> getServices() {
         List<ServiceDTO> res = courtService.getActiveServices();
@@ -90,9 +96,9 @@ public class CourtManagementController {
     }
 
     @PostMapping(value = "/addPlayerToCourt")
-    public ResponseEntity<Boolean> addAvaPlayerToCourt(@RequestBody GameDTO gameDTO) {
+    public ResponseEntity<Boolean> addAvaPlayerToCourt(@RequestBody GameDTO gameDTO) throws Exception {
         Boolean res = courtService.addAvailablePlayerToCourtArea(gameDTO.getPlayerName(), gameDTO.getCourt(),
-                gameDTO.getShuttleBall());
+                gameDTO.getShuttleBalls().getFirst());
         // Error cases are not handled
         return ResponseEntity.ok(res);
     }
