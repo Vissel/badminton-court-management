@@ -17,5 +17,8 @@ public class TeamResult {
 
     private float expenseTwo = 0.0f;
 
-    private String win = GameConstant.WIN;
+    /**
+     * Default is lose team
+     */
+    private String win = GameConstant.LOSE;
 }

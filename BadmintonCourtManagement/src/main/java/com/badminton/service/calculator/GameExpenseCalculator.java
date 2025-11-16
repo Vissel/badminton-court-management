@@ -7,10 +7,12 @@ import com.badminton.response.result.GameResult;
 import com.badminton.response.result.ShuttleBallResult;
 import com.badminton.response.result.TeamResult;
 import com.badminton.util.ServiceUtil;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
 
+@Slf4j
 @Service
 public class GameExpenseCalculator {
     /**
@@ -26,6 +28,7 @@ public class GameExpenseCalculator {
     }
 
     public GameResult calculateGameResult(Game game) {
+        log.info("Calculate GameResult of GameId: {}", game.getGameId());
         GameResult gameResult = new GameResult();
         gameResult.setGameId(game.getGameId());
         gameResult.setCourtResult(new CourtResult(game.getCourt().getCourtId(), game.getCourt().getCourtName()));

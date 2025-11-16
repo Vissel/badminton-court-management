@@ -11,6 +11,8 @@ import ServiceDialog from "./dialog/ServiceDialog";
 import GameDialog from "./dialog/GameDialog";
 import ShuttleBallDialog from "./dialog/ShuttleBallDialog";
 
+const COST_IN_PERSON = "costInPerson";
+const VN_COST_IN_PERSON = "Tiền sân";
 /* HomePage */
 function HomePage() {
   const courtIds = [1, 2, 3, 4, 5, 6, 7];
@@ -37,7 +39,6 @@ function HomePage() {
   // shuttle_ball selection
   const [selectedBall, setSelectedBall] = useState("");
   const selectedBallRef = useRef("");
-
   const [ballOptions, setBallOptions] = useState([]);
   const [services, setServices] = useState([]);
   const [costInPerson, setCostInPerson] = useState();
@@ -56,6 +57,24 @@ function HomePage() {
     return responseSuccess(response.status) && response.data === true;
   };
 
+  // Get shuttleName
+  const getShuttleBallName = (ballString) => {
+    return ballString.slice(0, ballString.lastIndexOf("-")).trim();
+  };
+  const getShuttleBallCost = (ballString) => {
+    return Number(ballString.slice(ballString.lastIndexOf("-") + 1).trim());
+  };
+
+  // 
+  const  handleSelectedBall = (ballChangeOption)=>{
+    api.post(`/court-mana/changeSelectedBall`,{
+      shuttleName: getShuttleBallName(ballChangeOption),
+      shuttleCost: getShuttleBallCost(ballChangeOption),
+      selected: true
+    })
+    setSelectedBall(ballChangeOption);
+  };
+  // Get shuttleCost
   const removePlayerFromCourtApi = (playerName, courtId, areaKey) => {
     const courtPayload = {
       courtId: courtId,
@@ -142,14 +161,6 @@ function HomePage() {
     };
 
     api.post(`/court-mana/addPlayerToCourt`, gameDTO);
-    // .then((res) => {
-    //   if (responseSuccess(res)) {
-    //     console.log()
-    //   }
-    // })
-    // .catch((error) => {
-    //   console.error(`Error while onDropPlayerOntoCourt - ${playerName}, ${courtId}, ${areaKey}, ${error} `);
-    // });
     setCourts((prev) => {
       const updated = { ...prev };
       for (const id in updated) {
@@ -175,7 +186,17 @@ function HomePage() {
       });
     }
   };
-
+  const setArrayAvailablePlayerBack = (arrayPlayer) => {
+    Object.values(arrayPlayer).forEach((playerName) =>
+      setAvailablePlayers((prev) => {
+        if (prev.includes(playerName)) {
+          // force a new array so React re-renders and react-dnd unhides the item
+          return [...prev];
+        }
+        return [...prev, playerName];
+      })
+    );
+  };
   const occupied = () => {};
   const onDropPlayerBack = (playerName, courtId, areaKey) => {
     console.log(availablePlayers);
@@ -215,16 +236,6 @@ function HomePage() {
   const [showShuttleDialog, setShowShuttleDialog] = useState(false);
   const [courtProcessing, setCourtProcessing] = useState(0);
   const saveBallOntoCourt = (courtId, ballQuantityMap) => {
-    // let listBall = [];
-    // for (const key of Array.prototype.keys.call(ballQuantityMap)) {
-    //   console.log(`[${key}:${ballQuantityMap[key]}]`);
-    //   listBall.push({
-    //     shuttleName: key.slice(0, key.lastIndexOf("-")).trim(),
-    //     shuttleCost: key.slice(key.lastIndexOf("-") + 1).trim(),
-    //     ballQuantity: ballQuantityMap[key],
-    //   });
-    // }
-
     // Build List<ShuttleBallDTO>
     const shuttleBallDTOList = Object.entries(ballQuantityMap).map(
       ([name, quantity]) => ({
@@ -259,13 +270,22 @@ function HomePage() {
   };
 
   /* On Start*/
-  const [lockedCourts, setLockedCourts] = useState({});
-  const onStart = async (courtId) => {
+  const [lockedCourts, setLockedCourts] = useState([]);
+  const startGame = async (courtId) => {
+    console.log(`Selected shuttle ball: ${selectedBall}`);
+
     await api
       .post(`/court-mana/changeGameState`, {
         court: {
           courtId: courtId,
         },
+        shuttleBalls: [
+          {
+            shuttleName: getShuttleBallName(selectedBall),
+            shuttleCost: getShuttleBallCost(selectedBall),
+            quantity: 1,
+          },
+        ],
         gameState: "Start",
       })
       .then((response) => {
@@ -359,6 +379,7 @@ function HomePage() {
       },
       gameState: "Cancel",
     });
+
     if (res.status !== 200 && res.data === false) {
       alert("Hành động thất bại. Load lại trang và thử lại. ");
       return;
@@ -367,26 +388,27 @@ function HomePage() {
     setCourts((prev) => {
       const updated = { ...prev };
       const playersToReturn = Object.values(updated[courtId]).filter(Boolean);
+      let playerName = null;
       courtIds.forEach((id) => {
         for (const key in updated[id]) {
-          if (playersToReturn.includes(updated[id][key]))
+          playerName = updated[id][key];
+          if (playersToReturn.includes(playerName)) {
+            setAvailablePlayerBack(playerName);
             updated[id][key] = null;
+          }
         }
       });
       return updated;
     });
 
-    setAvailablePlayerBack(courts[courtId]);
-
     // setAvailablePlayers((prev) => [
     //   ...prev,
     //   ...Object.values(courts[courtId]).filter(Boolean),
     // ]);
-    setLockedCourts((prev) => {
-      const updated = { ...prev };
-      delete updated[courtId];
-      return updated;
-    });
+    setLockedCourts((prev) => ({
+      ...prev,
+      [courtId]: false,
+    }));
     alert(`On Cancel court ${courtId}`);
   };
 
@@ -436,7 +458,6 @@ function HomePage() {
   const setSelectedBallAndRef = (value) => {
     selectedBallRef.current = value; // update ref immediately
     setSelectedBall(value); // update state as well
-    console.debug("setSelectedBallAndRef ->", value);
   };
 
   // HomePage useEffect
@@ -468,8 +489,12 @@ function HomePage() {
             listBall.map((b) => `${b.shuttleName} - ${b.shuttleCost}`)
           );
           // choose a sensible default (first item if exists)
-          const defaultBall = `${listBall[0].shuttleName} -  ${listBall[0].shuttleCost}`;
-          setSelectedBallAndRef(defaultBall);
+          const selectedShuttleBall = listBall.find((b) => b.selected);
+          let selectedShuttleBallOption = `${listBall[0].shuttleName} - ${listBall[0].shuttleCost}`;
+          if (selectedShuttleBall) {
+            selectedShuttleBallOption = `${selectedShuttleBall.shuttleName} - ${selectedShuttleBall.shuttleCost}`;
+          }
+          setSelectedBallAndRef(selectedShuttleBallOption);
         } else {
           console.error(ballResponse.message);
           setBallOptions([
@@ -484,12 +509,14 @@ function HomePage() {
         console.log(
           `Getting service response status:${servicesResponse.status}`
         );
+        let costPersonService = "";
         if (servicesResponse.status === 200 && servicesResponse.data !== "") {
           const listService = servicesResponse.data;
           // set cost in person and remainning services
-          setCostInPerson(
-            listService.find((s) => s.serviceName === "costInPerson").cost
-          );
+          costPersonService = listService.find(
+            (s) => s.serviceName === "costInPerson"
+          ).cost;
+          setCostInPerson(costPersonService);
           setServices(
             listService.filter((s) => s.serviceName !== "costInPerson")
           );
@@ -526,6 +553,22 @@ function HomePage() {
           const resAvaPlayers = resCourtMana.data.availablePlayerDTOs;
           if (resAvaPlayers !== "") {
             setAvailablePlayers(resAvaPlayers.map((p) => p.playerName));
+
+            resAvaPlayers.forEach((player) => {
+              const playerServiceList = player.serviceDTOs.map((service) => {
+                if (service.includes(COST_IN_PERSON)) {
+                  return service.replace(COST_IN_PERSON, VN_COST_IN_PERSON);
+                }
+                return service;
+              });
+
+              setPlayerServiceMap((prevMap) => {
+                return {
+                  ...prevMap,
+                  [player.playerName]: playerServiceList,
+                };
+              });
+            });
           }
         } else {
           console.error(`Cannot get court management data.`);
@@ -556,29 +599,46 @@ function HomePage() {
             flexDirection: "column",
             width: "20%",
             padding: "3px",
-            backgroundColor: "#eef",
             borderRight: "1px solid #ccc",
             transition: "background-color 2s ease",
           }}
         >
-          <div style={{ margin: "5px 0 5px 5px" }}>
-            CostInPerson: {costInPerson} vnd
-          </div>
-          <div>value: {selectedBall}</div>
-          <select
-            value={selectedBall}
-            onChange={(e) => setSelectedBall(e.target.value)}
-            className="court-select"
+          <div
+            className="service-area"
+            style={{
+              // backgroundColor: "rgb(239 242 244)",
+              color: "white",
+              border: "1px solid #cde",
+              margin: "5px 5px 5px 5px",
+              padding: "5px 10px 5px",
+              backgroundImage: 'url("whatsapp-wallpaper-3.jpg")',
+              backgroundSize: "cover",
+              fontSize: "16px",
+            }}
           >
-            {ballOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-
+            <h5> Tiền sân và Cầu: </h5>
+            <b>Tiền sân: {costInPerson} vnd</b>
+            <br></br>
+            <b>Cầu: {selectedBall} vnd</b>
+          </div>
           <div className="service-area">
-            <h5 style={{ margin: "15px 0 0 5px" }}>List of Service</h5>
+            <h5 style={{ margin: "15px 0 0 5px" }}> Thay đổi cầu: </h5>
+            <select
+              id="ballOptionId"
+              name="ballOptions"
+              value={selectedBall}
+              onChange={(e) => handleSelectedBall(e.target.value)}
+              className="court-select selection-box"
+            >
+              {ballOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="service-area">
+            <h5 style={{ margin: "15px 0 0 5px" }}>Chọn dịch vụ: </h5>
             {services.map((s) => (
               <DraggableService
                 key={s.serviceName}
@@ -623,7 +683,7 @@ function HomePage() {
                     onDropPlayer={onDropPlayerOntoCourt}
                     occupied={occupied}
                     isLocked={lockedCourts[id]}
-                    onStart={onStart}
+                    onStart={startGame}
                     showAddedBallDialog={showAddedBallDialog}
                     onFinish={onFinish}
                     onCancel={onCancel}
@@ -647,7 +707,7 @@ function HomePage() {
                     onDropPlayer={onDropPlayerOntoCourt}
                     occupied={occupied}
                     isLocked={lockedCourts[id]}
-                    onStart={onStart}
+                    onStart={startGame}
                     showAddedBallDialog={showAddedBallDialog}
                     onFinish={onFinish}
                     onCancel={onCancel}
@@ -666,12 +726,14 @@ function HomePage() {
           />
 
           {/* Show game dialog */}
-          <GameDialog
-            show={showGameDialog}
-            data={gameDialogData}
-            onConfirm={confirmGameRes}
-            onCancel={cancelGameRes}
-          />
+          {showGameDialog && (
+            <GameDialog
+              show={showGameDialog}
+              data={gameDialogData}
+              onConfirm={confirmGameRes}
+              onCancel={cancelGameRes}
+            />
+          )}
         </div>
       </div>
     </DndProvider>

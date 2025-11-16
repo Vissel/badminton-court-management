@@ -51,4 +51,7 @@
     <changeSet id="013.3" author="thach">
         <sqlFile path="db/changelog/changeset-013.3-game-shuttle-map-table.sql"/>
     </changeSet>
+    <changeSet id="014" author="thach">
+        <sqlFile path="db/changelog/changeset-014-shuttle-ball-table.sql"/>
+    </changeSet>
 </databaseChangeLog>

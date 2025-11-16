@@ -27,7 +27,7 @@ public class CourtManagementController {
 
     @GetMapping(value = "/getShuttleBalls")
     public ResponseEntity<List<ShuttleBallDTO>> getShuttleBalls() {
-        List<ShuttleBallDTO> res = ballService.getActiveShuttleBalls();
+        List<ShuttleBallDTO> res = ballService.getListActiveShuttleBallDTOs();
         log.info("Size active shuttle balls is:{}", res.size());
         // Error cases are not handled
         return ResponseEntity.ok().body(res);
@@ -119,11 +119,18 @@ public class CourtManagementController {
     @PostMapping(value = "/changeGameState")
     public ResponseEntity<Boolean> changeGameState(@RequestBody GameDTO gameDTO) {
         if (gameDTO != null && StringUtils.isNoneBlank(gameDTO.getGameState(), gameDTO.getCourt().getCourtId())) {
-            Boolean res = courtService.changeGameState(gameDTO.getGameState(), gameDTO.getCourt().getCourtId());
+            Boolean res = courtService.changeGameState(gameDTO);
             // Error cases are not handled
             return ResponseEntity.ok(res);
         }
         return ResponseEntity.badRequest().body(Boolean.FALSE);
+    }
+
+    @PostMapping(value = "/changeSelectedBall")
+    public ResponseEntity<Void> changeSelectedBall(@RequestBody ShuttleBallDTO shuttleBallDTO) {
+        ballService.changeSelectedShuttleBall(shuttleBallDTO);
+        // Error cases are not handled
+        return ResponseEntity.ok().body(null);
     }
 
 }

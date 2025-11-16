@@ -40,6 +40,39 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  position: relative;
+}
+/* 2. Style and position the badge for the winning team */
+.team-win::before {
+  content: '🏆 Winner 🏆'; /* The text/emoji for the badge */
+  position: absolute;
+  top: -20px; /* Adjust position above the box */
+  left: 50%;
+  transform: translateX(-50%); /* Center the badge horizontally */
+  
+  /* Styling the badge */
+  background-color: #4CAF50; /* Green background */
+  color: white;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: bold;
+  letter-spacing: 0.5px;
+  white-space: nowrap; /* Prevents text wrap */
+  z-index: 10;
+}
+.team-win {
+  border: 2px solid transparent;
+  /* padding: 10px; */
+  border-radius: 6px;
+  border-color: green; /* Green border for winner */
+}
+
+.team-lose {
+  border: 2px solid transparent;
+  padding: 10px;
+  border-radius: 6px;
+  border-color: red; /* Red border for loser */
 }
 
 .player-row {
@@ -55,5 +88,10 @@
 
 .dialog-actions {
   display: flex;
-  justify-content: center;
+  justify-content: space-between;
+  width: 100%;
+}
+.dialog-label{
+  /* width: 35%; */
+  flex-grow: 4;
 }

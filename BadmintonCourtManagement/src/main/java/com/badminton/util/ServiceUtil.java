@@ -54,11 +54,17 @@ public class ServiceUtil {
     }
 
     public static String getPlayerOneNameBy(Team team) {
-        return team.getPlayerOne().getPlayer().getPlayerName();
+        if (availablePlayerNotNull(team.getPlayerOne())) {
+            return team.getPlayerOne().getPlayer().getPlayerName();
+        }
+        return CommonConstant.EMPTY;
     }
 
     public static String getPlayerTwoNameBy(Team team) {
-        return team.getPlayerTwo().getPlayer().getPlayerName();
+        if (availablePlayerNotNull(team.getPlayerTwo())) {
+            return team.getPlayerTwo().getPlayer().getPlayerName();
+        }
+        return CommonConstant.EMPTY;
     }
 
     public static String getPlayerInArea(CourtAreaDTO courtArea) {
@@ -79,5 +85,9 @@ public class ServiceUtil {
 
     public static boolean availablePlayerNotNull(AvailablePlayer availablePlayer) {
         return availablePlayer != null && availablePlayer.getPlayer() != null;
+    }
+
+    public static boolean teamPlayersNotNull(Team team) {
+        return team != null && availablePlayerNotNull(team.getPlayerOne()) && availablePlayerNotNull(team.getPlayerTwo());
     }
 }

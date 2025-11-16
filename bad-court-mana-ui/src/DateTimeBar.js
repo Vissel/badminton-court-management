@@ -54,7 +54,7 @@ function DateTimeBar() {
 
   return (
     <div className="date-time-bar">
-      <span>{formatVietnameseDateTime(currentDateTime)}</span>
+      <span style={{marginRight:"5px"}} >{formatVietnameseDateTime(currentDateTime)}</span>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 // src/components/ShuttleBallDialog.js
-import React, { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import "./Dialog.css"; // reuse same CSS as GameDialog
 import api from "../../api/index";
 
@@ -14,6 +14,13 @@ const ShuttleBallDialog = ({
   const [quantity, setQuantity] = useState(1);
   const [addedItems, setAddedItems] = useState([]);
 
+  const handleEscPress = useCallback((event) => {
+    if (event.key === "Escape") {
+      console.log("[ShuttleBallDialog] Escape key pressed!");
+      onCancel();
+    }
+  }, []);
+
   useEffect(() => {
     if (show) {
       setAddedItems([]);
@@ -25,9 +32,16 @@ const ShuttleBallDialog = ({
           setSelectedValue("");
         })
         .catch((err) => console.error("Error fetching shuttle balls:", err));
-    }
-  }, [show]);
 
+      // Add event listener when the component mounts
+      document.addEventListener("keydown", handleEscPress);
+
+      // Clean up: remove event listener when the component unmounts
+      return () => {
+        document.removeEventListener("keydown", handleEscPress);
+      };
+    }
+  }, [show, handleEscPress]);
 
   const handleDelete = (index) => {
     setAddedItems((prev) => prev.filter((_, i) => i !== index));
@@ -91,18 +105,20 @@ const ShuttleBallDialog = ({
               className="form-control"
               value={quantity}
               onChange={(e) => setQuantity(parseInt(e.target.value || 1))}
-              style={{ width: "25%",margin:"0 7px 0 0" }}
+              style={{ width: "25%", margin: "0 7px 0 0" }}
             />
             <button className="btn btn-primary" onClick={handleAdd}>
               Thêm
             </button>
           </div>
         </div>
- {/* Scrollable rows */}
+        {/* Scrollable rows */}
         <div className="dialog-scrollable">
           <div className="added-list">
             {addedItems.length === 0 && (
-              <div className="text-muted text-center">Chưa có cầu nào được thêm</div>
+              <div className="text-muted text-center">
+                Chưa có cầu nào được thêm
+              </div>
             )}
 
             {addedItems.map((item, index) => (
@@ -112,7 +128,9 @@ const ShuttleBallDialog = ({
               >
                 <div>
                   <strong>{item.name}</strong> &nbsp;–&nbsp;
-                  <span className="text-secondary">Số lượng: {item.quantity}</span>
+                  <span className="text-secondary">
+                    Số lượng: {item.quantity}
+                  </span>
                 </div>
                 <button
                   className="btn btn-sm btn-outline-danger"

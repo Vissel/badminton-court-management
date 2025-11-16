@@ -29,6 +29,9 @@ public class ShuttleBall {
     @Column(name = "is_active")
     private boolean isActive;
 
+    @Column(name = "is_selected")
+    private boolean isSelected;
+
     public ShuttleBall(String name, float cost) {
         super();
         this.shuttleName = name;

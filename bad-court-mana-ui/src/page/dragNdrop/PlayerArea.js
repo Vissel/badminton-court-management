@@ -45,11 +45,11 @@ export default function PlayerArea({
       }}
     >
       <div class="player-area-header">
-        Total player: {availablePlayers.length}
+        <h5> Tổng người chơi: {availablePlayers.length} </h5>
       </div>
       <input
         type="text"
-        placeholder="Player A"
+        placeholder="Tên người chơi"
         value={newPlayer}
         onChange={(e) => setNewPlayer(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && handleAdd()}

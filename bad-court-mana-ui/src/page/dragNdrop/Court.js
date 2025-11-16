@@ -36,7 +36,7 @@ export default function Court({
             height: "45px",
           }}
         >
-          court{id} {isLocked && "(In-Progress)"}{" "}
+          Sân {id} {isLocked && "(Đang diễn ra ...)"}{" "}
         </div>
 
         {/* Finish and Cancel buttons */}
@@ -54,17 +54,14 @@ export default function Court({
               transition: "opacity 2s ease",
             }}
           >
-            <button
-              className="btn btn-success"
-              onClick={() => onFinish(id)}
-            >
-              Finish
+            <button className="btn btn-success" onClick={() => onFinish(id)}>
+              Kết thúc
             </button>
             <button
-              className="btn btn-outline-secondary"
+              className="btn btn-outline-danger"
               onClick={() => onCancel(id)}
             >
-              Cancel
+              Huỷ
             </button>
           </div>
         )}
@@ -118,7 +115,7 @@ export default function Court({
                 transition: "opacity 2s ease",
               }}
             >
-              Start
+              Bắt đầu
             </button>
           )}
           {isLocked && hovering && (
@@ -128,9 +125,9 @@ export default function Court({
                 position: "absolute",
                 top: "50%",
                 left: "50%",
-                transform: "translate(-50%, -50%)",  
+                transform: "translate(-50%, -50%)",
                 padding: "7px 7px",
-                backgroundColor:"white",
+                backgroundColor: "white",
                 color: "#4198f7",
                 border: "none",
                 borderRadius: "4px",
@@ -138,15 +135,24 @@ export default function Court({
                 zIndex: 1,
                 transition: "opacity 4s ease",
               }}
+              title="Thêm cầu"
             >
-              <svg style={{
-                width: "25px",
-                height: "auto"
-              }} xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-plus-circle" viewBox="0 0 16 16">
- <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0M8.5 4.5a.5.5 0 0 0-1 0v3h-3a.5.5 0 0 0 0 1h3v3a.5.5 0 0 0 1 0v-3h3a.5.5 0 0 0 0-1h-3z"/>
-</svg>
+              <svg
+                width="25px"
+                fill="currentColor"
+                class="bi bi-plus"
+                viewBox="0 0 16 16"
+              >
+                <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4" />
+              </svg>
+              <img
+                src="icon.png"
+                style={{
+                  width: "25px",
+                  height: "auto",
+                }}
+              ></img>
             </button>
-           
           )}
         </div>
       </div>

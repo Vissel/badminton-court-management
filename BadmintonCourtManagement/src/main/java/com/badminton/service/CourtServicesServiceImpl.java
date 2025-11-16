@@ -30,7 +30,8 @@ public class CourtServicesServiceImpl {
     private SessionServiceImpl session;
     @Autowired
     GameExpenseCalculator gameCalculator;
-
+    @Autowired
+    ShuttleBallServiceImpl shuttleBallService;
     @Autowired
     private UserRepository userRepo;
 
@@ -61,8 +62,7 @@ public class CourtServicesServiceImpl {
     public List<AvaPlayerDTO> getCurrentAvailablePlayers() {
         List<Session> activeSessions = session.findListCurrentSession();
         if (!activeSessions.isEmpty()) {
-            return activeSessions.getFirst().getAvailablePlayers().stream().filter(ava -> ava.getLeaveTime() == null)
-                    .map(ava -> new AvaPlayerDTO(ava)).collect(Collectors.toList());
+            return activeSessions.getFirst().getAvailablePlayers().stream().filter(ava -> ava.getLeaveTime() == null).map(ava -> new AvaPlayerDTO(ava)).collect(Collectors.toList());
         }
         return new ArrayList<>();
     }
@@ -95,16 +95,14 @@ public class CourtServicesServiceImpl {
                     courtExcludes.add(g.getCourt().getCourtId());
                 });
                 // remove the null Team player
-                if (playerExcludes.size() > 1)
-                    playerExcludes.remove(NULL_OF_LONG);
+                if (playerExcludes.size() > 1) playerExcludes.remove(NULL_OF_LONG);
             }
 
             log.info("Getting current session.");
             List<Session> activeSessions = session.findListCurrentSession();
             if (!activeSessions.isEmpty()) {
                 log.info("Getting list of Remain available players.");
-                List<AvailablePlayer> listOfRemainAvaPlayer = avaPlayerRepo
-                        .findAllBySessionAndAvaIdNotInAndLeaveTimeIsNull(activeSessions.getFirst(), playerExcludes);
+                List<AvailablePlayer> listOfRemainAvaPlayer = avaPlayerRepo.findAllBySessionAndAvaIdNotInAndLeaveTimeIsNull(activeSessions.getFirst(), playerExcludes);
                 log.debug("Size of Remain available players:{}", listOfRemainAvaPlayer.size());
                 res.convertToAvaPlayerDTOs(listOfRemainAvaPlayer);
                 log.debug("Added Remain available players into result.");
@@ -174,8 +172,7 @@ public class CourtServicesServiceImpl {
     public Boolean addServiceToAvailablePlayer(ServiceDTO serviceDTO, String playerName) {
         AvailablePlayer availablePlayer = session.getAvailablePlayerInActiveSession(playerName);
         if (availablePlayer != null) {
-            availablePlayer.setServices(availablePlayer.getCurrentServices().concat(CommonConstant.STR_SEMI_COLON)
-                    .concat(ServiceUtil.buildService(serviceDTO.getServiceName(), serviceDTO.getCost())));
+            availablePlayer.setServices(availablePlayer.getCurrentServices().concat(CommonConstant.STR_SEMI_COLON).concat(ServiceUtil.buildService(serviceDTO.getServiceName(), serviceDTO.getCost())));
             avaPlayerRepo.save(availablePlayer);
             return true;
         }
@@ -191,8 +188,7 @@ public class CourtServicesServiceImpl {
      * @return
      */
     @Transactional(rollbackFor = Exception.class)
-    public Boolean addAvailablePlayerToCourtArea(String playerName, CourtDTO courtDTO, ShuttleBallDTO shuttleBallDTO)
-            throws Exception {
+    public Boolean addAvailablePlayerToCourtArea(String playerName, CourtDTO courtDTO, ShuttleBallDTO shuttleBallDTO) throws Exception {
         log.info("addAvailablePlayerToCourtArea {}", CommonConstant.START);
         // create game if there is new, update otherwise
         Optional<Court> courtOpt = courtRepo.findById(Integer.valueOf(courtDTO.getCourtId()));
@@ -200,18 +196,15 @@ public class CourtServicesServiceImpl {
             return false;
         }
 
-        Optional<Game> gameOfCourtOpt = gameRepo.findByCourtAndStateAndEndedDateIsNull(courtOpt.get(),
-                GameState.NOT_START.getValue());
+        Optional<Game> gameOfCourtOpt = gameRepo.findByCourtAndStateAndEndedDateIsNull(courtOpt.get(), GameState.NOT_START.getValue());
         Game game = null;
         if (gameOfCourtOpt.isPresent()) {
             game = gameOfCourtOpt.get();
         } else {
-            List<ShuttleBall> balls = ballRepo.findAllByShuttleNameAndCostAndIsActiveTrue(
-                    shuttleBallDTO.getShuttleName(), shuttleBallDTO.getShuttleCost());
+            List<ShuttleBall> balls = ballRepo.findAllByShuttleNameAndCostAndIsActiveTrue(shuttleBallDTO.getShuttleName(), shuttleBallDTO.getShuttleCost());
 
             if (balls.isEmpty()) {
-                log.error("No finding shuttleName:{} with cost:{}", shuttleBallDTO.getShuttleName(),
-                        shuttleBallDTO.getShuttleCost());
+                log.error("No finding shuttleName:{} with cost:{}", shuttleBallDTO.getShuttleName(), shuttleBallDTO.getShuttleCost());
                 return false;
             }
 
@@ -228,8 +221,7 @@ public class CourtServicesServiceImpl {
         try {
             Team team = getTeam(game, area);
 
-            AvailablePlayer player = avaPlayerRepo
-                    .findAvailablePlayerInSessionByName(session.findListCurrentSession().getFirst(), playerName);
+            AvailablePlayer player = avaPlayerRepo.findAvailablePlayerInSessionByName(session.findListCurrentSession().getFirst(), playerName);
             // Determine team for
             switch (area) {
                 case GameState.Player.PLAYER_A, GameState.Player.PLAYER_C:
@@ -273,30 +265,27 @@ public class CourtServicesServiceImpl {
      * Started -> Finish <br>
      * Started -> Cancel
      *
-     * @param stateChange
-     * @param courtId
      * @return
      */
-    public Boolean changeGameState(String stateChange, String courtId) {
+    public Boolean changeGameState(GameDTO gameDTO) {
         try {
             log.info("Changing GameState {}", CommonConstant.START);
-            Optional<Game> gameOpt = gameRepo.findByCourtIdAndEndedDateIsNull(Integer.valueOf(courtId));
+            final String stateChange = gameDTO.getGameState();
+            final int courtId = Integer.valueOf(gameDTO.getCourt().getCourtId());
+            Optional<Game> gameOpt = gameRepo.findByCourtIdAndEndedDateIsNull(courtId);
             if (!gameOpt.isPresent()) {
-                throw new ElementNotExistException(BizCode.NOT_FOUND,
-                        String.format("No game is found by courtId [%s]", courtId));
+                throw new ElementNotExistException(BizCode.NOT_FOUND, String.format("No game is found by courtId [%s]", courtId));
             }
             Game game = gameOpt.get();
             GameState currentGameState = GameState.getGameState(game.getState());
             GameState changeGameState = GameState.getGameState(stateChange);
             if (currentGameState != null && changeGameState != null) {
-                boolean update = false;
-                if (ServiceUtil.validGameStateUpdate(currentGameState, changeGameState) &&
-                        readyToStart(changeGameState, game.getTeamOne(), game.getTeamTwo())) {
-                    update = true;
-                }
+                boolean validGameState = ServiceUtil.validGameStateUpdate(currentGameState, changeGameState);
+                boolean isStartGame = readyToStart(changeGameState, game.getTeamOne(), game.getTeamTwo());
                 // update
-                if (update) {
+                if (validGameState && isStartGame) {
                     game.setState(stateChange);
+                    setSelectedBallIntoGame(game, gameDTO.getShuttleBalls(), stateChange);
                     // update ended time for FINISH & CANCEL state
                     if (ServiceUtil.isEndedState(changeGameState)) {
                         game.setEndedDate(ServiceUtil.getCurrentTimeStamp());
@@ -309,13 +298,19 @@ public class CourtServicesServiceImpl {
 
             }
         } catch (NumberFormatException | BusinessException e) {
-            log.error("Court id [{}] is invalid.{}", courtId, e.getMessage());
+            log.error("Court id [{}] is invalid.{}", gameDTO.getCourt().getCourtId(), e.getMessage());
         } catch (Exception e) {
             log.error("Error:{}", e.getMessage());
         } finally {
             log.info("Changing GameState {}", CommonConstant.END);
         }
         return false;
+    }
+
+    private void setSelectedBallIntoGame(Game game, List<ShuttleBallDTO> shuttleBalls, String gameStateChange) {
+        if (GameState.START.equals(gameStateChange)) {
+            game.setShuttleMap(Arrays.asList(shuttleBallService.createGameShuttleMap(game, shuttleBalls.getFirst(), shuttleBalls.getFirst().getBallQuantity())));
+        }
     }
 
     private boolean readyToStart(GameState changeGameState, Team teamOne, Team teamTwo) {

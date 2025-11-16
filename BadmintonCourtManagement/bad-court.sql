@@ -16,10 +16,15 @@ insert into session(from_time,is_active)
 values (current_time(),true);
 
 -- available players
-select * from available_player 
+select a.ava_id, p.player_id, p. player_name, a.services
+ from available_player a inner join player p on a.player_id = p.player_id
 where session_id = 14 and leave_time is null;
 
 select * from available_player ;
+
+update available_player
+set services = 'costInPerson-15000.0'
+where ava_id < 21;
 
 -- update 
 update `session`
@@ -41,8 +46,14 @@ select * from team;
 
 SELECT constraint_name, constraint_type FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
 where table_name ='team';
-
-select * from game;
+-- query team 1 in game
+select g.team_id1 as team1, g.state, g.gtype, t.is_status
+from game g right join team t on g.team_id1 = t.team_id
+where g.court_id = 5 and g.state = 'Start';
+-- query team 2 in game
+select g.team_id2 as team2, g.state, g.gtype, t.is_status
+from game g right join team t on g.team_id2 = t.team_id
+where g.court_id = 5 and g.state = 'Start';
 
 select * from game
 where ended_date is null and court_id = 5;

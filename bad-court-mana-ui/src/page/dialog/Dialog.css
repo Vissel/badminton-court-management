@@ -20,16 +20,6 @@
   max-height: 380px;
 }
 
-/* keep bottom buttons fixed (not scrollable) */
-.fixed-bottom-actions {
-  position: sticky;
-  bottom: 0;
-  background: white;
-  padding-top: 10px;
-  border-top: 1px solid #ddd;
-  display: flex;
-  justify-content: center;
-}
 /* header/title area — not scrollable */
 .dialog-content {
   /* keep minimal height for title + top controls */
@@ -58,7 +48,8 @@
 .fixed-bottom-actions {
   flex: 0 0 auto;           /* don't grow or shrink */
   display: flex;
-  justify-content: center;
+  justify-content: space-between;
+  width: 100%;
   gap: 12px;
   padding-top: 10px;
   padding-bottom: 8px;

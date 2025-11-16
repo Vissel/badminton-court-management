@@ -18,7 +18,8 @@ public class ShuttleBallResult {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (!(o instanceof ShuttleBallResult)) return false;
-        ShuttleBallResult that = (ShuttleBallResult) o;
+        ShuttleBallResult
+                that = (ShuttleBallResult) o;
         return cost == that.cost && Objects.equals(shuttleName, that.shuttleName);
     }
 

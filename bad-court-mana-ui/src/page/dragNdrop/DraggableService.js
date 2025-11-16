@@ -15,16 +15,10 @@ const DraggableService = ({ serviceName, cost }) => {
   );
 
   return (
-    <div
+    <div className="selection-box"
       ref={drag}
       style={{
-        opacity: isDragging ? 0.5 : 1,
-        padding: "5px 10px",
-        margin: "5px",
-        backgroundColor: "#cde",
-        borderRadius: "4px",
-        cursor: "move",
-        border: "1px solid #aac",
+        opacity: isDragging ? 0.5 : 1
       }}
     >
       {serviceName} - {cost}
