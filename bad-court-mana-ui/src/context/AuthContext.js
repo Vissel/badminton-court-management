@@ -1,7 +1,6 @@
 // src/context/AuthContext.js
 import React, { createContext, useState, useEffect } from "react";
 
-import axios from "axios";
 import Cookies from "js-cookie";
 import api from "../api";
 
@@ -11,8 +10,6 @@ export const AuthProvider = ({ children }) => {
   const [authenticated, setAuthenticated] = useState(false);
   const [csrfToken, setCsrfToken] = useState(null);
   const [loading, setLoading] = useState(true);
-  const localHost = "http://localhost:9080";
-  const context = "bad-court-management-dev";
 
   // Check session on mount
   const checkSession = async () => {
@@ -23,10 +20,7 @@ export const AuthProvider = ({ children }) => {
         const tokenFromCookie = res.data.csrfToken;
         setCsrfToken(tokenFromCookie);
         sessionStorage.setItem('csrfToken',tokenFromCookie)
-        // Step 2: check session (if already logged in)
-        //   await axios.get('http://localhost:8080/api/user', {
-        //     withCredentials: true,
-        //   });
+
         setAuthenticated(res.data.valid);
       }
     } catch (err) {
@@ -59,14 +53,13 @@ export const AuthProvider = ({ children }) => {
     const res = await api.post(
       `/logout`,
       {}
-      
     );
 
     if (res.status === 200) {
       setAuthenticated(false);
       setCsrfToken(null);
       sessionStorage.clear();
-      alert("logout is successful.");
+      alert("Đăng xuất thành công.");
     }
   };
   return (
@@ -78,6 +71,7 @@ export const AuthProvider = ({ children }) => {
         setCsrfToken,
         logout,
         loading,
+        setLoading
       }}
     >
       {children}
