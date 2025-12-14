@@ -28,6 +28,8 @@ public class AvaPlayerDTO extends ResponseDTO {
     private transient Instant to;
     private List<String> serviceDTOs;
 
+    private float expense;
+
     public AvaPlayerDTO(AvailablePlayer avaPlayerEntity) {
         this.playerId = avaPlayerEntity.getPlayer().getPlayerId();
         this.playerName = avaPlayerEntity.getPlayer().getPlayerName();

@@ -8,7 +8,14 @@ import java.util.List;
 
 public final class CommonUtil {
     public static boolean isNotNullEmpty(String string) {
-        return string != null && !string.isBlank();
+        return StringUtils.isNoneBlank(string);
+    }
+
+    public static boolean isNotNullEmpty(String... strings) {
+        for (String str : strings) {
+            if (!isNotNullEmpty(str)) return false;
+        }
+        return true;
     }
 
     public static boolean checkValidCourt(CourtDTO courtDTO) {

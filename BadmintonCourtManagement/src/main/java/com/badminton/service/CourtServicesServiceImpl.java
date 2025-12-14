@@ -4,9 +4,9 @@ import com.badminton.BadmintonCourtManagementApplication;
 import com.badminton.constant.CommonConstant;
 import com.badminton.constant.GameState;
 import com.badminton.entity.*;
-import com.badminton.enums.BizCode;
 import com.badminton.exception.BusinessException;
 import com.badminton.exception.ElementNotExistException;
+import com.badminton.exception.enums.BizCode;
 import com.badminton.repository.*;
 import com.badminton.requestmodel.*;
 import com.badminton.service.calculator.GameExpenseCalculator;
@@ -274,7 +274,7 @@ public class CourtServicesServiceImpl {
             final int courtId = Integer.valueOf(gameDTO.getCourt().getCourtId());
             Optional<Game> gameOpt = gameRepo.findByCourtIdAndEndedDateIsNull(courtId);
             if (!gameOpt.isPresent()) {
-                throw new ElementNotExistException(BizCode.NOT_FOUND, String.format("No game is found by courtId [%s]", courtId));
+                throw new ElementNotExistException(BizCode.GAME_NOT_FOUND, String.format("No game is found by courtId [%s]", courtId));
             }
             Game game = gameOpt.get();
             GameState currentGameState = GameState.getGameState(game.getState());

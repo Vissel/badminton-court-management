@@ -24,7 +24,7 @@ public class GameResultController {
 
     @PostMapping("/confirmGameResult")
     public ResponseEntity<GameResult> confirmGameResult(@RequestBody GameDTO gameDTO) {
-
+        gameService.handleFinishGame(gameDTO);
         return ResponseEntity.ok(null);
     }
 

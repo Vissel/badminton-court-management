@@ -90,4 +90,13 @@ public class ServiceUtil {
     public static boolean teamPlayersNotNull(Team team) {
         return team != null && availablePlayerNotNull(team.getPlayerOne()) && availablePlayerNotNull(team.getPlayerTwo());
     }
+
+    public static boolean isTeamOne(String area) {
+        return GameState.teamOne().contains(area);
+    }
+
+    public static boolean isTeamTwo(String area) {
+        return GameState.teamTwo().contains(area);
+    }
+
 }

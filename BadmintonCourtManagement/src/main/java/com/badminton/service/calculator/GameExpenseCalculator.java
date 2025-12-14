@@ -16,7 +16,7 @@ import java.util.Map;
 @Service
 public class GameExpenseCalculator {
     /**
-     * get total cost by shuttle ball in game
+     * get total cost by Map shuttle ball result and number
      *
      * @param ballResMap
      * @return
@@ -24,6 +24,18 @@ public class GameExpenseCalculator {
     public Float getTotalBallCost(Map<ShuttleBallResult, Integer> ballResMap) {
         return ballResMap.entrySet().stream().map(
                 e -> (float) e.getKey().getCost() * e.getValue()
+        ).reduce(0f, Float::sum);
+    }
+
+    /**
+     * get total cost by List shuttle ball
+     *
+     * @param game
+     * @return
+     */
+    public Float getTotalBallCost(Game game) {
+        return game.getShuttleMap().stream().map(
+                map -> map.getShuttleBall().getCost() * map.getShuttleNumber()
         ).reduce(0f, Float::sum);
     }
 

@@ -2,7 +2,9 @@ package com.badminton.constant;
 
 import lombok.Getter;
 
+import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 @Getter
@@ -40,5 +42,15 @@ public enum GameState {
         public static final String PLAYER_B = "B";
         public static final String PLAYER_C = "C";
         public static final String PLAYER_D = "D";
+
+
+    }
+
+    public static List<String> teamOne() {
+        return Arrays.asList(Player.PLAYER_A, Player.PLAYER_B);
+    }
+
+    public static List<String> teamTwo() {
+        return Arrays.asList(Player.PLAYER_C, Player.PLAYER_D);
     }
 }
