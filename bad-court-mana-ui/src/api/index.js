@@ -7,10 +7,6 @@ const currentHost = `${window.location.protocol}//${window.location.hostname}`;
 const localHost = "http://localhost:9080";
 const context = "bad-court-management-dev";
 
-const isNotAuthorized = (status) => {
-  return status === 401 || status === 403;
-};
-let isRedirecting = false;
 const api = axios.create({
   baseURL: `${localHost}/${context}`, // Update with your backend base URL
   withCredentials: true,
@@ -29,24 +25,24 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-
     const status = error?.response?.status;
 
-    if (status === 401 || status === 403){
+    if (status === 401 || status === 403) {
+      if (
+        !window.location.pathname.includes("/login") ||
+        !window.location.pathname.includes("/")
+      ) {
+        console.warn("Unauthorized or Forbidden – redirecting to /login");
 
-    
- if( !window.location.pathname.includes("/login") || !window.location.pathname.includes("/") ) {
-      console.warn("Unauthorized or Forbidden – redirecting to /login");
+        // Clear any stored auth info if you have
+        localStorage.clear();
+        sessionStorage.clear();
 
-      // Clear any stored auth info if you have
-      localStorage.clear();
-      sessionStorage.clear();
-
-      alert("Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại!")
-      window.location.replace("/#/login");
-      return new Promise(()=>{});
+        alert("Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại!");
+        window.location.replace("/#/login");
+        return new Promise(() => {});
+      }
     }
-}
     return Promise.reject(error);
   }
 );

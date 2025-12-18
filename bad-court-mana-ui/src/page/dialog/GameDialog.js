@@ -106,6 +106,7 @@ const GameDialog = ({ show, data, onConfirm, onCancel }) => {
         ...expenseUpdate,
         courtResult: data.courtResult,
         gameState: data.state,
+        ballList: parsed
       }));
       setTotalCost(total);
       // Add event listener when the component mounts
@@ -133,23 +134,11 @@ const GameDialog = ({ show, data, onConfirm, onCancel }) => {
 
   if (!show || !formData) return null;
 
-  const getTotalCostByBall = (newMap) => {
-    let total = 0.0;
-    Object.entries(newMap).forEach(([key, qty]) => {
-      const match = key.slice(key.lastIndexOf("-") + 1).trim();
-      const cost = match ? parseFloat(match) : 0;
-      total += cost * qty;
-    });
-    return total.toLocaleString("it-IT", {
-      style: "currency",
-      currency: "VND",
-    });
-  };
-
   const calculateActualCost = (team) => {
     let updatedFormData = { ...formData };
     // Team 1 wins, Team 2 pays
     if (team === TEAM_ONE) {
+      updatedFormData.teamOneResult.win = true;
       // 1. Reset Team 1 (Winner) expenses to 0
       updatedFormData.teamOneResult.expenseOne = 0;
       updatedFormData.teamOneResult.expenseTwo = 0;
@@ -179,6 +168,7 @@ const GameDialog = ({ show, data, onConfirm, onCancel }) => {
       }
     } else if (team === TEAM_TWO) {
       // Team 2 wins, Team 1 pays
+      updatedFormData.teamTwoResult.win = true;
       // 1. Reset Team 2 (Winner) expenses to 0
       updatedFormData.teamTwoResult.expenseOne = 0;
       updatedFormData.teamTwoResult.expenseTwo = 0;
@@ -257,7 +247,7 @@ const GameDialog = ({ show, data, onConfirm, onCancel }) => {
       const key = `shuttleName=${b.shuttleName}, cost=${b.cost}`;
       newMap[key] = b.quantity;
     });
-    setFormData({ ...formData, ballResultMap: newMap });
+    setFormData({ ...formData, ballResultMap: newMap, ballList: updatedBalls });
 
     // re-calculate total cost by ball number
     let total = 0;
@@ -474,7 +464,7 @@ const GameDialog = ({ show, data, onConfirm, onCancel }) => {
           <button
             className="btn btn-success me-2"
             disabled={winnerTeam === null}
-            onClick={() => onConfirm(formData)}
+            onClick={() => onConfirm(formData, winnerTeam)}
           >
             Xác nhận
           </button>

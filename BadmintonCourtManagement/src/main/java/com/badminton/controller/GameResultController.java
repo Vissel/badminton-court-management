@@ -2,7 +2,9 @@ package com.badminton.controller;
 
 import com.badminton.requestmodel.GameDTO;
 import com.badminton.response.result.GameResult;
+import com.badminton.response.result.Result;
 import com.badminton.service.GameService;
+import com.badminton.util.ResponseConvertor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -23,9 +25,8 @@ public class GameResultController {
     }
 
     @PostMapping("/confirmGameResult")
-    public ResponseEntity<GameResult> confirmGameResult(@RequestBody GameDTO gameDTO) {
-        gameService.handleFinishGame(gameDTO);
-        return ResponseEntity.ok(null);
+    public ResponseEntity<Result<Boolean>> confirmGameResult(@RequestBody GameDTO gameDTO) {
+        return ResponseConvertor.convert(gameService.handleFinishGame(gameDTO));
     }
 
     @PostMapping("/rejectGameResult")

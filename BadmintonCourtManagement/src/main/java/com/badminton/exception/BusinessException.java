@@ -1,16 +1,16 @@
 package com.badminton.exception;
 
-import com.badminton.exception.enums.BizCode;
+import com.badminton.exception.enums.ErrorCodeEnum;
 import lombok.Data;
 
 @Data
 public class BusinessException extends Exception {
-    private BizCode bizCode;
+    private ErrorCodeEnum errorCodeEnum;
     private String errorMessage;
 
-    public BusinessException(BizCode bizCode, String errorMessage) {
+    public BusinessException(ErrorCodeEnum errorCodeEnum, String errorMessage) {
         super(errorMessage);
-        this.bizCode = bizCode;
+        this.errorCodeEnum = errorCodeEnum;
         this.errorMessage = errorMessage;
     }
 }

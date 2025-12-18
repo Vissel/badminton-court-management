@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
+import { useNavigate } from "react-router";
 import "../App.css";
 import api from "../api/index";
 
@@ -50,6 +51,8 @@ function HomePage() {
   const [showGameDialog, setShowGameDialog] = useState(false);
   const [gameDialogData, setGameDialogData] = useState("");
 
+  const navigate = useNavigate();
+
   const responseSuccess = (response) => {
     return response.status === 200 && response.data != null;
   };
@@ -65,13 +68,13 @@ function HomePage() {
     return Number(ballString.slice(ballString.lastIndexOf("-") + 1).trim());
   };
 
-  // 
-  const  handleSelectedBall = (ballChangeOption)=>{
-    api.post(`/court-mana/changeSelectedBall`,{
+  //
+  const handleSelectedBall = (ballChangeOption) => {
+    api.post(`/court-mana/changeSelectedBall`, {
       shuttleName: getShuttleBallName(ballChangeOption),
       shuttleCost: getShuttleBallCost(ballChangeOption),
-      selected: true
-    })
+      selected: true,
+    });
     setSelectedBall(ballChangeOption);
   };
   // Get shuttleCost
@@ -301,7 +304,61 @@ function HomePage() {
         }
       });
   };
+  const courtAreaPayload = (area, playerName, expense, isWin) => {
+    return {
+      area: area,
+      playerInArea: {
+        playerName: playerName,
+        expense: Number(expense || 0),
+      },
+      win: isWin,
+    };
+  };
+  const buildCourtPayLoad = (formData, winnerTeam) => {
+    const payload = [];
+    if (formData.teamOneResult.playerOneName != null) {
+      payload.push(
+        courtAreaPayload(
+          "A",
+          formData.teamOneResult.playerOneName,
+          formData.teamOneResult.expenseOne,
+          winnerTeam === "teamOne"
+        )
+      );
+    }
+    if (formData.teamOneResult.playerTwoName != null) {
+      payload.push(
+        courtAreaPayload(
+          "B",
+          formData.teamOneResult.playerTwoName,
+          formData.teamOneResult.expenseTwo,
+          winnerTeam === "teamOne"
+        )
+      );
+    }
+    if (formData.teamTwoResult.playerOneName != null) {
+      payload.push(
+        courtAreaPayload(
+          "C",
+          formData.teamTwoResult.playerOneName,
+          formData.teamTwoResult.expenseOne,
+          winnerTeam === "teamTwo"
+        )
+      );
+    }
+    if (formData.teamTwoResult.playerTwoName != null) {
+      payload.push(
+        courtAreaPayload(
+          "D",
+          formData.teamTwoResult.playerTwoName,
+          formData.teamTwoResult.expenseTwo,
+          winnerTeam === "teamTwo"
+        )
+      );
+    }
 
+    return payload;
+  };
   /** On Finish */
   const onFinish = async (courtId) => {
     const gameRes = await api.get(
@@ -312,56 +369,60 @@ function HomePage() {
       setShowGameDialog(true);
     }
   };
-  const confirmGameRes = async (formData) => {
-    console.log("Confirmed action with data:", formData);
-    // gameDialogData.state = "Finish";
-    // const gameDTO = {
-    //   playerName: "",
-    //   court: {
-    //     courtId: courtId,
-    //     courtName: "San 2",
-    //     courtAreas: [
-    //       {
-    //         area: "",
-    //         playerInArea: {},
-    //       },
-    //     ],
-    //   },
-    //   shuttleBall: {
-    //     shuttleName: "",
-    //     shuttleCost: parseFloat(0),
-    //   },
-    // };
-    // const res = await api.post(`/gameResult/confirmGameResult`, gameDialogData);
+  const confirmGameRes = async (formData, winTeam) => {
+    console.log(`Confirmed action with data: ${formData}, winTeam: ${winTeam}`);
+    const ballPayload = formData.ballList.map((b) => ({
+      shuttleName: b.shuttleName,
+      shuttleCost: b.cost,
+      ballQuantity: b.quantity,
+    }));
 
-    // if (!responseSuccess(res)) {
-    //   alert("Hành động thất bại. Load lại trang và thử lại. ");
-    //   return;
-    // }
+    const payload = {
+      court: {
+        courtId: formData.courtResult.courtId,
+        courtName: formData.courtResult.courtName,
+        courtAreas: buildCourtPayLoad(formData, winTeam),
+      },
+      shuttleBalls: ballPayload,
+      gameState: "Finish",
+    };
+    try {
+      const response = await api.post(`/gameResult/confirmGameResult`, payload);
 
-    // setCourts((prev) => {
-    //   const updated = { ...prev };
-    //   const playersToReturn = Object.values(updated[courtId]).filter(Boolean);
-    //   courtIds.forEach((id) => {
-    //     for (const key in updated[id]) {
-    //       if (playersToReturn.includes(updated[id][key]))
-    //         updated[id][key] = null;
-    //     }
-    //   });
-    //   return updated;
-    // });
+      if (!responseSuccess(response)) {
+        alert("Hành động thất bại. Load lại trang và thử lại. ");
+        return;
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Hành động thất bại. Load lại trang và thử lại. ");
+      setShowGameDialog(false);
+      return;
+    }
 
-    // const courtId = gameDialogData.courtResult.courtId;
-    // setAvailablePlayers((prev) => [
-    //   ...prev,
-    //   ...Object.values(courts[courtId]).filter(Boolean),
-    // ]);
-    // setLockedCourts((prev) => {
-    //   const updated = { ...prev };
-    //   delete updated[courtId];
-    //   return updated;
-    // });
+    setCourts((prev) => {
+      const updated = { ...prev };
+      const playersToReturn = Object.values(updated[courtId]).filter(Boolean);
+      courtIds.forEach((id) => {
+        for (const key in updated[id]) {
+          if (playersToReturn.includes(updated[id][key]))
+            updated[id][key] = null;
+        }
+      });
+      return updated;
+    });
 
+    const courtId = gameDialogData.courtResult.courtId;
+    setAvailablePlayers((prev) => [
+      ...prev,
+      ...Object.values(courts[courtId]).filter(Boolean),
+    ]);
+    setLockedCourts((prev) => {
+      const updated = { ...prev };
+      delete updated[courtId];
+      return updated;
+    });
+    console.log(`On finish of court ${courtId}`);
     // alert(`On finish of court ${courtId}`);
     setShowGameDialog(false);
   };

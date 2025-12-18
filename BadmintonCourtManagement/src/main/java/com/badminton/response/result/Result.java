@@ -18,4 +18,10 @@ public class Result<T> {
      * error message
      */
     private String errorMessage;
+
+    /**
+     * error code
+     */
+    private int errorCode;
+
 }

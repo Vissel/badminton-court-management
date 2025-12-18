@@ -5,8 +5,7 @@ import com.badminton.constant.GameType;
 import com.badminton.entity.Game;
 import com.badminton.entity.Team;
 import com.badminton.exception.BusinessException;
-import com.badminton.exception.ErrorMess;
-import com.badminton.exception.enums.BizCode;
+import com.badminton.exception.enums.ErrorCodeEnum;
 import com.badminton.repository.GameRepository;
 import com.badminton.requestmodel.CourtAreaDTO;
 import com.badminton.requestmodel.GameDTO;
@@ -35,6 +34,8 @@ public class GameService {
     GameRepository gameRepository;
     @Autowired
     GameExpenseCalculator gameExpenseCalculator;
+    @Autowired
+    ServiceTemple serviceTemple;
 
     /**
      * Get a GameResult when user click on Finish btn.
@@ -64,43 +65,39 @@ public class GameService {
         return result;
     }
 
-    public Result handleFinishGame(GameDTO gameRequest) {
-        Result result = new Result();
-        String errorMess = null;
-        try {
-            // 1. validate Game confirmation value
-            validateGameFinishField(gameRequest);
+    public Result<Boolean> handleFinishGame(GameDTO gameRequest) {
+        return serviceTemple.execute(new ProcessCallback<GameDTO, Boolean>() {
 
-            // 2. get Game
-            int courtId = Integer.valueOf(gameRequest.getCourt().getCourtId());
-            Optional<Game> gOption = gameRepository.findByCourtIdAndEndedDateIsNull(courtId);
-            if (!gOption.isPresent()) {
-                errorMess = "There is no Game with court id:" + gameRequest.getCourt().getCourtId();
-                throw new BusinessException(BizCode.GAME_NOT_FOUND, errorMess);
+            @Override
+            public GameDTO getRequest() {
+                return gameRequest;
             }
-            Game game = gOption.get();
-            // 3. validate from request the type of game: SHARE or NEGO and set expense
-            findGTypeAndSetExpense(game, gameRequest.getCourt().getCourtAreas());
-            // 4. set value: state, Team's expense, endedDate, gType.
-            game.setEndedDate(ServiceUtil.getCurrentTimeStamp());
-            game.setState(GameState.FINISH.getValue());
 
-            gameRepository.save(game);
-            result.setSuccess(true);
-        } catch (IllegalArgumentException e) {
-            log.error(ErrorMess.REQUEST_VAL, e.getMessage());
-            errorMess = e.getMessage();
-            result.setSuccess(false);
-        } catch (BusinessException e) {
-            log.error(ErrorMess.BIZ_VAL, e.getMessage());
-            result.setSuccess(false);
-        } catch (Exception e) {
-            log.error(e.getMessage());
-            result.setSuccess(false);
-        } finally {
-            result.setErrorMessage(errorMess);
-        }
-        return result;
+            @Override
+            public void preProcess(GameDTO request) {
+                // 1. validate Game confirmation value
+                validateGameFinishField(gameRequest);
+            }
+
+            @Override
+            public Boolean process() throws BusinessException {
+                // 2. get Game
+                int courtId = Integer.valueOf(gameRequest.getCourt().getCourtId());
+                Optional<Game> gOption = gameRepository.findByCourtIdAndEndedDateIsNull(courtId);
+                if (!gOption.isPresent()) {
+                    throw new BusinessException(ErrorCodeEnum.GAME_NOT_FOUND, "Game is not found to execute.");
+                }
+                Game game = gOption.get();
+                // 3. validate from request the type of game: SHARE or NEGO and set expense
+                findGTypeAndSetExpense(game, gameRequest.getCourt().getCourtAreas());
+                // 4. set value: state, Team's expense, endedDate, gType.
+                game.setEndedDate(ServiceUtil.getCurrentTimeStamp());
+                game.setState(GameState.FINISH.getValue());
+
+                gameRepository.save(game);
+                return true;
+            }
+        });
     }
 
     private TeamResult buildTeamResult(Team team, Map<ShuttleBallResult, Integer> shuttleMap, Game startedGame) {
@@ -163,19 +160,13 @@ public class GameService {
     }
 
 
-    private void findGTypeAndSetExpense(Game game, List<CourtAreaDTO> listCourtAreas) throws BusinessException {
+    private void findGTypeAndSetExpense(Game game, List<CourtAreaDTO> listCourtAreas) {
         Map<String, CourtAreaDTO> areaCourtMap = mapAreaStrKey(listCourtAreas);
-        String winAreaDTO = findWinAreaDTO(areaCourtMap);
         GameType gType = findGameType(areaCourtMap);
         // set gType to game
         game.setGtype(gType.name());
-        if (GameType.SHARE.equals(gType)) {
-            Team loseTeam = findLoseTeam(game, areaCourtMap.get(winAreaDTO));
-            setSharedExpenseToLoseTeam(gameExpenseCalculator.getTotalBallCost(game), loseTeam);
-        } else {
-            // don't need to calculate expense, negotiation has been done from FE by admin's input
-            setNegotiateExpense(game, areaCourtMap);
-        }
+        // set expense
+        setExpense(game, areaCourtMap);
     }
 
     private GameType findGameType(Map<String, CourtAreaDTO> areaCourtMap) {
@@ -191,7 +182,7 @@ public class GameService {
 
     private String findWinAreaDTO(Map<String, CourtAreaDTO> areaCourtMap) throws BusinessException {
         Map.Entry<String, CourtAreaDTO> entry = areaCourtMap.entrySet().stream().filter(map -> map.getValue().isWin()).findFirst()
-                .orElseThrow(() -> new BusinessException(BizCode.WINNER_NOT_FOUND, "No specific winner."));
+                .orElseThrow(() -> new BusinessException(ErrorCodeEnum.WINNER_NOT_FOUND, "No specific winner."));
         return entry.getKey();
     }
 
@@ -208,20 +199,32 @@ public class GameService {
         loseTeam.setExpenseTwo(sharedExpense);
     }
 
-    private void setNegotiateExpense(Game game, Map<String, CourtAreaDTO> areaCourtMap) {
+    private void setExpense(Game game, Map<String, CourtAreaDTO> areaCourtMap) {
         float expense;
         for (Map.Entry<String, CourtAreaDTO> entry : areaCourtMap.entrySet()) {
             expense = entry.getValue().getPlayerInArea().getExpense();
-            findTeamAndSetExpense(game, entry.getKey(), expense);
+            setExpenseAndWinToTeam(game, entry.getKey(), expense, entry.getValue().isWin());
         }
     }
 
-    private void findTeamAndSetExpense(Game game, String areaDTO, float expense) {
+    private void setExpenseAndWinToTeam(Game game, String areaDTO, float expense, boolean win) {
         switch (areaDTO) {
-            case GameState.Player.PLAYER_A -> game.getTeamOne().setExpenseOne(expense);
-            case GameState.Player.PLAYER_B -> game.getTeamOne().setExpenseTwo(expense);
-            case GameState.Player.PLAYER_C -> game.getTeamTwo().setExpenseOne(expense);
-            case GameState.Player.PLAYER_D -> game.getTeamTwo().setExpenseTwo(expense);
+            case GameState.Player.PLAYER_A -> {
+                game.getTeamOne().setExpenseOne(expense);
+                game.getTeamOne().setWin(win);
+            }
+            case GameState.Player.PLAYER_B -> {
+                game.getTeamOne().setExpenseTwo(expense);
+                game.getTeamOne().setWin(win);
+            }
+            case GameState.Player.PLAYER_C -> {
+                game.getTeamTwo().setExpenseOne(expense);
+                game.getTeamTwo().setWin(win);
+            }
+            case GameState.Player.PLAYER_D -> {
+                game.getTeamTwo().setExpenseTwo(expense);
+                game.getTeamTwo().setWin(win);
+            }
         }
     }
 
@@ -233,7 +236,7 @@ public class GameService {
 
         Assert.isTrue(StringUtils.isNotBlank(gameRequest.getCourt().getCourtName()), "Court name must not be empty.");
         Assert.notEmpty(gameRequest.getCourt().getCourtAreas(), "Court area must not be empty.");
-        Assert.notEmpty(gameRequest.getShuttleMap(), "Shuttle ball must not be empty.");
+        Assert.notEmpty(gameRequest.getShuttleBalls(), "Shuttle ball must not be empty.");
         boolean isValidTeamPlayers = haveValidTeamPlayers(gameRequest.getCourt().getCourtAreas(), getTotalBallExpense(gameRequest.getShuttleBalls()));
         Assert.isTrue(isValidTeamPlayers, "Player or expense is invalid.");
     }
