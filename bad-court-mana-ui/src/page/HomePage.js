@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
-import { useNavigate } from "react-router";
+
 import "../App.css";
 import api from "../api/index";
 
@@ -11,22 +11,28 @@ import PlayerArea from "./dragNdrop/PlayerArea";
 import ServiceDialog from "./dialog/ServiceDialog";
 import GameDialog from "./dialog/GameDialog";
 import ShuttleBallDialog from "./dialog/ShuttleBallDialog";
+import CancelConfirm from "./dialog/CancelConfirm";
+import PayConfirm from "./dialog/PayConfirm";
 
 const COST_IN_PERSON = "costInPerson";
 const VN_COST_IN_PERSON = "Tiền sân";
+export const TYPE = {
+  PAY: "PAY",
+  CANCEL: "CANCEL",
+};
 /* HomePage */
 function HomePage() {
-  const courtIds = [1, 2, 3, 4, 5, 6, 7];
+  const courtIds = [1, 2, 3, 4, 5, 6, 7, 8];
 
   // Sort images for the right column (1, 2, 3) to display from bottom-up visually
   // We need to reverse the order for rendering to achieve "right-end > up"
   const rightColumn = courtIds
-    .filter((id) => id >= 1 && id <= 3)
+    .filter((id) => id >= 1 && id <= 4)
     .sort((a, b) => a - b); // Ensure 1, 2, 3 order, then reverse for display
 
   // Sort images for the left column (4, 5, 6, 7)
   const leftColumn = courtIds
-    .filter((id) => id >= 4 && id <= 7)
+    .filter((id) => id >= 5 && id <= 8)
     .sort((a, b) => a - b);
 
   const [courts, setCourts] = useState(() => {
@@ -49,9 +55,11 @@ function HomePage() {
   // const [courts, setCourts] = useState();
 
   const [showGameDialog, setShowGameDialog] = useState(false);
-  const [gameDialogData, setGameDialogData] = useState("");
-
-  const navigate = useNavigate();
+  const [gameDialogData, setGameDialogData] = useState();
+  const [showCancelConfirmDialog, setShowCancelConfirmDialog] = useState(false);
+  const [cancelCourtId, setCancelCourtId] = useState("");
+  const [showPayConfirmDialog, setShowPayConfirmDialog] = useState(false);
+  const [payConfirmData, setPayConfirmData] = useState(null);
 
   const responseSuccess = (response) => {
     return response.status === 200 && response.data != null;
@@ -189,17 +197,7 @@ function HomePage() {
       });
     }
   };
-  const setArrayAvailablePlayerBack = (arrayPlayer) => {
-    Object.values(arrayPlayer).forEach((playerName) =>
-      setAvailablePlayers((prev) => {
-        if (prev.includes(playerName)) {
-          // force a new array so React re-renders and react-dnd unhides the item
-          return [...prev];
-        }
-        return [...prev, playerName];
-      })
-    );
-  };
+
   const occupied = () => {};
   const onDropPlayerBack = (playerName, courtId, areaKey) => {
     console.log(availablePlayers);
@@ -259,10 +257,6 @@ function HomePage() {
         }
       })
       .catch((err) => console.error("Error fetching shuttle balls:", err));
-    setShowShuttleDialog(false);
-  };
-
-  const handleCancel = () => {
     setShowShuttleDialog(false);
   };
 
@@ -359,6 +353,31 @@ function HomePage() {
 
     return payload;
   };
+  const resetPlayerInCourt = (courtId) => {
+    setAvailablePlayers((prev) => [
+      ...prev,
+      ...Object.values(courts[courtId]).filter(Boolean),
+    ]);
+
+    setCourts((prev) => {
+      const updated = { ...prev };
+      const playersToReturn = Object.values(updated[courtId]).filter(Boolean);
+      courtIds.forEach((id) => {
+        for (const key in updated[id]) {
+          if (playersToReturn.includes(updated[id][key]))
+            updated[id][key] = null;
+        }
+      });
+      return updated;
+    });
+
+    setLockedCourts((prev) => {
+      const updated = { ...prev };
+      delete updated[courtId];
+      return updated;
+    });
+  };
+
   /** On Finish */
   const onFinish = async (courtId) => {
     const gameRes = await api.get(
@@ -369,7 +388,7 @@ function HomePage() {
       setShowGameDialog(true);
     }
   };
-  const confirmGameRes = async (formData, winTeam) => {
+  const confirmGameRes = (formData, winTeam) => {
     console.log(`Confirmed action with data: ${formData}, winTeam: ${winTeam}`);
     const ballPayload = formData.ballList.map((b) => ({
       shuttleName: b.shuttleName,
@@ -387,54 +406,64 @@ function HomePage() {
       gameState: "Finish",
     };
     try {
-      const response = await api.post(`/gameResult/confirmGameResult`, payload);
-
-      if (!responseSuccess(response)) {
-        alert("Hành động thất bại. Load lại trang và thử lại. ");
-        return;
-      }
+      api.post(`/gameResult/confirmGameResult`, payload);
     } catch (error) {
       console.error(error);
       alert("Hành động thất bại. Load lại trang và thử lại. ");
       setShowGameDialog(false);
       return;
     }
-
-    setCourts((prev) => {
-      const updated = { ...prev };
-      const playersToReturn = Object.values(updated[courtId]).filter(Boolean);
-      courtIds.forEach((id) => {
-        for (const key in updated[id]) {
-          if (playersToReturn.includes(updated[id][key]))
-            updated[id][key] = null;
-        }
+    // 4. ADD SERVICE TO PLAYERS (The New Logic)
+    // We extract players and their calculated expenses from formData
+    const participants = [
+      {
+        name: formData.teamOneResult.playerOneName,
+        cost: formData.teamOneResult.expenseOne,
+      },
+      {
+        name: formData.teamOneResult.playerTwoName,
+        cost: formData.teamOneResult.expenseTwo,
+      },
+      {
+        name: formData.teamTwoResult.playerOneName,
+        cost: formData.teamTwoResult.expenseOne,
+      },
+      {
+        name: formData.teamTwoResult.playerTwoName,
+        cost: formData.teamTwoResult.expenseTwo,
+      },
+    ].filter((p) => p.name && p.cost > 0);
+    // await Promise.all(participants.map(p => {
+    //     saveServiceToPlayer(p.name, "Tiền Sân " + formData.courtResult.courtId, p.cost);
+    // }));
+    // 4. Update the local UI state for services all at once
+    setPlayerServiceMap((prev) => {
+      const newMap = { ...prev };
+      participants.forEach((p) => {
+        const existing = newMap[p.name] || [];
+        newMap[p.name] = [
+          ...existing,
+          `Tiền sân ${formData.courtResult.courtId}-${p.cost}`,
+        ];
       });
-      return updated;
+      return newMap;
     });
 
     const courtId = gameDialogData.courtResult.courtId;
-    setAvailablePlayers((prev) => [
-      ...prev,
-      ...Object.values(courts[courtId]).filter(Boolean),
-    ]);
-    setLockedCourts((prev) => {
-      const updated = { ...prev };
-      delete updated[courtId];
-      return updated;
-    });
-    console.log(`On finish of court ${courtId}`);
-    // alert(`On finish of court ${courtId}`);
-    setShowGameDialog(false);
-  };
+    resetPlayerInCourt(courtId);
 
-  const cancelGameRes = () => {
-    console.log("Cancel game");
+    console.log(`On finish of court ${courtId}`);
     setShowGameDialog(false);
+    // alert("Kết thúc trận đấu.");
   };
 
   /**On Cancel */
-  const onCancel = async (courtId) => {
-    const res = await api.post(`/court-mana/changeGameState`, {
+  const onCancelGame = (courtId) => {
+    setShowCancelConfirmDialog(true);
+    setCancelCourtId(courtId);
+  };
+  const cancelGameRes = async (courtId) => {
+    const res = await api.post(`/gameResult/rejectGameResult`, {
       court: {
         courtId: courtId,
       },
@@ -446,31 +475,8 @@ function HomePage() {
       return;
     }
 
-    setCourts((prev) => {
-      const updated = { ...prev };
-      const playersToReturn = Object.values(updated[courtId]).filter(Boolean);
-      let playerName = null;
-      courtIds.forEach((id) => {
-        for (const key in updated[id]) {
-          playerName = updated[id][key];
-          if (playersToReturn.includes(playerName)) {
-            setAvailablePlayerBack(playerName);
-            updated[id][key] = null;
-          }
-        }
-      });
-      return updated;
-    });
-
-    // setAvailablePlayers((prev) => [
-    //   ...prev,
-    //   ...Object.values(courts[courtId]).filter(Boolean),
-    // ]);
-    setLockedCourts((prev) => ({
-      ...prev,
-      [courtId]: false,
-    }));
-    alert(`On Cancel court ${courtId}`);
+    resetPlayerInCourt(courtId);
+    setShowCancelConfirmDialog(false);
   };
 
   // Handle Drop service
@@ -500,19 +506,17 @@ function HomePage() {
     setSelectedPlayer(p);
     setShowDialog(true);
   };
-  const saveServiceToPlayer = async (playerName, serviceName, cost) => {
-    const res = await api.post(
-      `/court-mana/addServiceToPlayer?playerName=${playerName}`,
-      {
-        serviceName: serviceName,
-        cost: parseFloat(cost),
-      }
-    );
-    if (res.status === 200 && res.data === true) {
-      console.info(`Added ${serviceName} - ${cost} to ${playerName}`);
-    } else {
-      console.error(`Failed to add ${serviceName} - ${cost} to ${playerName}`);
-    }
+  const saveServiceToPlayer = (playerName, serviceName, cost) => {
+    return api.post(`/court-mana/addServiceToPlayer?playerName=${playerName}`, {
+      serviceName: serviceName,
+      cost: parseFloat(cost),
+    });
+    // if (res.status === 200 && res.data === true) {
+    //   console.info(`Added ${serviceName} - ${cost} to ${playerName}`);
+    // } else {
+    //   console.error(`Failed to add ${serviceName} - ${cost} to ${playerName}`);
+    // }
+    // return res;
   };
 
   // helper setter — ALWAYS use this to set selectedBall
@@ -651,6 +655,40 @@ function HomePage() {
     }
   }, []);
 
+  const onPayConfirm = (playerName, type, serviceList, expense) => {
+    // show dialog type: pay, cancel.
+    let title = `Xác nhận XOÁ người chơi [${playerName}] ?`;
+    if (TYPE.PAY === type) {
+      title = `Xác nhận THANH TOÁN cho người chơi [${playerName}] ?`;
+    }
+    setShowPayConfirmDialog(true);
+    setPayConfirmData({
+      playerName: playerName,
+      title: title,
+      type: type,
+      services: serviceList,
+      expense: expense,
+    });
+  };
+
+  const handlePayment = (data) => {
+    console.log(`handle: ${data.title}`);
+
+    // send api pay
+
+    // send api cancel.
+
+    api.post(`/api/v1/pay/payToPlayer`, {
+      playerName: data.playerName,
+      serviceDTOs: data.services,
+      expense: data.expense,
+      payType: data.type,
+    });
+    setShowPayConfirmDialog(false);
+    setShowDialog(false);
+    setAvailablePlayers((prev) => prev.filter((p) => p !== data.playerName));
+  };
+
   return (
     <DndProvider backend={HTML5Backend}>
       <div style={{ display: "flex", flexDirection: "row", height: "100vh" }}>
@@ -726,8 +764,8 @@ function HomePage() {
               playerName={selectedPlayer}
               services={playerServiceMap[selectedPlayer] || []}
               onClose={() => setShowDialog(false)}
-              onPay={() => alert("payment")}
-              onDelete={handleDeletePlayer}
+              onPay={onPayConfirm}
+              onDelete={onPayConfirm}
             />
           )}
           <div className="column left-column">
@@ -747,7 +785,7 @@ function HomePage() {
                     onStart={startGame}
                     showAddedBallDialog={showAddedBallDialog}
                     onFinish={onFinish}
-                    onCancel={onCancel}
+                    onCancel={() => onCancelGame(id)}
                     onDropService={handleDropService}
                   />
                 </div>
@@ -771,7 +809,7 @@ function HomePage() {
                     onStart={startGame}
                     showAddedBallDialog={showAddedBallDialog}
                     onFinish={onFinish}
-                    onCancel={onCancel}
+                    onCancel={() => onCancelGame(id)}
                     onDropService={handleDropService}
                   />
                 </div>
@@ -783,18 +821,30 @@ function HomePage() {
             courtProcessing={courtProcessing}
             show={showShuttleDialog}
             onSaveBallOntoCourt={saveBallOntoCourt}
-            onCancel={handleCancel}
+            onCancel={() => setShowShuttleDialog(false)}
           />
 
           {/* Show game dialog */}
-          {showGameDialog && (
-            <GameDialog
-              show={showGameDialog}
-              data={gameDialogData}
-              onConfirm={confirmGameRes}
-              onCancel={cancelGameRes}
-            />
-          )}
+
+          <GameDialog
+            show={showGameDialog}
+            data={gameDialogData}
+            onConfirm={confirmGameRes}
+            onExit={() => setShowGameDialog(false)}
+          />
+
+          <CancelConfirm
+            show={showCancelConfirmDialog}
+            courtId={cancelCourtId}
+            onConfirm={cancelGameRes}
+            onExit={() => setShowCancelConfirmDialog(false)}
+          />
+          <PayConfirm
+            show={showPayConfirmDialog}
+            data={payConfirmData}
+            onConfirm={handlePayment}
+            onExit={() => setShowPayConfirmDialog(false)}
+          />
         </div>
       </div>
     </DndProvider>

@@ -30,9 +30,8 @@ public class GameResultController {
     }
 
     @PostMapping("/rejectGameResult")
-    public ResponseEntity<GameResult> rejectGameResult() {
-
-        return ResponseEntity.ok(null);
+    public ResponseEntity<Result<Boolean>> rejectGameResult(@RequestBody GameDTO gameDTO) {
+        return ResponseConvertor.convert(gameService.terminateGame(gameDTO));
     }
 
     @PostMapping("/editGameResult")

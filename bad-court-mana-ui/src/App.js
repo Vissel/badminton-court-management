@@ -5,6 +5,7 @@ import LoginPage from "./page/LoginPage";
 
 import HomePage from "./page/HomePage";
 import SetupPage from "./page/SetupPage";
+import ReportPage from "./page/ReportPage";
 import Footer from "./Footer";
 import Header from "./Header";
 import { AuthProvider } from "./context/AuthContext";
@@ -55,6 +56,14 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <SetupPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/report"
+                element={
+                  <ProtectedRoute>
+                    <ReportPage />
                   </ProtectedRoute>
                 }
               />

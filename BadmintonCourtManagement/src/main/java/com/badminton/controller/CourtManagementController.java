@@ -2,9 +2,11 @@ package com.badminton.controller;
 
 import com.badminton.constant.CommonConstant;
 import com.badminton.requestmodel.*;
+import com.badminton.response.result.Result;
 import com.badminton.service.CourtServicesServiceImpl;
 import com.badminton.service.ShuttleBallServiceImpl;
 import com.badminton.util.CommonUtil;
+import com.badminton.util.ResponseConvertor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,6 +39,11 @@ public class CourtManagementController {
     public ResponseEntity<Boolean> addListBallIntoCourt(@RequestParam String courtId, @RequestBody List<ShuttleBallDTO> listBall) {
         Boolean res = ballService.addListOfShuttleBallIntoCourt(Integer.valueOf(courtId), listBall);
         return ResponseEntity.ok().body(res);
+    }
+
+    @PostMapping(value = "/changeBallQuantity")
+    public ResponseEntity<Result<Boolean>> changeBallQuantity(@RequestParam String courtId, @RequestBody ShuttleBallDTO ballDTO) {
+        return ResponseConvertor.convert(ballService.changeShuttleBallQuantity(courtId, ballDTO));
     }
 
     @GetMapping(value = "/getServices")
@@ -81,7 +88,7 @@ public class CourtManagementController {
     public ResponseEntity<Boolean> removePlayerOutAvailableSession(@RequestBody String name) {
         log.info("Removing player:{}", name);
         Boolean res = courtService
-                .deactivePlayerOutCurrentSession(name.replace(CommonConstant.DOUBLE_QUOTES, CommonConstant.EMPTY));
+                .deactivatePlayerOutCurrentSession(name.replace(CommonConstant.DOUBLE_QUOTES, CommonConstant.EMPTY));
         log.info("Result is:{}", res);
         // Error cases are not handled
         return ResponseEntity.ok(res);

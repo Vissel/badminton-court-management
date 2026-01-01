@@ -10,7 +10,7 @@ const context = "bad-court-management-dev";
 const api = axios.create({
   baseURL: `${localHost}/${context}`, // Update with your backend base URL
   withCredentials: true,
-  timeout: 3000,
+  // timeout: 3000,
 });
 api.interceptors.request.use((config) => {
   const csrfToken = sessionStorage.getItem("csrfToken");

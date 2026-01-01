@@ -11,7 +11,7 @@ const ShuttleBallDialog = ({
 }) => {
   const [options, setOptions] = useState([]);
   const [selectedValue, setSelectedValue] = useState("");
-  const [quantity, setQuantity] = useState(1);
+  const [quantity, setQuantity] = useState(0);
   const [addedItems, setAddedItems] = useState([]);
 
   const handleEscPress = useCallback((event) => {
@@ -48,19 +48,21 @@ const ShuttleBallDialog = ({
   };
 
   const handleAdd = () => {
-    if (!selectedValue || quantity < 1) return;
-
+    if (!selectedValue || Number.isNaN(quantity) || quantity < 1) {
+      return;
+    }
+    const intQuantity = parseInt(quantity);
     // Check if item already exists → update quantity
     setAddedItems((prev) => {
       const existing = prev.find((it) => it.name === selectedValue);
       if (existing) {
         return prev.map((it) =>
           it.name === selectedValue
-            ? { ...it, quantity: it.quantity + quantity }
+            ? { ...it, quantity: it.quantity + intQuantity }
             : it
         );
       }
-      return [...prev, { name: selectedValue, quantity }];
+      return [...prev, { name: selectedValue, quantity: intQuantity }];
     });
     setQuantity(1);
   };
@@ -73,6 +75,13 @@ const ShuttleBallDialog = ({
     });
     console.log("✅ Saved shuttle balls map:", resultMap);
     onSaveBallOntoCourt(courtProcessing, resultMap);
+  };
+
+  const checkAndSetQuantity = (newQuantity) => {
+    if (!Number.isNaN(newQuantity)) {
+      setQuantity(newQuantity);
+    }
+   
   };
 
   if (!show) return null;
@@ -104,7 +113,7 @@ const ShuttleBallDialog = ({
               type="number"
               className="form-control"
               value={quantity}
-              onChange={(e) => setQuantity(parseInt(e.target.value || 1))}
+              onChange={(e) => checkAndSetQuantity(e.target.value)}
               style={{ width: "25%", margin: "0 7px 0 0" }}
             />
             <button className="btn btn-primary" onClick={handleAdd}>

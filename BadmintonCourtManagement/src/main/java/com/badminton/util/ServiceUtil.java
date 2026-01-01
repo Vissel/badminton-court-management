@@ -10,16 +10,36 @@ import com.badminton.requestmodel.CourtAreaDTO;
 import com.badminton.response.result.ShuttleBallResult;
 
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 public class ServiceUtil {
 
+    /**
+     * build service string by name and cost. Result looks like serviceName-cost
+     *
+     * @param serviceName
+     * @param cost
+     * @return
+     */
     public static String buildService(String serviceName, float cost) {
         return serviceName.concat(CommonConstant.HYPHEN).concat(String.valueOf(cost));
+    }
+
+    /**
+     * concat array new services into current services string. Separated by semi-colon
+     *
+     * @param currentServices
+     * @param newServices
+     * @return
+     */
+    public static String concatService(String currentServices, String... newServices) {
+        return currentServices.concat(CommonConstant.STR_SEMI_COLON).concat(Arrays.stream(newServices).collect(Collectors.joining(CommonConstant.STR_SEMI_COLON)));
     }
 
     /**
@@ -51,6 +71,10 @@ public class ServiceUtil {
 
     public static Timestamp getCurrentTimeStamp() {
         return new Timestamp(System.currentTimeMillis());
+    }
+
+    public static Instant getCurrentInstant() {
+        return Instant.now();
     }
 
     public static String getPlayerOneNameBy(Team team) {

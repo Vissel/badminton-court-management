@@ -43,6 +43,14 @@ select * from shuttle_ball;
 select * from game;
 select * from game_shuttle_map;
 select * from team;
+select * from service;
+
+insert into court(court_name)
+value ('Sân 8');
+
+update court
+set court_name = 'Sân 7'
+where court_id = 7;
 
 SELECT constraint_name, constraint_type FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
 where table_name ='team';
@@ -56,14 +64,21 @@ from game g right join team t on g.team_id2 = t.team_id
 where g.court_id = 5 and g.state = 'Start';
 
 select * from game
-where ended_date is null and court_id = 5;
+where ended_date is null and court_id = 6;
+
+select * from game 
+where ended_date is not null
+ORDER BY ended_date DESC;
 
 select * from game_shuttle_map;
 
 select * from team 
-where team_id in (26, 27);
+where team_id in (80,81);
 select * from available_player a inner join player p on a.player_id = p.player_id
-where a.ava_id in (9, 10);
+where a.ava_id in (7, 5);
+
+select * from available_player 
+where ava_id in (22,12,14,21,16,5,18,8);
 
 update game
 set state = 'Cancel',

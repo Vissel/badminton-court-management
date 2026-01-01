@@ -3,10 +3,17 @@ package com.badminton.service;
 import com.badminton.entity.AvailablePlayer;
 import com.badminton.entity.Session;
 import com.badminton.repository.SessionRepository;
+import com.badminton.repository.filter.SessionParam;
+import com.badminton.requestmodel.Pagination;
 import com.badminton.response.result.SessionResult;
 import com.badminton.util.Converter;
+import com.badminton.util.TimeUtils;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.domain.Sort.Order;
 import org.springframework.stereotype.Service;
@@ -91,6 +98,41 @@ public class SessionServiceImpl {
         return currSession.getAvailablePlayers().stream().filter(p -> p.getPlayer().getPlayerName().equals(playerName))
                 .findFirst().orElse(null);
 
+    }
+
+    public List<Session> findListSessionBy(String yearMonthString, Pagination pagination) {
+        Pageable pageable = PageRequest.of(pagination.getPageSize(), pagination.getPageSize(), Sort.by("fromTime"));
+        Page<Session> pageSessions;
+        if (!StringUtils.isNoneBlank(yearMonthString) || "Tất cả".equals(yearMonthString)) {
+            pageSessions = sessionRepo.findAll(pageable);
+        } else {
+            SessionParam sessionParam = TimeUtils.convertYearMonthToInstant(yearMonthString);
+            pageSessions = sessionRepo.findBySessionTimeBetween(sessionParam.getFrom(), sessionParam.getTo(), pageable);
+        }
+        return pageSessions.stream().toList();
+    }
+
+//    public List<AvailablePlayer> getListAvailablePlayerInSessions(String yearMonthString) {
+//        List<Session> listSession = findListSessionBy(yearMonthString);
+//        return listSession.stream().flatMap(s -> s.getAvailablePlayers().stream()).collect(Collectors.toList());
+//    }
+
+//    public List<AvailablePlayer> getListAvailablePlayerInSessions(String fromStr, String toStr, String sortBy) {
+//        SessionParam sessionParam = buildSessionParams(fromStr, toStr, sortBy);
+//        Sort sort = Sort.by(Sort.Direction.DESC, sortBy);
+//        List<Session> listSession = sessionRepo.findBySessionTimeBetween(sessionParam.getFrom(), sessionParam.getTo(), null);
+//        return listSession.stream().flatMap(s -> s.getAvailablePlayers().stream()).collect(Collectors.toList());
+//    }
+
+    private SessionParam buildSessionParams(String fromStr, String toStr, String sortBy) {
+        SessionParam param = new SessionParam();
+        Instant from = TimeUtils.convertToInstant(fromStr);
+        Instant to = TimeUtils.convertToInstant(toStr);
+
+        param.setFrom(from);
+        param.setTo(to);
+//        param.setOrderBy(new SessionParam.OrderBy());
+        return param;
     }
 
 }

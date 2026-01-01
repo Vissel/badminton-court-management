@@ -4,8 +4,9 @@ import { Container, Navbar, Nav } from "react-bootstrap";
 import { useContext } from "react";
 import { AuthContext } from "./context/AuthContext";
 import { useNavigate } from "react-router";
+
 function Header() {
-  const {  logout } = useContext(AuthContext);
+  const { logout } = useContext(AuthContext);
   let navigate = useNavigate();
 
   return (
@@ -14,9 +15,10 @@ function Header() {
         <Navbar.Brand href="/"> Quản lý sân cầu lông Tân Châu </Navbar.Brand>
         <Navbar.Toggle aria-controls="basic-navbar-nav" />
         <Navbar.Collapse id="basic-navbar-nav">
-          <Nav className="ms-auto" style={{gap:"20px"}}>
+          <Nav className="ms-auto" style={{ gap: "20px" }}>
             <Nav.Link onClick={() => navigate("/home")}>Trang chủ</Nav.Link>
             <Nav.Link onClick={() => navigate("/setup")}>Cài đặt</Nav.Link>
+            <Nav.Link onClick={() => navigate("/report")}>Thống kê </Nav.Link>
             <Nav.Link onClick={logout}>Đăng xuất</Nav.Link>
           </Nav>
         </Navbar.Collapse>

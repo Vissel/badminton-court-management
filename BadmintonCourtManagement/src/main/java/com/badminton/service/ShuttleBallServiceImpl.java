@@ -1,12 +1,16 @@
 package com.badminton.service;
 
+import com.badminton.constant.CommonConstant;
 import com.badminton.entity.Game;
 import com.badminton.entity.GameShuttleMap;
 import com.badminton.entity.ShuttleBall;
+import com.badminton.exception.BusinessException;
+import com.badminton.exception.enums.ErrorCodeEnum;
 import com.badminton.repository.GameRepository;
 import com.badminton.repository.GameShuttleMapRepository;
 import com.badminton.repository.ShuttleBallRepositoty;
 import com.badminton.requestmodel.ShuttleBallDTO;
+import com.badminton.response.result.Result;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -27,6 +31,8 @@ public class ShuttleBallServiceImpl {
     private GameShuttleMapRepository gameShuttleMapRepo;
     @Autowired
     private ShuttleBallRepositoty shuttleBallRepo;
+    @Autowired
+    ServiceTemple serviceTemple;
 
     public List<ShuttleBallDTO> getListActiveShuttleBallDTOs() {
         List<ShuttleBall> activeBalls = ballRepo.findAllByIsActive(true);
@@ -35,25 +41,60 @@ public class ShuttleBallServiceImpl {
 
     public Boolean addListOfShuttleBallIntoCourt(int courtId, List<ShuttleBallDTO> listOfShuttleBall) {
         log.info("Adding List<ShuttleBallDTO> into courtId {}", courtId);
-        Boolean addBallSuccess = Boolean.TRUE;
         // get game by court id
         Optional<Game> optGame = gameRepo.findByCourtIdAndEndedDateIsNull(courtId);
         if (!optGame.isPresent()) {
-            addBallSuccess = Boolean.FALSE;
+            return Boolean.FALSE;
         }
         Game game = optGame.get();
         listOfShuttleBall.stream().forEach(ballDTO -> {
             GameShuttleMap gameShuttleMap = getExistGameShuttleBall(ballDTO, game.getShuttleMap());
             if (gameShuttleMap != null) {
-                gameShuttleMap.setShuttleNumber(gameShuttleMap.getShuttleNumber() + 1);
+                gameShuttleMap.setShuttleNumber(gameShuttleMap.getShuttleNumber() + ballDTO.getBallQuantity());
             } else {
-                game.getShuttleMap().add(createGameShuttleMap(game, ballDTO, 1));
+                game.getShuttleMap().add(createGameShuttleMap(game, ballDTO, ballDTO.getBallQuantity()));
             }
         });
         gameRepo.save(game);
 
         // add to list of game shuttle map if there is not exist, otherwise increasing shuttle number +1
-        return addBallSuccess;
+        return Boolean.TRUE;
+    }
+
+    public Result<Boolean> changeShuttleBallQuantity(String courtIdStr, ShuttleBallDTO ballDTO) {
+        log.info("Changing ShuttleBallDTO into courtId [{}], ball [{}]", courtIdStr, ballDTO.toString());
+        return serviceTemple.execute(new ProcessCallback<ShuttleBallDTO, Boolean>() {
+            @Override
+            public ShuttleBallDTO getRequest() {
+                return ballDTO;
+            }
+
+            @Override
+            public void preProcess(ShuttleBallDTO request) {
+                try {
+                    Integer.valueOf(courtIdStr);
+                } catch (NumberFormatException e) {
+                    throw new IllegalArgumentException(ErrorCodeEnum.INCORRECT_TYPE.getDescription());
+                }
+            }
+
+            @Override
+            public Boolean process() throws BusinessException {
+                // get game by court id
+                Optional<Game> optGame = gameRepo.findByCourtIdAndEndedDateIsNull(Integer.valueOf(courtIdStr));
+                if (!optGame.isPresent()) {
+                    throw new BusinessException(ErrorCodeEnum.GAME_NOT_FOUND, CommonConstant.EMPTY);
+                }
+                Game game = optGame.get();
+                GameShuttleMap gameShuttleMap = getExistGameShuttleBall(ballDTO, game.getShuttleMap());
+                if (gameShuttleMap == null) {
+                    throw new BusinessException(ErrorCodeEnum.SHUTTLE_BALL_NOT_FOUND, CommonConstant.EMPTY);
+                }
+                gameShuttleMap.setShuttleNumber(ballDTO.getBallQuantity());
+                gameRepo.save(game);
+                return Boolean.TRUE;
+            }
+        });
     }
 
     public List<ShuttleBall> findAllByNameAndCost(String shuttleName, float shuttleCost) {

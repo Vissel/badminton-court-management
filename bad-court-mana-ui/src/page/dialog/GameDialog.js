@@ -1,14 +1,16 @@
 import React, { useEffect, useState, useCallback } from "react";
+import api from "../../api";
+
 import "./GameDialog.css";
 const WIN = "Win";
 const TEAM_ONE = "teamOne";
 const TEAM_TWO = "teamTwo";
 
-const GameDialog = ({ show, data, onConfirm, onCancel }) => {
+const GameDialog = ({ show, data, onConfirm, onExit }) => {
   const [formData, setFormData] = useState(null);
   const [totalCost, setTotalCost] = useState(0);
   const [actualCost, setActualCost] = useState(0);
-  const [ballList, setBallList] = useState([]);
+
   const [winnerTeam, setWinnerTeam] = useState(null);
   const [winnerEdited, setWinnerEdited] = useState(false);
 
@@ -25,10 +27,10 @@ const GameDialog = ({ show, data, onConfirm, onCancel }) => {
 
   const actualMatch = actualCost === totalCost;
 
-  const parseBallMap = () => {
-    if (!data.ballResultMap) return [];
+  const parseBallMap = useCallback((ballMap) => {
+    if (!ballMap) return [];
 
-    return Object.entries(data.ballResultMap).map(([key, qty]) => {
+    return Object.entries(ballMap).map(([key, qty]) => {
       const match = key.match(/shuttleName=(.*?), cost=(.*?)[)\]]/);
       return {
         shuttleName: match ? match[1] : key,
@@ -36,63 +38,64 @@ const GameDialog = ({ show, data, onConfirm, onCancel }) => {
         quantity: qty,
       };
     });
-  };
+  }, []);
 
   const checkPlayerNotNull = (playerName) => {
     return playerName != null;
   };
-  const setExpenseToPlayer = (playerName, expenseOfPlayer, cost) => {
-    if (checkPlayerNotNull(playerName)) {
-      [expenseOfPlayer] = cost;
-    }
-  };
-  const handleTeamExpenses = (total) => {
-    let perPlayer;
-    const teamOneResult = data.teamOneResult;
-    const teamTwoResult = data.teamTwoResult;
 
-    let loseTeam = null;
-    if (teamOneResult.win === WIN) {
-      loseTeam = teamTwoResult;
-    }
-    if (teamTwoResult.win === WIN) {
-      loseTeam = teamOneResult;
-    }
+  const handleTeamExpenses = useCallback(
+    (total) => {
+      let perPlayer;
+      const teamOneResult = data.teamOneResult;
+      const teamTwoResult = data.teamTwoResult;
 
-    // calculate the expenses in only case finding lose team
-    if (loseTeam != null) {
-      let dividedNumer = 0;
-      if (checkPlayerNotNull(loseTeam.playerOneName)) {
-        dividedNumer += 1;
+      let loseTeam = null;
+      if (teamOneResult.win === WIN) {
+        loseTeam = teamTwoResult;
       }
-      if (checkPlayerNotNull(loseTeam.playerTwoName)) {
-        dividedNumer += 1;
+      if (teamTwoResult.win === WIN) {
+        loseTeam = teamOneResult;
       }
-      perPlayer = total / dividedNumer;
-      if (checkPlayerNotNull(loseTeam.playerOneName)) {
-        loseTeam.expenseOne = perPlayer;
-      }
-      if (checkPlayerNotNull(loseTeam.playerTwoName)) {
-        loseTeam.expenseTwo = perPlayer;
-      }
-    }
-    return {
-      teamOneResult,
-      teamTwoResult,
-    };
-  };
 
-  const handleEscPress = useCallback((event) => {
-    if (event.key === "Escape") {
-      console.log("[GameDialog] Escape key pressed!");
-      onCancel();
-    }
-  }, []);
+      // calculate the expenses in only case finding lose team
+      if (loseTeam != null) {
+        let dividedNumer = 0;
+        if (checkPlayerNotNull(loseTeam.playerOneName)) {
+          dividedNumer += 1;
+        }
+        if (checkPlayerNotNull(loseTeam.playerTwoName)) {
+          dividedNumer += 1;
+        }
+        perPlayer = total / dividedNumer;
+        if (checkPlayerNotNull(loseTeam.playerOneName)) {
+          loseTeam.expenseOne = perPlayer;
+        }
+        if (checkPlayerNotNull(loseTeam.playerTwoName)) {
+          loseTeam.expenseTwo = perPlayer;
+        }
+      }
+      return {
+        teamOneResult,
+        teamTwoResult,
+      };
+    },
+    [data]
+  );
+
+  const handleEscPress = useCallback(
+    (event) => {
+      if (event.key === "Escape") {
+        console.log("[GameDialog] Escape key pressed!");
+        onExit();
+      }
+    },
+    [onExit]
+  );
 
   useEffect(() => {
     if (show && data) {
-      const parsed = parseBallMap();
-      setBallList(parsed);
+      const parsed = parseBallMap(data.ballResultMap);
 
       let total = 0.0;
 
@@ -106,7 +109,7 @@ const GameDialog = ({ show, data, onConfirm, onCancel }) => {
         ...expenseUpdate,
         courtResult: data.courtResult,
         gameState: data.state,
-        ballList: parsed
+        ballList: parsed,
       }));
       setTotalCost(total);
       // Add event listener when the component mounts
@@ -118,7 +121,7 @@ const GameDialog = ({ show, data, onConfirm, onCancel }) => {
       };
     }
     setWinnerEdited(false);
-  }, [data, handleEscPress]);
+  }, [show, data, handleEscPress, parseBallMap, handleTeamExpenses]);
 
   useEffect(() => {
     if (!formData) return;
@@ -233,29 +236,71 @@ const GameDialog = ({ show, data, onConfirm, onCancel }) => {
   };
 
   const handleBallChange = (index, field, value) => {
-    if (Number.isNaN(value)) return;
-
     // update ballList immutably
-    const updatedBalls = ballList.map((b, i) =>
-      i === index ? { ...b, quantity: value } : b
+    const updatedBalls = formData.ballList.map((b, i) =>
+      i === index
+        ? {
+            ...b,
+            quantity: value,
+          }
+        : b
     );
-    setBallList(updatedBalls);
+
+    if (Number.isNaN(value)) {
+      setFormData({
+        ...formData,
+        ballList: updatedBalls,
+      });
+      return;
+    }
+    let change = false;
+    let ballDTO = {};
 
     // rebuild ballResultMap for saving
     const newMap = {};
-    updatedBalls.forEach((b) => {
+    updatedBalls.forEach((b, i) => {
       const key = `shuttleName=${b.shuttleName}, cost=${b.cost}`;
-      newMap[key] = b.quantity;
+      if (i === index) {
+        if (newMap[key] !== value) {
+          change = true;
+          ballDTO = {
+            shuttleName: b.shuttleName,
+            shuttleCost: Number(b.cost),
+            ballQuantity: value,
+          };
+        }
+        newMap[key] = value;
+      } else {
+        newMap[key] = b.quantity;
+      }
     });
-    setFormData({ ...formData, ballResultMap: newMap, ballList: updatedBalls });
 
-    // re-calculate total cost by ball number
-    let total = 0;
-    updatedBalls.forEach((b) => {
-      total += b.cost * b.quantity;
-    });
-    
-    setTotalCost(total);
+    // send ball quantity change api
+    try {
+      if (change) {
+        api.post(
+          `/court-mana/changeBallQuantity?courtId=${formData.courtResult.courtId}`,
+          ballDTO
+        );
+      }
+      setFormData({
+        ...formData,
+        ballResultMap: newMap,
+        ballList: updatedBalls,
+      });
+
+      // re-calculate total cost by ball number
+      let total = 0;
+      updatedBalls.forEach((b) => {
+        total += b.cost * b.quantity;
+      });
+
+      setTotalCost(total);
+    } catch (error) {
+      console.log(
+        `Error while change shuttle ball in court: ${formData.courtResult.courtId}, quantity change to: ${value}`
+      );
+    }
   };
   const setWinnerClassName = (winTeam) => {
     if (winTeam === TEAM_ONE) {
@@ -325,14 +370,14 @@ const GameDialog = ({ show, data, onConfirm, onCancel }) => {
             </label>
           </div>
           <div className="ball-list p-2">
-            {ballList.map((b, index) => (
+            {formData.ballList.map((b, index) => (
               <div key={index} className="d-flex align-items-center mb-2">
                 <input
                   type="text"
                   className="form-control me-2"
                   value={b.shuttleName}
                   disabled
-                  style={{ width: "20%" }}
+                  style={{ maxWidth: "40%" }}
                 />
                 <input
                   type="text"
@@ -468,7 +513,7 @@ const GameDialog = ({ show, data, onConfirm, onCancel }) => {
           >
             Xác nhận
           </button>
-          <button className="btn btn-secondary" onClick={onCancel}>
+          <button className="btn btn-secondary" onClick={onExit}>
             Tắt
           </button>
         </div>

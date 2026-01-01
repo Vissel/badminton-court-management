@@ -6,6 +6,7 @@ import com.badminton.constant.GameState;
 import com.badminton.entity.*;
 import com.badminton.exception.BusinessException;
 import com.badminton.exception.ElementNotExistException;
+import com.badminton.exception.ErrorMess;
 import com.badminton.exception.enums.ErrorCodeEnum;
 import com.badminton.repository.*;
 import com.badminton.requestmodel.*;
@@ -159,7 +160,7 @@ public class CourtServicesServiceImpl {
         return false;
     }
 
-    public boolean deactivePlayerOutCurrentSession(String name) {
+    public boolean deactivatePlayerOutCurrentSession(String name) {
         AvailablePlayer availablePlayer = session.getAvailablePlayerInActiveSession(name);
         if (availablePlayer != null) {
             availablePlayer.setLeaveTime(session.getMatchDBInstant());
@@ -172,7 +173,8 @@ public class CourtServicesServiceImpl {
     public Boolean addServiceToAvailablePlayer(ServiceDTO serviceDTO, String playerName) {
         AvailablePlayer availablePlayer = session.getAvailablePlayerInActiveSession(playerName);
         if (availablePlayer != null) {
-            availablePlayer.setServices(availablePlayer.getCurrentServices().concat(CommonConstant.STR_SEMI_COLON).concat(ServiceUtil.buildService(serviceDTO.getServiceName(), serviceDTO.getCost())));
+            availablePlayer.setServices(ServiceUtil.concatService(availablePlayer.getCurrentServices(),
+                    ServiceUtil.buildService(serviceDTO.getServiceName(), serviceDTO.getCost())));
             avaPlayerRepo.save(availablePlayer);
             return true;
         }
@@ -189,7 +191,7 @@ public class CourtServicesServiceImpl {
      */
     @Transactional(rollbackFor = Exception.class)
     public Boolean addAvailablePlayerToCourtArea(String playerName, CourtDTO courtDTO, ShuttleBallDTO shuttleBallDTO) throws Exception {
-        log.info("addAvailablePlayerToCourtArea {}", CommonConstant.START);
+        log.info(ErrorMess.ADD_PLAYER_INTO_COURT, CommonConstant.START);
         // create game if there is new, update otherwise
         Optional<Court> courtOpt = courtRepo.findById(Integer.valueOf(courtDTO.getCourtId()));
         if (!courtOpt.isPresent()) {
@@ -200,6 +202,10 @@ public class CourtServicesServiceImpl {
         Game game = null;
         if (gameOfCourtOpt.isPresent()) {
             game = gameOfCourtOpt.get();
+            if (!GameState.NOT_START.getValue().equals(game.getState())) {
+                log.error(ErrorMess.GAME_STATE_ERROR, courtDTO.getCourtName(), GameState.NOT_START, game.getState());
+                return false;
+            }
         } else {
             List<ShuttleBall> balls = ballRepo.findAllByShuttleNameAndCostAndIsActiveTrue(shuttleBallDTO.getShuttleName(), shuttleBallDTO.getShuttleCost());
 
@@ -217,11 +223,15 @@ public class CourtServicesServiceImpl {
         return addAvailablePlayerIntoGame(game, playerName, courtDTO.getCourtAreas().getFirst().getArea());
     }
 
-    private boolean addAvailablePlayerIntoGame(Game game, String playerName, String area) throws Exception {
+    private boolean addAvailablePlayerIntoGame(Game game, String playerName, String area) {
         try {
             Team team = getTeam(game, area);
 
-            AvailablePlayer player = avaPlayerRepo.findAvailablePlayerInSessionByName(session.findListCurrentSession().getFirst(), playerName);
+            Optional<AvailablePlayer> optPlayer = avaPlayerRepo.findAvailablePlayerInSessionByName(session.findListCurrentSession().getFirst(), playerName);
+            if (!optPlayer.isPresent()) {
+                throw new BusinessException(ErrorCodeEnum.PLAYER_NOT_FOUND, "Available player is not found.");
+            }
+            AvailablePlayer player = optPlayer.get();
             // Determine team for
             switch (area) {
                 case GameState.Player.PLAYER_A, GameState.Player.PLAYER_C:
@@ -252,9 +262,11 @@ public class CourtServicesServiceImpl {
 
             return true;
         } catch (NullPointerException e) {
-            log.error("addAvailablePlayerToCourtArea has null exception:{}", e.getMessage());
+            log.error(ErrorMess.ADD_PLAYER_INTO_COURT, " has null exception:{}", e.getMessage());
+        } catch (BusinessException e) {
+            log.error(e.getErrorCodeEnum().getName());
         } finally {
-            log.info("addAvailablePlayerToCourtArea {}", CommonConstant.END);
+            log.info(ErrorMess.ADD_PLAYER_INTO_COURT, CommonConstant.END);
         }
         return false;
     }

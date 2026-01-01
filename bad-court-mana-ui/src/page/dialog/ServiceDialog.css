@@ -9,23 +9,22 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 9999;
+  z-index: 2000;
 }
 
 /* Dialog box */
-.dialog-box {
+.service-dialog-box {
   background: #fff;
   border-radius: 10px;
   padding: 20px 25px;
   width: 500px;
-  height: 300px;
   max-width: 90%;
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
   animation: fadeIn 0.3s ease-in-out;
 }
 
 /* Heading */
-.dialog-box h3 {
+.service-dialog-box h3 {
   margin-top: 0;
   margin-bottom: 10px;
 }
