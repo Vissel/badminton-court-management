@@ -3,11 +3,14 @@ select * from service;
 SELECT * FROM player;
 
 -- session queries
-select * from `session`;
+select * from `session`
+order by from_time limit 1, 10
+;
+
 SELECT * FROM `session` 
 WHERE is_active = true AND to_time is null;
 
-SELECT * FROM `session` ;
+SELECT * FROM `session`;
 SELECT * FROM `session` 
 where is_active = true and from_time < current_timestamp();
 SELECT * FROM `session` where session_id=10;
@@ -20,11 +23,14 @@ select a.ava_id, p.player_id, p. player_name, a.services
  from available_player a inner join player p on a.player_id = p.player_id
 where session_id = 14 and leave_time is null;
 
-select * from available_player ;
+select * from available_player a inner join player p on a.player_id = p.player_id;
+
 
 update available_player
 set services = 'costInPerson-15000.0'
-where ava_id < 21;
+-- where ava_id < 21;
+
+
 
 -- update 
 update `session`
@@ -88,3 +94,22 @@ where game_id = 10;
 update team
 set player_id1 = null
 where team_id = 22;
+
+-- select for report
+select a.session_id, c.court_name, a.ava_id, p.player_name, a.leave_time, a.pay_amount, a.pay_type, a.services
+		, t.team_id as TEAM, t.player_id1, t.player_id2
+from available_player a inner join player p on a.player_id = p.player_id
+	left join team t on a.ava_id = t.player_id1
+		left join game g on g.team_id1 = t.team_id
+		left join court c on c.court_id = g.court_id
+	where a.session_id = 14
+;
+
+select a.session_id, c.court_name, a.ava_id, p.player_name, a.leave_time, a.pay_amount, a.pay_type, a.services
+		, t.team_id as TEAM, t.player_id1, t.player_id2
+from available_player a inner join player p on a.player_id = p.player_id
+	left join team t on a.ava_id = t.player_id1
+		left join game g on g.team_id2 = t.team_id
+		left join court c on c.court_id = g.court_id
+	where a.session_id = 14
+;

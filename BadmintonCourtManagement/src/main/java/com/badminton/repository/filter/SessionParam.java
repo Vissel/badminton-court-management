@@ -1,7 +1,7 @@
 package com.badminton.repository.filter;
 
-import lombok.AllArgsConstructor;
 import lombok.Data;
+import org.springframework.data.domain.Pageable;
 
 import java.time.Instant;
 
@@ -9,11 +9,5 @@ import java.time.Instant;
 public class SessionParam {
     private Instant from;
     private Instant to;
-    OrderBy orderBy;
-
-    @AllArgsConstructor
-    public class OrderBy {
-        public String by;
-        public String order = "DESC";
-    }
+    private Pageable pageable;
 }

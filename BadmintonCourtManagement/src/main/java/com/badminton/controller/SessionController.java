@@ -9,8 +9,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
-
 @RestController
 @RequestMapping("/session")
 public class SessionController {
@@ -23,14 +21,14 @@ public class SessionController {
         return ResponseEntity.ok(sessionService.checkAvailableSession());
     }
 
-    @PostMapping(value = "/createNewSession")
-    public ResponseEntity<Boolean> createNewSession() {
-        return ResponseEntity.ok(sessionService.createNewSessionInDay());
+    @PostMapping(value = "/checkCreateNewSession")
+    public ResponseEntity<SessionResult> checkCreateNewSession() {
+        return ResponseEntity.ok(sessionService.checkAndCreateNewSessionInDay());
     }
 
     @PostMapping(value = "/deleteSession")
-    public ResponseEntity<List<SessionResult>> deleteSession() {
-        return ResponseEntity.ok(sessionService.deactiveSessions());
+    public ResponseEntity<Boolean> deleteSession() {
+        return ResponseEntity.ok(sessionService.deactivateSessions());
     }
 
 }

@@ -50,7 +50,9 @@ public class SecurityConfig {
                 // Authorize all requests (adjust as per your security requirements)
                 .authorizeHttpRequests(authorize -> authorize.requestMatchers("/login", "/logout", "/index", "/error",
                         "/admin/internal/**", "/public/**", "/csrf").permitAll().anyRequest().authenticated())
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
+                .sessionManagement(session ->
+                        session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
+                )
 
 //				.formLogin(form -> form.loginProcessingUrl("/login").usernameParameter("username")
 //						.passwordParameter("password").permitAll().successHandler(authenticationSuccessHandler())
@@ -102,9 +104,11 @@ public class SecurityConfig {
     UrlBasedCorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         // Allow all origins (use specific origins in production)
-        configuration.setAllowedOriginPatterns(Arrays.asList("http://localhost:3000", "http://localhost:8080"));
+        configuration.setAllowedOriginPatterns(Arrays.asList(
+                "http://localhost:3000", "http://localhost:8080",
+                "http://localhost:9080"));
         // Allow all HTTP methods
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE"));
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         // Allow all headers
         configuration.setAllowedHeaders(Arrays.asList("*"));
         // Allow credentials (e.g., cookies, authorization headers)

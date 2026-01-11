@@ -16,6 +16,7 @@ import com.badminton.util.ServiceUtil;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
 
 import java.util.Optional;
@@ -30,6 +31,7 @@ public class PayServiceImpl implements PayService {
     @Autowired
     SessionServiceImpl sessionService;
 
+    @Transactional
     @Override
     public Result<PayResponse> payToPlayer(PayRequest payRequest) {
         return serviceTemple.execute(new ProcessCallback<PayRequest, PayResponse>() {
@@ -48,7 +50,8 @@ public class PayServiceImpl implements PayService {
 
             @Override
             public PayResponse process() throws BusinessException {
-                Optional<AvailablePlayer> optPlayer = availablePlayerRepository.findAvailablePlayerInSessionByName(sessionService.findListCurrentSession().getFirst(), payRequest.getPlayerName());
+                Optional<AvailablePlayer> optPlayer = availablePlayerRepository.findAvailablePlayerInSessionByName(
+                        sessionService.findListCurrentSession().getFirst(), payRequest.getPlayerName());
                 if (!optPlayer.isPresent()) {
                     throw new BusinessException(ErrorCodeEnum.PLAYER_NOT_FOUND, "Available player is not found.");
                 }

@@ -1,5 +1,6 @@
 package com.badminton.util;
 
+import java.time.Month;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
@@ -9,6 +10,7 @@ import java.util.Map;
 public class VietnameseMonthConverter {
 
     private static final Map<String, String> VN_TO_EN_MONTH = new HashMap<>();
+    private static final Map<String, Integer> EN_MONTH_MAP = new HashMap<>();
 
     static {
         VN_TO_EN_MONTH.put("tháng 1", "January");
@@ -23,13 +25,20 @@ public class VietnameseMonthConverter {
         VN_TO_EN_MONTH.put("tháng 10", "October");
         VN_TO_EN_MONTH.put("tháng 11", "November");
         VN_TO_EN_MONTH.put("tháng 12", "December");
+
+        // English
+        for (Month m : Month.values()) {
+            EN_MONTH_MAP.put(
+                    m.getDisplayName(java.time.format.TextStyle.FULL, Locale.ENGLISH).toLowerCase(),
+                    m.getValue()
+            );
+        }
     }
 
     private VietnameseMonthConverter() {
     }
 
     public static YearMonth convertToYearMonth(String monthParam) {
-
         String normalized = monthParam
                 .trim()
                 .toLowerCase(Locale.ROOT)
@@ -52,6 +61,12 @@ public class VietnameseMonthConverter {
                         DateTimeFormatter.ofPattern("yyyy MMMM", Locale.ENGLISH)
                 );
             }
+        }
+        // Case 3: English text month
+        if (EN_MONTH_MAP.containsKey(monthParam)) {
+            return YearMonth.parse(
+                    monthParam,
+                    DateTimeFormatter.ofPattern("yyyy MMMM", Locale.ENGLISH));
         }
 
         throw new IllegalArgumentException(

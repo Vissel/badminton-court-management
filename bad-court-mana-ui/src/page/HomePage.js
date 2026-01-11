@@ -205,31 +205,15 @@ function HomePage() {
   };
 
   const onAddPlayer = async (name) => {
-    const addedPlayer = await api.post("/court-mana/addPlayer", name);
-    if (addedPlayer.status === 200) {
+    try {
+      await api.post("/court-mana/addPlayer", name);
       console.log("Adding new player successfully.");
       setAvailablePlayers((prev) => [...prev, name]);
       // set costInPerson
       handleDropService(name, "costInPerson", costInPerson);
-    } else {
+    } catch (error) {
       console.error("Error while adding player to available session.");
       alert("Có lỗi khi thêm người chơi. Refresh lại trang này!");
-    }
-  };
-
-  const handleDeletePlayer = async (selectedPlayer) => {
-    console.log(availablePlayers);
-
-    const deletedPlayer = await api.post(
-      "/court-mana/removePlayer",
-      selectedPlayer
-    );
-    if (deletedPlayer.status === 200) {
-      console.log("Deleting player successfully.");
-      setAvailablePlayers((prev) => prev.filter((p) => p !== selectedPlayer));
-    } else {
-      console.error("Error while deleting player to available session.");
-      alert("Có lỗi khi xoa người chơi. Refresh lại trang này!");
     }
   };
 
@@ -530,21 +514,8 @@ function HomePage() {
     const fetchCourtInfor = async () => {
       try {
         // check available session
-        const avaSession = await api.get("/session/checkAvailable");
-        if (avaSession.status === 200) {
-          if (avaSession.data === true) {
-            console.info("Session is available.");
-          } else {
-            // create new one
-            await api.post("/session/createNewSession");
-            console.info("New session is created.");
-            // await api.post('/session/deleteSession');
-          }
-        } else {
-          // TODO
-          console.error("Error while checking available session.");
-          return;
-        }
+        const avaSession = await api.post("/session/checkCreateNewSession");
+        console.log(`Init message: ${avaSession.data.message}`);
 
         // fetch shuttle_balls
         const ballResponse = await api.get("/court-mana/getShuttleBalls");
@@ -644,7 +615,10 @@ function HomePage() {
         //   setAvailablePlayers(avaPlayers.data.map((p) => p.playerName));
         // }
       } catch (error) {
-        console.error(error);
+        console.error(
+          `Error while checking available session. Error: ${error}`
+        );
+        console.error("Lỗi khi load trang chủ .");
       }
     };
 

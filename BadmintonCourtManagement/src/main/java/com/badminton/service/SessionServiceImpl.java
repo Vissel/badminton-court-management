@@ -9,7 +9,6 @@ import com.badminton.response.result.SessionResult;
 import com.badminton.util.Converter;
 import com.badminton.util.TimeUtils;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -17,6 +16,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.domain.Sort.Order;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.ZoneId;
@@ -46,7 +46,10 @@ public class SessionServiceImpl {
     }
 
     public Boolean checkAvailableSession() {
-        List<Session> availableSession = findListCurrentSession();
+        Instant current = getMatchDBInstant();
+
+        List<Session> availableSession = sessionRepo.findByFromTimeLessThanAndToTimeIsNullAndIsActive(current, true,
+                Sort.by(Order.desc("sessionId")));
         if (!availableSession.isEmpty()) {
             ZoneId zone = ZoneId.of("Z");
             // DB's return global zone
@@ -56,14 +59,28 @@ public class SessionServiceImpl {
         return false;
     }
 
-    public Boolean createNewSessionInDay() {
-        List<Session> avaSessions = findListCurrentSession();
-        if (avaSessions.isEmpty()) {
-            Session newSession = new Session();
-
-            return sessionRepo.save(newSession).getSessionId() != 0;
+    @Transactional
+    public SessionResult checkAndCreateNewSessionInDay() {
+        Boolean available = checkAvailableSession();
+        if (!available) {
+            Session createdSession = new Session();
+            sessionRepo.save(createdSession);
+            return createdSessionResult(createdSession);
         }
-        return true;
+        return availableSessionResult();
+    }
+
+    private SessionResult availableSessionResult() {
+        SessionResult res = new SessionResult();
+        res.setMessage("Session is available.");
+        return res;
+    }
+
+    private SessionResult createdSessionResult(Session createdSession) {
+        SessionResult res = new SessionResult();
+        res.setId(createdSession.getSessionId());
+        res.setFromTime(createdSession.getFromTime());
+        return res;
     }
 
     /**
@@ -71,6 +88,7 @@ public class SessionServiceImpl {
      *
      * @return
      */
+    @Deprecated
     public List<SessionResult> deactiveSessions() {
         List<SessionResult> deactiveList = new ArrayList<>();
         List<Session> currSessions = findListCurrentSession();
@@ -87,52 +105,65 @@ public class SessionServiceImpl {
         return deactiveList;
     }
 
+    @Transactional
+    public Boolean deactivateSessions() {
+        List<Session> currSessions = findListCurrentSession();
+        if (!currSessions.isEmpty()) {
+            Instant toTime = Instant.now();
+            currSessions.stream().forEach(s -> {
+                s.setActive(false);
+                s.setToTime(toTime);
+            });
+            sessionRepo.saveAll(currSessions);
+        }
+        return Boolean.TRUE;
+    }
+
     public List<Session> findListCurrentSession() {
         Instant current = getMatchDBInstant();
         return sessionRepo.findByFromTimeLessThanAndToTimeIsNullAndIsActive(current, true,
                 Sort.by(Order.desc("sessionId")));
     }
 
+    @Transactional
     public AvailablePlayer getAvailablePlayerInActiveSession(String playerName) {
         Session currSession = findListCurrentSession().getFirst();
         return currSession.getAvailablePlayers().stream().filter(p -> p.getPlayer().getPlayerName().equals(playerName))
                 .findFirst().orElse(null);
-
     }
 
     public List<Session> findListSessionBy(String yearMonthString, Pagination pagination) {
-        Pageable pageable = PageRequest.of(pagination.getPageSize(), pagination.getPageSize(), Sort.by("fromTime"));
+//        Pageable pageable = PageRequest.of(pagination.getCurrent(), pagination.getPageSize(), Sort.by(Sort.Direction.DESC, "fromTime"));
         Page<Session> pageSessions;
-        if (!StringUtils.isNoneBlank(yearMonthString) || "Tất cả".equals(yearMonthString)) {
-            pageSessions = sessionRepo.findAll(pageable);
-        } else {
-            SessionParam sessionParam = TimeUtils.convertYearMonthToInstant(yearMonthString);
-            pageSessions = sessionRepo.findBySessionTimeBetween(sessionParam.getFrom(), sessionParam.getTo(), pageable);
-        }
+//        if (!StringUtils.isNoneBlank(yearMonthString) || "Tất cả".equals(yearMonthString)) {
+//            pageSessions = sessionRepo.findAll(pageable);
+//        } else {
+
+        SessionParam sessionParam = buildSessionParams(yearMonthString, pagination);
+
+        pageSessions = sessionRepo.findByFromTimeBetween(sessionParam.getFrom(), sessionParam.getTo(), sessionParam.getPageable());
+
         return pageSessions.stream().toList();
     }
 
-//    public List<AvailablePlayer> getListAvailablePlayerInSessions(String yearMonthString) {
-//        List<Session> listSession = findListSessionBy(yearMonthString);
-//        return listSession.stream().flatMap(s -> s.getAvailablePlayers().stream()).collect(Collectors.toList());
-//    }
-
-//    public List<AvailablePlayer> getListAvailablePlayerInSessions(String fromStr, String toStr, String sortBy) {
-//        SessionParam sessionParam = buildSessionParams(fromStr, toStr, sortBy);
-//        Sort sort = Sort.by(Sort.Direction.DESC, sortBy);
-//        List<Session> listSession = sessionRepo.findBySessionTimeBetween(sessionParam.getFrom(), sessionParam.getTo(), null);
-//        return listSession.stream().flatMap(s -> s.getAvailablePlayers().stream()).collect(Collectors.toList());
-//    }
-
-    private SessionParam buildSessionParams(String fromStr, String toStr, String sortBy) {
-        SessionParam param = new SessionParam();
-        Instant from = TimeUtils.convertToInstant(fromStr);
-        Instant to = TimeUtils.convertToInstant(toStr);
-
-        param.setFrom(from);
-        param.setTo(to);
-//        param.setOrderBy(new SessionParam.OrderBy());
-        return param;
+    private Pageable buildPageableFrom(Pagination pagination) {
+        return PageRequest.of(pagination.getCurrent(), pagination.getPageSize(), Sort.by(Sort.Direction.DESC, "fromTime"));
     }
 
+    public long countSessionBy(String yearMonthString, Pagination pagination) {
+        SessionParam sessionParam = buildSessionParams(yearMonthString, pagination);
+        return sessionRepo.countByFromTimeBetween(sessionParam.getFrom(), sessionParam.getTo());
+    }
+
+    private SessionParam buildSessionParams(String yearMonthString, Pagination pagination) {
+        SessionParam sessionParam =
+                TimeUtils.convertYearMonthToInstant(yearMonthString);
+
+        sessionParam.setPageable(buildPageableFrom(pagination));
+        return sessionParam;
+    }
+
+    public Session findSessionById(String sessionId) {
+        return sessionRepo.findById(Integer.valueOf(sessionId)).orElse(null);
+    }
 }

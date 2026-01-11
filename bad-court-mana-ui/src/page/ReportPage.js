@@ -1,6 +1,6 @@
-import React, { useState,  useEffect } from "react";
+import React, { useState, useEffect } from "react";
 
-import axios from "axios";
+import api from "../api/index";
 
 // -------- dummy data for UI testing --------
 const DUMMY_REPORTS = Array.from({ length: 23 }).map((_, i) => ({
@@ -18,12 +18,14 @@ export default function ReportPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10); // default 10 rows
   const [totalPages, setTotalPages] = useState(0);
+  const [numberRows, setNumberRows] = useState(0);
   const [totalRows, setTotalRows] = useState(0);
   const [loading, setLoading] = useState(false);
 
   const [sortField, setSortField] = useState("date");
   const [sortDir, setSortDir] = useState("ASC");
   const [month, setMonth] = useState("");
+  const [monthOptions, setMonthOptions] = useState([]);
 
   // -------- debounce search --------
   useEffect(() => {
@@ -36,46 +38,39 @@ export default function ReportPage() {
 
   // -------- call API / dummy pagination --------
   useEffect(() => {
-    fetchReports(currentPage, debouncedSearch, pageSize, sortField, sortDir, month);
-  }, [currentPage, debouncedSearch, pageSize, sortField, sortDir, month]);
+    fetchReports({
+      pagination: {
+        current: 0,
+        pageSize: 10,
+      },
+    });
 
-  const fetchReports = async (page, keyword, size, sortBy, direction, monthFilter) => {
+    api
+      .get(`/api/v1/manager/getMonthYear`)
+      .then((res) => {
+        setMonthOptions(res.data);
+      })
+      .catch((exception) => {
+        console.log(`Cannot get month year: ${exception.error}`);
+      });
+  }, []);
+
+  const fetchReports = async (payload) => {
     try {
       setLoading(true);
 
-      let data = [...DUMMY_REPORTS];
+      const response = await api.post("/api/v1/manager/reportList", payload);
+      const pageResponse = response.data.data;
+      const pagination = pageResponse.pagination;
+      const list = pageResponse.list;
 
-      if (monthFilter) {
-        data = data.filter((r) => r.date.startsWith(monthFilter));
-      }
+      // setCurrentPage(pagination.current);
+      setPageSize(pagination.pageSize);
+      setTotalPages(pagination.totalPage);
 
-      if (keyword) {
-        const lower = keyword.toLowerCase();
-        data = data.filter(
-          (r) =>
-            r.date.toLowerCase().includes(lower) ||
-            r.fromTo.toLowerCase().includes(lower) ||
-            r.total.toString().includes(lower)
-        );
-      }
-
-      data.sort((a, b) => {
-        const v1 = a[sortBy];
-        const v2 = b[sortBy];
-        if (v1 < v2) return direction === "ASC" ? -1 : 1;
-        if (v1 > v2) return direction === "ASC" ? 1 : -1;
-        return 0;
-      });
-
-      setTotalRows(data.length);
-      setTotalPages(Math.ceil(data.length / size));
-
-      const start = (page - 1) * size;
-      const end = start + size;
-      setReports(data.slice(start, end));
-
-      // ===== API placeholder =====
-      // await axios.get("/api/reports", { params: { page: page - 1, size, search: keyword, sort: `${sortBy},${direction}`, month: monthFilter }});
+      setReports(list);
+      setNumberRows(list.length);
+      setTotalRows(pageResponse.total);
     } catch (error) {
       console.error("Failed to fetch reports", error);
     } finally {
@@ -90,9 +85,72 @@ export default function ReportPage() {
       setSortDir("ASC");
     }
   };
+  const handlePageSizeChange = (size) => {
+    fetchReports({
+      pagination: {
+        current: 0,
+        pageSize: size,
+      },
+    });
+    setPageSize(size);
+  };
+  const handlePageChange = (current) => {
+    fetchReports({
+      pagination: {
+        current: current - 1,
+        pageSize: pageSize,
+      },
+    });
+    setCurrentPage(current);
+  };
 
-  const handlePageChange = (page) => {
-    if (page >= 1 && page <= totalPages) setCurrentPage(page);
+  const handleExport = async (sessionId) => {
+    // need handle loading
+    try {
+      const response = await api.get(
+        `/api/v1/manager/reportExport/${sessionId}`,
+        { responseType: "blob" }
+      );
+
+      // Create file download
+      const blob = new Blob([response.data]);
+      const url = window.URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `report_${sessionId}.xlsx`; // or .pdf
+      document.body.appendChild(link);
+      link.click();
+
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Failed to export report", error);
+      alert("Export failed. Please try again.");
+    }
+    api
+      .post(`/api/v1/manager/reportExport`, { sessionId: sessionId })
+      .then((res) => {
+        console.log(
+          `export report sessionId[${sessionId}] has status: ${res.status}`
+        );
+      })
+      .catch((ex) => {
+        console.error(
+          `Error while exporting report sessionId[${sessionId}]. Error: ${ex}`
+        );
+      });
+  };
+
+  const handleMonthChange = (month) => {
+    fetchReports({
+      yearMonth: month,
+      pagination: {
+        current: currentPage - 1,
+        pageSize: pageSize,
+      },
+    });
+    setMonth(month);
   };
 
   return (
@@ -111,13 +169,20 @@ export default function ReportPage() {
           />
         </div>
         <div className="col-md-3">
-          <select className="form-select" value={month} onChange={(e) => setMonth(e.target.value)}>
-            <option value="">All months</option>
-            <option value="2025-01">Jan 2025</option>
+          <select
+            className="form-select"
+            value={month}
+            onChange={(e) => handleMonthChange(e.target.value)}
+          >
+            {monthOptions.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
+            ))}
           </select>
         </div>
         <div className="col-md-3 text-end text-muted">
-          Total: <strong>{totalRows}</strong> rows
+          Total : <strong>{numberRows}</strong>
         </div>
       </div>
 
@@ -127,66 +192,120 @@ export default function ReportPage() {
           <thead className="table-light">
             <tr>
               <th style={{ width: "60px" }}>No</th>
-              <th onClick={() => toggleSort("date")} style={{ cursor: "pointer" }}>
-                Date {sortField === "date" ? (sortDir === "ASC" ? "▲" : "▼") : ""}
+              <th
+                onClick={() => toggleSort("date")}
+                style={{ cursor: "pointer" }}
+              >
+                Date{" "}
+                {sortField === "date" ? (sortDir === "ASC" ? "▲" : "▼") : ""}
               </th>
-              <th onClick={() => toggleSort("fromTo")} style={{ cursor: "pointer" }}>
-                From - To {sortField === "fromTo" ? (sortDir === "ASC" ? "▲" : "▼") : ""}
+              <th
+                onClick={() => toggleSort("fromTo")}
+                style={{ cursor: "pointer" }}
+              >
+                From - To{" "}
+                {sortField === "fromTo" ? (sortDir === "ASC" ? "▲" : "▼") : ""}
               </th>
-              <th onClick={() => toggleSort("total")} style={{ cursor: "pointer" }}>
-                Total {sortField === "total" ? (sortDir === "ASC" ? "▲" : "▼") : ""}
+              <th
+                onClick={() => toggleSort("total")}
+                style={{ cursor: "pointer" }}
+              >
+                Total{" "}
+                {sortField === "total" ? (sortDir === "ASC" ? "▲" : "▼") : ""}
               </th>
               <th style={{ width: "120px" }}>Export</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={5} className="text-center">Loading...</td></tr>
+              <tr>
+                <td colSpan={5} className="text-center">
+                  Loading...
+                </td>
+              </tr>
             )}
             {!loading && reports.length === 0 && (
-              <tr><td colSpan={5} className="text-center text-muted">No data found</td></tr>
-            )}
-            {!loading && reports.map((row, index) => (
-              <tr key={row.id}>
-                <td>{(currentPage - 1) * pageSize + index + 1}</td>
-                <td>{row.date}</td>
-                <td>{row.fromTo}</td>
-                <td>{row.total.toLocaleString()}</td>
-                <td className="text-center"><button className="btn btn-success btn-sm">Export</button></td>
+              <tr>
+                <td colSpan={5} className="text-center text-muted">
+                  No data found
+                </td>
               </tr>
-            ))}
+            )}
+            {!loading &&
+              reports.map((row, index) => (
+                <tr key={row.id}>
+                  <td title={`sessionId:${row.sessionId}`}>
+                    {(currentPage - 1) * pageSize + index + 1}
+                  </td>
+                  <td>{row.date.viDateString}</td>
+                  <td>{row.during}</td>
+                  <td>{row.grossRevenue}</td>
+                  <td className="text-center">
+                    <button
+                      className="btn btn-success btn-sm"
+                      onClick={() => handleExport(row.sessionId)}
+                    >
+                      Export
+                    </button>
+                  </td>
+                </tr>
+              ))}
           </tbody>
         </table>
       </div>
 
       {/* Pagination + page size */}
-      {totalPages > 1 && (
-        <div className="d-flex justify-content-between align-items-center mt-3">
-          <select className="form-select w-auto" value={pageSize} onChange={(e) => { setCurrentPage(1); setPageSize(Number(e.target.value)); }}>
-            <option value={5}>5</option>
-            <option value={10}>10</option>
-            <option value={20}>20</option>
-          </select>
-
-          <ul className="pagination mb-0">
-            <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
-              <button className="page-link" onClick={() => handlePageChange(currentPage - 1)}>
-                <i className="bi bi-chevron-left"></i>
-              </button>
-            </li>
-            {[...Array(totalPages)].map((_, i) => (
-              <li key={i} className={`page-item ${currentPage === i + 1 ? "active" : ""}`}>
-                <button className="page-link" onClick={() => handlePageChange(i + 1)}>{i + 1}</button>
-              </li>
-            ))}
-            <li className={`page-item ${currentPage === totalPages ? "disabled" : ""}`}>
-              <button className="page-link" onClick={() => handlePageChange(currentPage + 1)}>
-                <i className="bi bi-chevron-right"></i>
-              </button>
-            </li>
-          </ul>
+      <div className="d-flex justify-content-between align-items-center mt-3">
+        <select
+          className="form-select w-auto"
+          value={pageSize}
+          onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+        >
+          <option value={10}>10</option>
+          <option value={20}>20</option>
+          <option value={20}>30</option>
+          <option value={20}>50</option>
+          <option value={20}>100</option>
+        </select>
+        <div className="col-md-3 text-end text-muted">
+          Total: <strong>{totalRows}</strong> rows
         </div>
-      )}
+        <ul className="pagination mb-0">
+          <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
+            <button
+              className="page-link"
+              onClick={() => handlePageChange(currentPage - 1)}
+            >
+              <i className="bi bi-chevron-left"></i>
+            </button>
+          </li>
+          {[...Array(totalPages)].map((_, i) => (
+            <li
+              key={i}
+              className={`page-item ${currentPage === i + 1 ? "active" : ""}`}
+            >
+              <button
+                className="page-link"
+                onClick={() => handlePageChange(i + 1)}
+              >
+                {i + 1}
+              </button>
+            </li>
+          ))}
+          <li
+            className={`page-item ${
+              currentPage === totalPages ? "disabled" : ""
+            }`}
+          >
+            <button
+              className="page-link"
+              onClick={() => handlePageChange(currentPage + 1)}
+            >
+              <i className="bi bi-chevron-right"></i>
+            </button>
+          </li>
+        </ul>
+      </div>
     </div>
   );
 }

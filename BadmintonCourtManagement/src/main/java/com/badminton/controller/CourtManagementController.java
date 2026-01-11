@@ -1,6 +1,5 @@
 package com.badminton.controller;
 
-import com.badminton.constant.CommonConstant;
 import com.badminton.requestmodel.*;
 import com.badminton.response.result.Result;
 import com.badminton.service.CourtServicesServiceImpl;
@@ -75,24 +74,15 @@ public class CourtManagementController {
     }
 
     @PostMapping(value = "/addPlayer")
-    public ResponseEntity<Boolean> addPlayerToAvailableSession(@RequestBody String name) {
+    public ResponseEntity<Result<Boolean>> addPlayerToAvailableSession(@RequestBody String name) {
         log.info("Adding player:{}", name);
-        Boolean res = courtService
-                .addPlayerToCurrentSession(name.replace(CommonConstant.DOUBLE_QUOTES, CommonConstant.EMPTY));
+        Result<Boolean> res = courtService
+                .addPlayerToCurrentSession(name);
         log.info("Result is:{}", res);
         // Error cases are not handled
-        return ResponseEntity.ok(res);
+        return ResponseConvertor.convert(res);
     }
 
-    @PostMapping(value = "/removePlayer")
-    public ResponseEntity<Boolean> removePlayerOutAvailableSession(@RequestBody String name) {
-        log.info("Removing player:{}", name);
-        Boolean res = courtService
-                .deactivatePlayerOutCurrentSession(name.replace(CommonConstant.DOUBLE_QUOTES, CommonConstant.EMPTY));
-        log.info("Result is:{}", res);
-        // Error cases are not handled
-        return ResponseEntity.ok(res);
-    }
 
     @PostMapping(value = "/addServiceToPlayer")
     public ResponseEntity<Boolean> addServiceToAvaPlayer(@RequestParam String playerName,

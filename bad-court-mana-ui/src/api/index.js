@@ -21,31 +21,80 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// 🔁 Response interceptor to handle expired CSRF/session
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    const status = error?.response?.status;
 
-    if (status === 401 || status === 403) {
-      if (
-        !window.location.pathname.includes("/login") ||
-        !window.location.pathname.includes("/")
-      ) {
-        console.warn("Unauthorized or Forbidden – redirecting to /login");
-
-        // Clear any stored auth info if you have
-        localStorage.clear();
-        sessionStorage.clear();
-
-        alert("Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại!");
-        window.location.replace("/#/login");
-        return new Promise(() => {});
-      }
+  async (error) => {
+    // Network error (server down, CORS, timeout)
+    if (!error.response) {
+      console.error("Network error:", error);
+      alert("Không thể kết nối tới máy chủ. Vui lòng thử lại.");
+      return Promise.reject(error);
     }
+
+    const { status, config, data, headers } = error.response;
+    const currentPath = window.location.pathname;
+
+    /* ===============================
+       401 / 403 – Unauthorized
+    ================================ */
+    if ((status === 401 || status === 403) && !currentPath.includes("/login")) {
+      console.warn("Unauthorized / Forbidden – redirecting to login");
+
+      localStorage.clear();
+      sessionStorage.clear();
+
+      alert("Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại!");
+      window.location.replace("/#/login");
+
+      // Stop promise chain cleanly
+      return Promise.reject(error);
+    }
+
+    /* ===============================
+       Handle BLOB error (export)
+    ================================ */
+    if (
+      config?.responseType === "blob" &&
+      data instanceof Blob &&
+      data.type?.includes("application/json")
+    ) {
+      try {
+        const text = await data.text();
+        const json = JSON.parse(text);
+
+        console.error("Export error:", json);
+        alert(json.message || "Xuất báo cáo thất bại");
+
+      } catch (e) {
+        console.error("Failed to parse blob error", e);
+        alert("Xuất báo cáo thất bại");
+      }
+
+      return Promise.reject(error);
+    }
+
+    /* ===============================
+       500 – Internal Server Error
+    ================================ */
+    if (status >= 500) {
+      console.error("Server error:", error.response);
+      alert("Lỗi hệ thống. Vui lòng thử lại sau.");
+      return Promise.resolve(null);
+    }
+
+    /* ===============================
+       Other client errors (400, 404…)
+    ================================ */
+    if (status >= 400) {
+      console.warn("Client error:", error.response);
+      alert("Yêu cầu không hợp lệ.");
+    }
+
     return Promise.reject(error);
   }
 );
+
 
 export default api;
 // export const addNewServiceAPI = (payload) =>
