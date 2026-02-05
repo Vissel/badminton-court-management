@@ -13,7 +13,7 @@ public enum GameState {
 
     private String value;
 
-    private GameState(String value) {
+    GameState(String value) {
         this.value = value;
     }
 

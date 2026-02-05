@@ -4,7 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.Map;
 
 @Data
@@ -21,9 +21,9 @@ public class GameResult {
 
     private TeamResult teamTwoResult;
 
-    private Timestamp createdDate;
+    private Instant createdDate;
 
-    private Timestamp endedDate;
+    private Instant endedDate;
 
     /**
      * Follow GameState

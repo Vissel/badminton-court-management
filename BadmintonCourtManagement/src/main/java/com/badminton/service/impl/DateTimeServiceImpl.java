@@ -48,4 +48,9 @@ public class DateTimeServiceImpl implements DateTimeService {
 
         return result;
     }
+
+    @Override
+    public Boolean inTheSameDay() {
+        return null;
+    }
 }

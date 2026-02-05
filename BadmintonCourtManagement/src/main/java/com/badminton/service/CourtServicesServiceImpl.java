@@ -38,6 +38,8 @@ public class CourtServicesServiceImpl {
     @Autowired
     GameExpenseCalculator gameCalculator;
     @Autowired
+    GameService gameService;
+    @Autowired
     ShuttleBallServiceImpl shuttleBallService;
     @Autowired
     private UserRepository userRepo;
@@ -91,7 +93,7 @@ public class CourtServicesServiceImpl {
         Set<Integer> courtExcludes = initExcludeSet();
         try {
             log.info("Getting Available games.");
-            List<Game> availableGames = gameRepo.findAllByStateInAndEndedDateIsNull(getNonFinishGameState());
+            List<Game> availableGames = gameService.findAllInprogress();
             log.debug("Size of Getting Available games:{}", availableGames.size());
             if (!availableGames.isEmpty()) {
                 // set to gameDTOs result
@@ -116,7 +118,8 @@ public class CourtServicesServiceImpl {
             List<Session> activeSessions = session.findListCurrentSession();
             if (!activeSessions.isEmpty()) {
                 log.info("Getting list of Remain available players.");
-                List<AvailablePlayer> listOfRemainAvaPlayer = avaPlayerRepo.findAllBySessionAndAvaIdNotInAndLeaveTimeIsNull(activeSessions.getFirst(), playerExcludes);
+                List<AvailablePlayer> listOfRemainAvaPlayer =
+                        avaPlayerRepo.findAllBySessionAndAvaIdNotInAndLeaveTimeIsNull(activeSessions.getFirst(), playerExcludes);
                 log.debug("Size of Remain available players:{}", listOfRemainAvaPlayer.size());
                 res.convertToAvaPlayerDTOs(listOfRemainAvaPlayer);
                 log.debug("Added Remain available players into result.");
@@ -334,7 +337,7 @@ public class CourtServicesServiceImpl {
                     setSelectedBallIntoGame(game, gameDTO.getShuttleBalls(), stateChange);
                     // update ended time for FINISH & CANCEL state
                     if (ServiceUtil.isEndedState(changeGameState)) {
-                        game.setEndedDate(ServiceUtil.getCurrentTimeStamp());
+                        game.setEndedDate(ServiceUtil.getCurrentInstant());
                         // calculate and save the expense of game.
                         gameCalculator.calculateGameResult(game);
                     }
@@ -399,9 +402,6 @@ public class CourtServicesServiceImpl {
         return isTeamOne;
     }
 
-    public Set<String> getNonFinishGameState() {
-        return new HashSet<>(Arrays.asList(GameState.NOT_START.getValue(), GameState.START.getValue()));
-    }
 
     private long getAvaIdFromPlayer(AvailablePlayer avaPlayer) {
         if (avaPlayer != null) {

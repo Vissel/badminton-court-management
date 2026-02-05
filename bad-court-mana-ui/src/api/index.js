@@ -3,9 +3,11 @@ import Cookies from "js-cookie";
 
 // import { useNavigate } from 'react-router';
 
-const currentHost = `${window.location.protocol}//${window.location.hostname}`;
+export const currentHost = `${window.location.protocol}//${window.location.hostname}:${window.location.port}/#/`;
+
 const localHost = "http://localhost:9080";
 const context = "bad-court-management-dev";
+export const backendHost = `${localHost}/${context}`
 
 const api = axios.create({
   baseURL: `${localHost}/${context}`, // Update with your backend base URL
@@ -48,7 +50,7 @@ api.interceptors.response.use(
       window.location.replace("/#/login");
 
       // Stop promise chain cleanly
-      return Promise.reject(error);
+      return new Promise(() => {});
     }
 
     /* ===============================

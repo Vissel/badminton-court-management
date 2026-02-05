@@ -1,7 +1,10 @@
 package com.badminton.service;
 
 import com.badminton.repository.GameRepository;
-import com.badminton.response.result.GameManagementResult;
+import com.badminton.requestmodel.SessionRequest;
+import com.badminton.response.result.Result;
+import com.badminton.response.result.SessionResult;
+import com.badminton.util.ResponseConvertor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -17,11 +20,11 @@ public class SchedulerService {
     @Autowired
     GameRepository gameRepository;
 
-    public ResponseEntity<GameManagementResult> removeGameInDay() {
+    public ResponseEntity<Result<SessionResult>> closeOutDateSession() {
         log.info("Start service removeRedundantSession");
-        GameManagementResult dataResult = new GameManagementResult();
+        Result<SessionResult> data = sessionService.closeOutDateSession(new SessionRequest(true));
 
-        log.info("check games which are not Finish or Cancel in the same date and Cancel them.");
+//        log.info("check games which are not Finish or Cancel in the same date and Cancel them.");
 //        List<GameResult> gameResultList = new ArrayList<>();
 //        // check games which are not Finish or Cancel in the same date and Cancel them.
 //        Set<String> ongoingState = GameState.getNotTerminateState();
@@ -41,6 +44,6 @@ public class SchedulerService {
 //        List<SessionResult> sessionResultList = sessionService.deactiveSessions();
 //        dataResult.setSessionResultList(sessionResultList);
         log.info("End service removeRedundantSession");
-        return ResponseEntity.ok(dataResult);
+        return ResponseConvertor.convert(data);
     }
 }

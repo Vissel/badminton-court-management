@@ -372,7 +372,7 @@ function HomePage() {
       setShowGameDialog(true);
     }
   };
-  const confirmGameRes = (formData, winTeam) => {
+  const confirmGameRes = async (formData, winTeam) => {
     console.log(`Confirmed action with data: ${formData}, winTeam: ${winTeam}`);
     const ballPayload = formData.ballList.map((b) => ({
       shuttleName: b.shuttleName,
@@ -390,15 +390,20 @@ function HomePage() {
       gameState: "Finish",
     };
     try {
-      api.post(`/gameResult/confirmGameResult`, payload);
+      await api.post(`/gameResult/confirmGameResult`, payload);
     } catch (error) {
       console.error(error);
       alert("Hành động thất bại. Load lại trang và thử lại. ");
       setShowGameDialog(false);
       return;
     }
-    // 4. ADD SERVICE TO PLAYERS (The New Logic)
-    // We extract players and their calculated expenses from formData
+
+    const courtId = gameDialogData.courtResult.courtId;
+    resetPlayerInCourt(courtId);
+
+    console.log(`On finish of court ${courtId}`);
+    setShowGameDialog(false);
+    // add the service [Tien san {courtId}] to player
     const participants = [
       {
         name: formData.teamOneResult.playerOneName,
@@ -417,9 +422,16 @@ function HomePage() {
         cost: formData.teamTwoResult.expenseTwo,
       },
     ].filter((p) => p.name && p.cost > 0);
-    // await Promise.all(participants.map(p => {
-    //     saveServiceToPlayer(p.name, "Tiền Sân " + formData.courtResult.courtId, p.cost);
-    // }));
+
+    await Promise.all(
+      participants.map((p) => {
+        saveServiceToPlayer(
+          p.name,
+          "Tiền Sân " + formData.courtResult.courtId,
+          p.cost
+        );
+      })
+    );
     // 4. Update the local UI state for services all at once
     setPlayerServiceMap((prev) => {
       const newMap = { ...prev };
@@ -432,12 +444,6 @@ function HomePage() {
       });
       return newMap;
     });
-
-    const courtId = gameDialogData.courtResult.courtId;
-    resetPlayerInCourt(courtId);
-
-    console.log(`On finish of court ${courtId}`);
-    setShowGameDialog(false);
     // alert("Kết thúc trận đấu.");
   };
 
@@ -495,12 +501,6 @@ function HomePage() {
       serviceName: serviceName,
       cost: parseFloat(cost),
     });
-    // if (res.status === 200 && res.data === true) {
-    //   console.info(`Added ${serviceName} - ${cost} to ${playerName}`);
-    // } else {
-    //   console.error(`Failed to add ${serviceName} - ${cost} to ${playerName}`);
-    // }
-    // return res;
   };
 
   // helper setter — ALWAYS use this to set selectedBall
@@ -509,6 +509,7 @@ function HomePage() {
     setSelectedBall(value); // update state as well
   };
 
+  const [endSessionPage,  setEndSessionPage] = useState(false);
   // HomePage useEffect
   useEffect(() => {
     const fetchCourtInfor = async () => {

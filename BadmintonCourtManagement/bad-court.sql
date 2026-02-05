@@ -21,21 +21,19 @@ values (current_time(),true);
 -- available players
 select a.ava_id, p.player_id, p. player_name, a.services
  from available_player a inner join player p on a.player_id = p.player_id
-where session_id = 14 and leave_time is null;
+where session_id = 26;
 
 select * from available_player a inner join player p on a.player_id = p.player_id;
 
 
 update available_player
-set services = 'costInPerson-15000.0'
+set services = 'costInPerson-15000.0';
 -- where ava_id < 21;
 
-
-
 -- update 
-update `session`
-set is_active = false, to_time = CURRENT_TIME()
-where session_id = 16;
+-- update `session`
+-- set is_active = false, to_time = CURRENT_TIME()
+-- where session_id = 16;
 
 SELECT * FROM mysql.time_zone_name;
 SELECT @@global.time_zone, @@session.time_zone;
@@ -86,10 +84,10 @@ where a.ava_id in (7, 5);
 select * from available_player 
 where ava_id in (22,12,14,21,16,5,18,8);
 
-update game
-set state = 'Cancel',
-ended_date = CURRENT_TIME()
-where game_id = 10;
+-- update game
+-- set state = 'Cancel',
+-- ended_date = CURRENT_TIME()
+-- where game_id = 10;
 
 update team
 set player_id1 = null

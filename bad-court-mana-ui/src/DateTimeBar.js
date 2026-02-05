@@ -1,60 +1,90 @@
-import React, { useState, useEffect } from 'react';
-import './DateTimeBar.css'; // Make sure this CSS file is in the same directory
+import React, { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
+import "./DateTimeBar.css";
+import api from "./api/index";
+import PayConfirm from "./page/dialog/PayConfirm";
 
 function DateTimeBar() {
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
+  const [ending, setEnding] = useState(false); // prevent double click
+  const [show, setShow] = useState(false);
+  const [data, setData] = useState();
 
   useEffect(() => {
-    // Set up an interval to update the time every second
+    setData({ title: "Bạn có chắc Kết thúc phiên làm việc ?" });
     const timerId = setInterval(() => {
       setCurrentDateTime(new Date());
-    }, 1000); // Update every 1000 milliseconds (1 second)
+    }, 1000);
 
-    // Clean up the interval when the component unmounts
-    return () => {
-      clearInterval(timerId);
-    };
-  }, []); // The empty dependency array ensures this effect runs only once on mount
+    return () => clearInterval(timerId);
+  }, []);
+  const location = useLocation();
+  const isHomePage = location.pathname === "/home";
 
-  // Helper function to format the date and time in Vietnamese
   const formatVietnameseDateTime = (date) => {
-    // Options for date formatting
-    const dateOptions = {
-      weekday: 'long',  // e.g., Thứ Hai, Thứ Ba
-      day: '2-digit',   // e.g., 01, 15
-      month: '2-digit', // e.g., 01, 12
-      year: 'numeric',  // e.g., 2023
-    };
-
-    // Options for time formatting (24-hour)
-    const timeOptions = {
-      hour: '2-digit',    // e.g., 08, 17
-      minute: '2-digit',  // e.g., 05, 30
-      second: '2-digit',  // e.g., 01, 45
-      hour12: false,      // Use 24-hour format
-    };
-
-    // Format the date part
-    const formattedDate = date.toLocaleDateString('vi-VN', dateOptions);
-
-    // Format the time part
-    const formattedTime = date.toLocaleTimeString('vi-VN', timeOptions);
-
-    // Manually reconstruct to match "Thứ 5, ngày dd, tháng mm, năm yyyy - HH:MM:ss"
-    // toLocaleDateString('vi-VN') typically gives "Thứ Hai, dd/mm/yyyy"
-    // We need to re-order and add "ngày", "tháng", "năm" prefixes.
-
-    const weekday = date.toLocaleDateString('vi-VN', { weekday: 'long' });
-    const day = date.getDate().toString().padStart(2, '0');
-    const month = (date.getMonth() + 1).toString().padStart(2, '0'); // Month is 0-indexed
+    const weekday = date.toLocaleDateString("vi-VN", { weekday: "long" });
+    const day = date.getDate().toString().padStart(2, "0");
+    const month = (date.getMonth() + 1).toString().padStart(2, "0");
     const year = date.getFullYear();
+    const time = date.toLocaleTimeString("vi-VN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    });
 
-    return `${weekday}, ngày ${day}, tháng ${month}, năm ${year} - ${formattedTime}`;
+    return `${weekday}, ngày ${day}, tháng ${month}, năm ${year} - ${time}`;
+  };
+
+  // =========================
+  // END SESSION HANDLER
+  // =========================
+  const onEndSession = () => {
+    setShow(true);
+  };
+  const handleEndSession = async () => {
+    console.log("Clicking on End session.");
+    try {
+      await api.post(`/session/deleteSession`);
+    } catch (error) {
+      console.log(
+        `Error while performing end session. Error:name=[${error.name}]; message=[${error.message}]`
+      );
+      alert(`Có lỗi khi kết thúc phiên làm việc. Thử lại.`);
+    } finally {
+      setShow(false);
+    }
+  };
+  const handleExit = () => {
+    console.log("Clicking on Exit.");
+    setShow(false);
   };
 
   return (
-    <div className="date-time-bar">
-      <span style={{marginRight:"5px"}} >{formatVietnameseDateTime(currentDateTime)}</span>
+    <div className="d-flex justify-content-between align-items-center px-3 date-time-bar">
+      {/* End Session Button */}
+      <div class="d-grid gap-2 d-md-flex justify-content-md-start">
+        {isHomePage && (
+          <button
+            className="btn btn-outline-danger btn-sm w-auto"
+            style={{ width: "fit-content" }}
+            onClick={onEndSession}
+            disabled={ending}
+          >
+            {ending ? "Ending..." : "Đóng cửa"}
+          </button>
+        )}
+      </div>
+      {/* Date Time */}
+      <div>
+        <span>{formatVietnameseDateTime(currentDateTime)}</span>
+      </div>
+      <PayConfirm
+        show={show}
+        data={data}
+        onConfirm={handleEndSession}
+        onExit={handleExit}
+      />
     </div>
   );
 }

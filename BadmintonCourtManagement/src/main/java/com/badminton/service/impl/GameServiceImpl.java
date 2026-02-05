@@ -18,16 +18,15 @@ import com.badminton.service.ServiceTemple;
 import com.badminton.service.calculator.GameExpenseCalculator;
 import com.badminton.util.CommonUtil;
 import com.badminton.util.ServiceUtil;
+import com.badminton.util.TimeUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.Assert;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
+import java.time.Instant;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -40,6 +39,15 @@ public class GameServiceImpl implements GameService {
     GameExpenseCalculator gameExpenseCalculator;
     @Autowired
     ServiceTemple serviceTemple;
+
+    @Override
+    public List<Game> findAllInprogress() {
+        return gameRepository.findAllByStateInAndEndedDateIsNull(getNonFinishGameState());
+    }
+
+    private Set<String> getNonFinishGameState() {
+        return new HashSet<>(Arrays.asList(GameState.NOT_START.getValue(), GameState.START.getValue()));
+    }
 
     /**
      * Get a GameResult when user click on Finish btn.
@@ -96,7 +104,7 @@ public class GameServiceImpl implements GameService {
                 // 3. validate from request the type of game: SHARE or NEGO and set expense
                 findGTypeAndSetExpense(game, gameRequest.getCourt().getCourtAreas());
                 // 4. set value: state, Team's expense, endedDate, gType.
-                game.setEndedDate(ServiceUtil.getCurrentTimeStamp());
+                game.setEndedDate(TimeUtils.getUTCPlus7Instant());
                 game.setState(GameState.FINISH.getValue());
 
                 gameRepository.save(game);
@@ -126,14 +134,21 @@ public class GameServiceImpl implements GameService {
             @Override
             public Boolean process() throws BusinessException {
                 List<Game> listGame = gameRepository.findAllByCourtIdAndEndedDateIsNull(Integer.valueOf(gameRequest.getCourt().getCourtId()));
+                final Instant endedDate = TimeUtils.getUTCPlus7Instant();
                 listGame.stream().forEach(game -> {
-                    game.setEndedDate(ServiceUtil.getCurrentTimeStamp());
+                    game.setEndedDate(endedDate);
                     game.setState(GameState.CANCEL.getValue());
                 });
                 gameRepository.saveAll(listGame);
                 return true;
             }
         });
+    }
+
+    @Override
+    public Boolean saveAll(List<Game> gameList) {
+        gameRepository.saveAll(gameList);
+        return Boolean.TRUE;
     }
 
     private TeamResult buildTeamResult(Team team, Map<ShuttleBallResult, Integer> shuttleMap, Game startedGame) {

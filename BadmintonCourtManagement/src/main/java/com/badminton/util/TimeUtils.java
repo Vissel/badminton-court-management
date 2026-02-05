@@ -2,13 +2,16 @@ package com.badminton.util;
 
 import com.badminton.constant.CommonConstant;
 import com.badminton.repository.filter.SessionParam;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 
 import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.Calendar;
 import java.util.Locale;
 
+@Slf4j
 public class TimeUtils {
     /**
      * Converts a relative time string to a UTC Instant.
@@ -131,5 +134,42 @@ public class TimeUtils {
             return CommonConstant.EMPTY; // Or return "" based on your preference
         }
         return DATETIME_FORMATTER.format(dateTime);
+    }
+
+    // 1. Convert to ZonedDateTime (Preserves the timezone info)
+    public static ZonedDateTime toSystemZoned(Instant instant) {
+        return instant.atZone(ZoneId.systemDefault());
+    }
+
+    // 2. Convert to LocalDateTime (Standard "wall-clock" time)
+    public static LocalDateTime toLocalDateTime(Instant instant) {
+        return LocalDateTime.ofInstant(instant, ZoneId.systemDefault());
+    }
+
+    /**
+     * Requirement: Format for the Session Header
+     * Example: "2026, tháng 1 ngày 6 thứ ba"
+     */
+    public static String toVNDateFormat(Instant instant) {
+        if (instant == null) return "";
+
+        DateTimeFormatter formatter = DateTimeFormatter
+                .ofPattern("yyyy, 'tháng' M 'ngày' d EEEE", newVNLocal());
+
+        return toSystemZoned(instant).format(formatter);
+    }
+
+    /**
+     * get UTC +7 instant time
+     *
+     * @return
+     */
+    public static Instant getUTCPlus7Instant() {
+        // Create a Calendar instance
+        Calendar calendar = Calendar.getInstance();
+        // Plus 7 hours
+        calendar.add(Calendar.HOUR, +7);
+        log.info("Convert to DB time zone value: {}", calendar.toInstant().toString());
+        return calendar.toInstant();
     }
 }

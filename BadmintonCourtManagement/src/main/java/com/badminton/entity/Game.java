@@ -6,7 +6,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -42,10 +42,10 @@ public class Game {
     private Team teamTwo;
 
     @Column(updatable = false, insertable = false)
-    private Timestamp createdDate;
+    private Instant createdDate;
 
     @Column(nullable = true)
-    private Timestamp endedDate;
+    private Instant endedDate;
 
     /**
      * Follow GameState

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 
-import api from "../api/index";
+import api, {backendHost} from "../api/index";
 
 // -------- dummy data for UI testing --------
 const DUMMY_REPORTS = Array.from({ length: 23 }).map((_, i) => ({
@@ -128,18 +128,20 @@ export default function ReportPage() {
       console.error("Failed to export report", error);
       alert("Export failed. Please try again.");
     }
-    api
-      .post(`/api/v1/manager/reportExport`, { sessionId: sessionId })
-      .then((res) => {
-        console.log(
-          `export report sessionId[${sessionId}] has status: ${res.status}`
-        );
-      })
-      .catch((ex) => {
-        console.error(
-          `Error while exporting report sessionId[${sessionId}]. Error: ${ex}`
-        );
-      });
+  };
+
+  const handleExportReport = async () => {
+    try {
+      const sessionIds = reports.map((r) => r.sessionId);
+
+      const response = await api.post(`/api/v1/manager/reportToken`,{ sessionIds: sessionIds });
+
+      window.location.href = `${backendHost}/api/v1/manager/stream/reportExportList/${response.data.reportToken}`;
+
+    } catch (error) {
+      console.error("Failed to export report", error);
+      alert("Export failed. Please try again.");
+    }
   };
 
   const handleMonthChange = (month) => {
@@ -158,8 +160,8 @@ export default function ReportPage() {
       <h3 className="mb-3">Manager</h3>
 
       {/* Search + Month filter + Total rows */}
-      <div className="row mb-3 align-items-center">
-        <div className="col-md-4">
+      <div className="row mb-4 align-items-center">
+        <div className="col-md-3">
           <input
             type="text"
             className="form-control"
@@ -183,6 +185,14 @@ export default function ReportPage() {
         </div>
         <div className="col-md-3 text-end text-muted">
           Total : <strong>{numberRows}</strong>
+        </div>
+        <div className="col-md-3 text-end">
+          <button
+            className="btn btn-success btn-sm"
+            onClick={() => handleExportReport()}
+          >
+            Export list
+          </button>
         </div>
       </div>
 
@@ -234,7 +244,7 @@ export default function ReportPage() {
             {!loading &&
               reports.map((row, index) => (
                 <tr key={row.id}>
-                  <td title={`sessionId:${row.sessionId}`}>
+                  <td title={`index:${index}`}>
                     {(currentPage - 1) * pageSize + index + 1}
                   </td>
                   <td>{row.date.viDateString}</td>
@@ -263,9 +273,9 @@ export default function ReportPage() {
         >
           <option value={10}>10</option>
           <option value={20}>20</option>
-          <option value={20}>30</option>
-          <option value={20}>50</option>
-          <option value={20}>100</option>
+          <option value={30}>30</option>
+          <option value={50}>50</option>
+          <option value={100}>100</option>
         </select>
         <div className="col-md-3 text-end text-muted">
           Total: <strong>{totalRows}</strong> rows

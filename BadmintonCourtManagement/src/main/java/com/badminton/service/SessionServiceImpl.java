@@ -1,10 +1,15 @@
 package com.badminton.service;
 
+import com.badminton.constant.GameState;
 import com.badminton.entity.AvailablePlayer;
+import com.badminton.entity.Game;
 import com.badminton.entity.Session;
+import com.badminton.exception.BusinessException;
 import com.badminton.repository.SessionRepository;
 import com.badminton.repository.filter.SessionParam;
 import com.badminton.requestmodel.Pagination;
+import com.badminton.requestmodel.SessionRequest;
+import com.badminton.response.result.Result;
 import com.badminton.response.result.SessionResult;
 import com.badminton.util.Converter;
 import com.badminton.util.TimeUtils;
@@ -17,13 +22,17 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.domain.Sort.Order;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.Assert;
 
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.time.format.TextStyle;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
+import java.util.Locale;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -31,12 +40,18 @@ public class SessionServiceImpl {
     @Autowired
     private SessionRepository sessionRepo;
 
+    @Autowired
+    private ServiceTemple serviceTemple;
+
+    @Autowired
+    private GameService gameService;
+
     /**
      * DB display the time data ...
      *
      * @return
      */
-    public Instant getMatchDBInstant() {
+    public Instant getUTCPlus7Instant() {
         // Create a Calendar instance
         Calendar calendar = Calendar.getInstance();
         // Plus 7 hours
@@ -46,7 +61,7 @@ public class SessionServiceImpl {
     }
 
     public Boolean checkAvailableSession() {
-        Instant current = getMatchDBInstant();
+        Instant current = getUTCPlus7Instant();
 
         List<Session> availableSession = sessionRepo.findByFromTimeLessThanAndToTimeIsNullAndIsActive(current, true,
                 Sort.by(Order.desc("sessionId")));
@@ -54,7 +69,7 @@ public class SessionServiceImpl {
             ZoneId zone = ZoneId.of("Z");
             // DB's return global zone
             ZonedDateTime zoneDateT = availableSession.getFirst().getFromTime().atZone(zone);
-            return zoneDateT.toLocalDate().equals(getMatchDBInstant().atZone(zone).toLocalDate());
+            return zoneDateT.toLocalDate().equals(getUTCPlus7Instant().atZone(zone).toLocalDate());
         }
         return false;
     }
@@ -105,22 +120,8 @@ public class SessionServiceImpl {
         return deactiveList;
     }
 
-    @Transactional
-    public Boolean deactivateSessions() {
-        List<Session> currSessions = findListCurrentSession();
-        if (!currSessions.isEmpty()) {
-            Instant toTime = Instant.now();
-            currSessions.stream().forEach(s -> {
-                s.setActive(false);
-                s.setToTime(toTime);
-            });
-            sessionRepo.saveAll(currSessions);
-        }
-        return Boolean.TRUE;
-    }
-
     public List<Session> findListCurrentSession() {
-        Instant current = getMatchDBInstant();
+        Instant current = getUTCPlus7Instant();
         return sessionRepo.findByFromTimeLessThanAndToTimeIsNullAndIsActive(current, true,
                 Sort.by(Order.desc("sessionId")));
     }
@@ -165,5 +166,61 @@ public class SessionServiceImpl {
 
     public Session findSessionById(String sessionId) {
         return sessionRepo.findById(Integer.valueOf(sessionId)).orElse(null);
+    }
+
+    @Transactional
+    public Result<SessionResult> closeOutDateSession(SessionRequest sessionRequest) {
+        return serviceTemple.execute(new ProcessCallback<SessionRequest, SessionResult>() {
+            @Override
+            public SessionRequest getRequest() {
+                return sessionRequest;
+            }
+
+            @Override
+            public void preProcess(SessionRequest request) {
+                Assert.notNull(request, "Session request must not be null.");
+            }
+
+            @Override
+            public SessionResult process() throws BusinessException {
+                SessionResult result = new SessionResult();
+                // 1. check current time is inTheSameDay
+                List<Session> sessions = findListCurrentSession();
+                final Instant toTime = getUTCPlus7Instant();
+                List<Session> closedSessions = new ArrayList<>(sessions);
+                if (getRequest().isScheduler()) {
+                    closedSessions = sessions.stream().filter(s -> !inTheSameUTCPlus7Date(s.getFromTime()))
+                            .map(s -> {
+                                s.setActive(false);
+                                s.setToTime(toTime);
+                                return s;
+                            })
+                            .collect(Collectors.toList());
+                }
+
+                if (closedSessions.isEmpty()) {
+                    result.setMessage("There is no session to close.");
+                    return result;
+                }
+                sessionRepo.saveAll(closedSessions);
+                // 2. false => deactivateSessions, terminateGame
+                List<Game> availableGames = gameService.findAllInprogress();
+                availableGames.stream().forEach(game -> {
+                    game.setEndedDate(toTime);
+                    game.setState(GameState.CANCEL.getValue());
+                });
+                gameService.saveAll(availableGames);
+                result.setMessage("Close session successfully!");
+                return result;
+            }
+        });
+    }
+
+    public Boolean inTheSameUTCPlus7Date(Instant time) {
+        Instant utc7Now = getUTCPlus7Instant();
+        ZoneId systemZoneId = ZoneId.systemDefault();
+        log.info("System zoneId:{}", systemZoneId.getDisplayName(TextStyle.FULL, Locale.ENGLISH));
+
+        return utc7Now.atZone(systemZoneId).toLocalDate().equals(time.atZone(systemZoneId).toLocalDate());
     }
 }

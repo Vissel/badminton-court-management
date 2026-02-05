@@ -1,7 +1,10 @@
 package com.badminton.controller;
 
+import com.badminton.requestmodel.SessionRequest;
+import com.badminton.response.result.Result;
 import com.badminton.response.result.SessionResult;
 import com.badminton.service.SessionServiceImpl;
+import com.badminton.util.ResponseConvertor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,8 +30,8 @@ public class SessionController {
     }
 
     @PostMapping(value = "/deleteSession")
-    public ResponseEntity<Boolean> deleteSession() {
-        return ResponseEntity.ok(sessionService.deactivateSessions());
+    public ResponseEntity<Result<SessionResult>> deleteSession() {
+        return ResponseConvertor.convert(sessionService.closeOutDateSession(new SessionRequest(false)));
     }
 
 }

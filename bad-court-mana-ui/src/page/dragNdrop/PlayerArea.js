@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { useDrop } from "react-dnd";
 import { ItemTypes } from "../ItemTypes";
 import DraggablePlayer from "./DraggablePlayer";
@@ -34,9 +33,7 @@ export default function PlayerArea({
       setNewPlayer("");
     }
   };
-  useEffect(() => {
 
-  },[availablePlayers]);
 
   return (
     <div

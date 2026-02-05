@@ -34,7 +34,7 @@ public class SafeDailyScheduler {
 
         log.info("✅ Running daily job after app startup: " + java.time.LocalDateTime.now());
         // Your job logic here — e.g. call service layer
-        ResponseEntity responseEntity = ResponseEntity.ok(schedulerService.removeGameInDay());
+        ResponseEntity responseEntity = schedulerService.closeOutDateSession();
         log.info("===Scheduled task===, {}", responseEntity);
     }
 }
