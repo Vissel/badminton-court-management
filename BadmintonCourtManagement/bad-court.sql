@@ -7,16 +7,23 @@ select * from `session`
 order by from_time limit 1, 10
 ;
 
+-- session operation
 SELECT * FROM `session` 
 WHERE is_active = true AND to_time is null;
 
-SELECT * FROM `session`;
+SELECT * FROM `session` 
+order by from_time desc;
+
 SELECT * FROM `session` 
 where is_active = true and from_time < current_timestamp();
 SELECT * FROM `session` where session_id=10;
 
 insert into session(from_time,is_active)
 values (current_time(),true);
+
+-- update `session`
+-- set to_time = null, is_active = b'1'
+-- where session_id between 1 and 12;
 
 -- available players
 select a.ava_id, p.player_id, p. player_name, a.services

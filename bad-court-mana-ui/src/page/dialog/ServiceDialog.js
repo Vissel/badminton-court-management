@@ -2,8 +2,24 @@ import React, { useCallback, useEffect, useState } from "react";
 import "./ServiceDialog.css";
 import { TYPE } from "../HomePage";
 
-const ServiceDialog = ({ playerName, services, onClose, onPay, onDelete }) => {
+const ServiceDialog = ({
+  playerName,
+  services = [],
+  onClose,
+  onPay,
+  onDelete,
+  onUpdateServices,
+}) => {
   const [totalCost, setTotalCost] = useState(0);
+  const [serviceName, setServiceName] = useState("");
+  const [serviceCost, setServiceCost] = useState("");
+
+  const recalcTotal = useCallback((serviceList) => {
+    return serviceList.reduce((sum, item) => {
+      const amount = Number(item.slice(item.lastIndexOf("-") + 1).trim()) || 0;
+      return sum + amount;
+    }, 0);
+  }, []);
 
   const onPreDelete = () => {
     onClose(false);
@@ -14,37 +30,51 @@ const ServiceDialog = ({ playerName, services, onClose, onPay, onDelete }) => {
     onPay(playerName, TYPE.PAY, services, Number(totalCost));
   };
 
-  // Define a callback function to handle the keydown event
-  const handleEscPress = useCallback(
-    (event) => {
-      if (event.key === "Escape") {
-        console.log("[ServiceDialog] Escape key pressed!");
-        onClose();
-      }
-    },
-    [onClose]
-  ); // Empty dependency array means this callback is memoized and won't change on re-renders
+  const handleAddService = () => {
+    if (!serviceName || !serviceCost) return;
 
-  // Use useEffect to add and remove the event listener
-  useEffect(() => {
-    if (services) {
-      const totalAmount = services.reduce((sum, item) => {
-        const amount =
-          Number(item.slice(item.lastIndexOf("-") + 1).trim()) || 0;
-        return sum + amount;
-      }, 0);
-      console.log(totalAmount);
-      setTotalCost(totalAmount);
+    const newService = `${serviceName}-${serviceCost}`;
+    const updated = [...services, newService];
+
+    onUpdateServices(playerName, updated);
+    setServiceName("");
+    setServiceCost("");
+  };
+
+  const handleRemoveService = (index) => {
+    const updated = services.filter((_, i) => i !== index);
+    onUpdateServices(playerName, updated);
+  };
+
+  // const handleEscPress = useCallback(
+  //   (event) => {
+  //     if (event.key === "Escape") {
+  //       onClose();
+  //     }
+  //   },
+  //   [onClose]
+  // );
+  const handleKeyDown = useCallback(
+  (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      handleAddService();
     }
 
-    // Add event listener when the component mounts
-    document.addEventListener("keydown", handleEscPress);
+    if (event.key === "Escape") {
+      onClose(false); // close dialog
+    }
+  },
+  [handleAddService, onClose]
+);
 
-    // Clean up: remove event listener when the component unmounts
+  useEffect(() => {
+    setTotalCost(recalcTotal(services));
+    document.addEventListener("keydown", handleKeyDown);
     return () => {
-      document.removeEventListener("keydown", handleEscPress);
+      document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [handleEscPress]); // Dependency array includes handleEscPress to ensure the correct function is always used
+  }, [services, handleKeyDown, recalcTotal]);
 
   return (
     <div className="dialog-overlay">
@@ -60,12 +90,57 @@ const ServiceDialog = ({ playerName, services, onClose, onPay, onDelete }) => {
             X
           </div>
         </div>
-        <h3> Bảng chi phí của: {playerName}</h3>
-        <h6 style={{color: "blue"}}>Tổng cộng: {totalCost} vnd </h6>
+
+        <h3>Bảng chi phí của: {playerName}</h3>
+        <h6 style={{ color: "blue" }}>Tổng cộng: {totalCost} vnd</h6>
+
+        {/* ➕ ADD SERVICE */}
+        <div className="d-flex bd-highlight align-items-center">
+          <div className="p-2 flex-grow-1 bd-highlight">
+            <input
+              type="text"
+              placeholder="Tên dịch vụ"
+              value={serviceName}
+              onChange={(e) => setServiceName(e.target.value)}
+            />
+          </div>
+          <div className="p-2 bd-highlight">
+            <input
+              type="number"
+              placeholder="Giá"
+              value={serviceCost}
+              onChange={(e) => setServiceCost(e.target.value)}
+            />
+          </div>
+          <div className="p-2 bd-highlight">
+            <button className="btn btn-success" onClick={handleAddService}>
+              +
+            </button>
+          </div>
+        </div>
+
+        <div className="add-service"></div>
+
+        {/* SERVICE LIST */}
         {services.length > 0 ? (
           <ul className="service-list">
             {services.map((service, idx) => (
-              <li key={idx}>{service} vnd</li>
+              <li key={idx} className="service-item">
+                <div className="d-flex justify-content-between">
+                  <div className="p-2 bd-highlight">
+                    <span>{service} vnd</span>
+                  </div>
+
+                  <div className="p-2 bd-highlight">
+                    <button
+                      className="btn btn-sm btn-outline-danger"
+                      onClick={() => handleRemoveService(idx)}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              </li>
             ))}
           </ul>
         ) : (

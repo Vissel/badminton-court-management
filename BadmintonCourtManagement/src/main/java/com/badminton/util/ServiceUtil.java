@@ -43,6 +43,18 @@ public class ServiceUtil {
     }
 
     /**
+     * concat array new services into current services string. Separated by semi-colon
+     *
+     * @param currentServices
+     * @param removedServices
+     * @return
+     */
+    public static String divideService(String currentServices, String... removedServices) {
+        Arrays.stream(removedServices).forEach(s -> currentServices.replace(CommonConstant.STR_SEMI_COLON + s, CommonConstant.EMPTY));
+        return currentServices;
+    }
+
+    /**
      * Condition true: Not start -> Started <br>
      * Started -> Finish <br>
      * Started -> Cancel

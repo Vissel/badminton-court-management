@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
 
 import java.time.Instant;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.TextStyle;
@@ -186,13 +187,14 @@ public class SessionServiceImpl {
                 SessionResult result = new SessionResult();
                 // 1. check current time is inTheSameDay
                 List<Session> sessions = findListCurrentSession();
-                final Instant toTime = getUTCPlus7Instant();
+
                 List<Session> closedSessions = new ArrayList<>(sessions);
                 if (getRequest().isScheduler()) {
                     closedSessions = sessions.stream().filter(s -> !inTheSameUTCPlus7Date(s.getFromTime()))
                             .map(s -> {
                                 s.setActive(false);
-                                s.setToTime(toTime);
+                                Instant endOfDayInclusive = toEndOfDay(s.getFromTime());
+                                s.setToTime(endOfDayInclusive);
                                 return s;
                             })
                             .collect(Collectors.toList());
@@ -206,7 +208,8 @@ public class SessionServiceImpl {
                 // 2. false => deactivateSessions, terminateGame
                 List<Game> availableGames = gameService.findAllInprogress();
                 availableGames.stream().forEach(game -> {
-                    game.setEndedDate(toTime);
+                    Instant endOfDayInclusive = toEndOfDay(game.getCreatedDate());
+                    game.setEndedDate(endOfDayInclusive);
                     game.setState(GameState.CANCEL.getValue());
                 });
                 gameService.saveAll(availableGames);
@@ -216,11 +219,27 @@ public class SessionServiceImpl {
         });
     }
 
+    /**
+     *
+     * @param time - from DB, zone is UTC+7
+     * @return
+     */
     public Boolean inTheSameUTCPlus7Date(Instant time) {
-        Instant utc7Now = getUTCPlus7Instant();
         ZoneId systemZoneId = ZoneId.systemDefault();
         log.info("System zoneId:{}", systemZoneId.getDisplayName(TextStyle.FULL, Locale.ENGLISH));
+        Instant utc7Time = utcPlus7FromDB(time);
+        log.info("Corrected time DB:{}", utc7Time);
 
-        return utc7Now.atZone(systemZoneId).toLocalDate().equals(time.atZone(systemZoneId).toLocalDate());
+        return Instant.now().atZone(systemZoneId).toLocalDate().equals(utc7Time.atZone(systemZoneId).toLocalDate());
+    }
+
+    public Instant utcPlus7FromDB(Instant time) {
+        return time.minusSeconds(7 * 3600);
+    }
+
+    public Instant toEndOfDay(Instant time) {
+        ZonedDateTime zdtEndOfDay = time.atZone(ZoneId.of("UTC"))
+                .with(LocalTime.of(23, 59, 0));
+        return zdtEndOfDay.toInstant();
     }
 }

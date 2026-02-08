@@ -7,7 +7,7 @@ export const currentHost = `${window.location.protocol}//${window.location.hostn
 
 const localHost = "http://localhost:9080";
 const context = "bad-court-management-dev";
-export const backendHost = `${localHost}/${context}`
+export const backendHost = `${localHost}/${context}`;
 
 const api = axios.create({
   baseURL: `${localHost}/${context}`, // Update with your backend base URL
@@ -40,19 +40,23 @@ api.interceptors.response.use(
     /* ===============================
        401 / 403 – Unauthorized
     ================================ */
-    if ((status === 401 || status === 403) && !currentPath.includes("/login")) {
-      console.warn("Unauthorized / Forbidden – redirecting to login");
+    if (status === 401 || status === 403) {
+      const excludePaths = ["/login", "*", "/"];
+      const isExcluded = excludePaths.some((p) => currentPath.includes(p));
 
-      localStorage.clear();
-      sessionStorage.clear();
+      if (!isExcluded) {
+        console.warn("Unauthorized / Forbidden – redirecting to login");
 
-      alert("Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại!");
-      window.location.replace("/#/login");
+        localStorage.clear();
+        sessionStorage.clear();
 
-      // Stop promise chain cleanly
-      return new Promise(() => {});
+        alert("Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại!");
+        window.location.replace("/#/login");
+
+        // Stop promise chain cleanly
+        return new Promise(() => {});
+      }
     }
-
     /* ===============================
        Handle BLOB error (export)
     ================================ */
@@ -67,7 +71,6 @@ api.interceptors.response.use(
 
         console.error("Export error:", json);
         alert(json.message || "Xuất báo cáo thất bại");
-
       } catch (e) {
         console.error("Failed to parse blob error", e);
         alert("Xuất báo cáo thất bại");
@@ -88,7 +91,7 @@ api.interceptors.response.use(
     /* ===============================
        Other client errors (400, 404…)
     ================================ */
-    if (status >= 400) {
+    if (status === 400 || status > 403 ) {
       console.warn("Client error:", error.response);
       alert("Yêu cầu không hợp lệ.");
     }
@@ -96,7 +99,6 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
-
 
 export default api;
 // export const addNewServiceAPI = (payload) =>

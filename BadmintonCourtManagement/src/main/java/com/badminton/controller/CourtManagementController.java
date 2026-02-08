@@ -84,6 +84,22 @@ public class CourtManagementController {
     }
 
 
+    @PostMapping(value = "/removeServiceOutPlayer")
+    public ResponseEntity<Boolean> removeServiceOutAvaPlayer(@RequestParam String playerName,
+                                                             @RequestBody ServiceDTO serviceDTO) {
+        Boolean res = courtService.removeServiceOutAvailablePlayer(serviceDTO, playerName);
+        // Error cases are not handled
+        return ResponseEntity.ok(res);
+    }
+
+    @PostMapping(value = "/updateServiceToPlayer")
+    public ResponseEntity<Boolean> updateServiceToAvaPlayer(@RequestParam String playerName,
+                                                            @RequestBody List<ServiceDTO> listServiceDTO) {
+        Boolean res = courtService.updateServicesToAvailablePlayer(listServiceDTO, playerName);
+        // Error cases are not handled
+        return ResponseEntity.ok(res);
+    }
+
     @PostMapping(value = "/addServiceToPlayer")
     public ResponseEntity<Boolean> addServiceToAvaPlayer(@RequestParam String playerName,
                                                          @RequestBody ServiceDTO serviceDTO) {

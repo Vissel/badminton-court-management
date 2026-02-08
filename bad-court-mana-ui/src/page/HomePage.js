@@ -62,10 +62,10 @@ function HomePage() {
   const [payConfirmData, setPayConfirmData] = useState(null);
 
   const responseSuccess = (response) => {
-    return response.status === 200 && response.data != null;
+    return response != null && response.status === 200 && response.data != null;
   };
   const responseDataTrue = (response) => {
-    return responseSuccess(response.status) && response.data === true;
+    return responseSuccess(response) && response.data === true;
   };
 
   // Get shuttleName
@@ -210,7 +210,7 @@ function HomePage() {
       console.log("Adding new player successfully.");
       setAvailablePlayers((prev) => [...prev, name]);
       // set costInPerson
-      handleDropService(name, "costInPerson", costInPerson);
+      handleDropService(name, VN_COST_IN_PERSON, costInPerson);
     } catch (error) {
       console.error("Error while adding player to available session.");
       alert("Có lỗi khi thêm người chơi. Refresh lại trang này!");
@@ -509,7 +509,7 @@ function HomePage() {
     setSelectedBall(value); // update state as well
   };
 
-  const [endSessionPage,  setEndSessionPage] = useState(false);
+  const [endSessionPage, setEndSessionPage] = useState(false);
   // HomePage useEffect
   useEffect(() => {
     const fetchCourtInfor = async () => {
@@ -630,11 +630,31 @@ function HomePage() {
     }
   }, []);
 
+  const handleUpdateServices = async (playerName, updatedServices) => {
+
+    const payload = updatedServices.map((s) => {
+      return {
+        serviceName: s.slice(0,s.lastIndexOf("-")).trim(),
+        cost: Number(s.slice(s.lastIndexOf("-")+1).trim())
+      };
+    });
+    const response = await api.post(`/court-mana/updateServiceToPlayer?playerName=${playerName}`, payload);
+    if (responseDataTrue(response)) {
+      setPlayerServiceMap((prev) => ({
+        ...prev,
+        [playerName]: updatedServices,
+      }));
+      return ;
+    }
+    alert(`Thay đổi dich vu không thành công.`);
+    console.log(`Thay đổi dich vu không thành công.`);
+  };
+
   const onPayConfirm = (playerName, type, serviceList, expense) => {
     // show dialog type: pay, cancel.
-    let title = `Xác nhận XOÁ người chơi [${playerName}] ?`;
+    let title = `Xác nhận XOÁ người chơi [${playerName}] : [${expense} vnd] ?`;
     if (TYPE.PAY === type) {
-      title = `Xác nhận THANH TOÁN cho người chơi [${playerName}] ?`;
+      title = `Xác nhận THANH TOÁN cho người chơi [${playerName}]  : [${expense} vnd] ?`;
     }
     setShowPayConfirmDialog(true);
     setPayConfirmData({
@@ -741,8 +761,10 @@ function HomePage() {
               onClose={() => setShowDialog(false)}
               onPay={onPayConfirm}
               onDelete={onPayConfirm}
+              onUpdateServices={handleUpdateServices}
             />
           )}
+
           <div className="column left-column">
             {leftColumn
               .slice()

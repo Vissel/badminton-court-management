@@ -206,11 +206,58 @@ public class CourtServicesServiceImpl {
         return Boolean.TRUE;
     }
 
+    /**
+     * Add service to available player
+     *
+     * @param serviceDTO
+     * @param playerName
+     * @return
+     */
+    @Transactional
     public Boolean addServiceToAvailablePlayer(ServiceDTO serviceDTO, String playerName) {
         AvailablePlayer availablePlayer = session.getAvailablePlayerInActiveSession(playerName);
         if (availablePlayer != null) {
             availablePlayer.setServices(ServiceUtil.concatService(availablePlayer.getCurrentServices(),
                     ServiceUtil.buildService(serviceDTO.getServiceName(), serviceDTO.getCost())));
+            avaPlayerRepo.save(availablePlayer);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Remove service out available player
+     *
+     * @param serviceDTO
+     * @param playerName
+     * @return
+     */
+    @Transactional
+    public Boolean removeServiceOutAvailablePlayer(ServiceDTO serviceDTO, String playerName) {
+        AvailablePlayer availablePlayer = session.getAvailablePlayerInActiveSession(playerName);
+        if (availablePlayer != null) {
+            availablePlayer.setServices(ServiceUtil.divideService(availablePlayer.getCurrentServices(),
+                    ServiceUtil.buildService(serviceDTO.getServiceName(), serviceDTO.getCost())));
+            avaPlayerRepo.save(availablePlayer);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * update new list service to available player
+     *
+     * @param playerName
+     * @return
+     */
+    @Transactional
+    public Boolean updateServicesToAvailablePlayer(List<ServiceDTO> listServices, String playerName) {
+        AvailablePlayer availablePlayer = session.getAvailablePlayerInActiveSession(playerName);
+        if (availablePlayer != null) {
+            String listServiceString = listServices.stream().map(serviceDTO ->
+                            ServiceUtil.buildService(serviceDTO.getServiceName(), serviceDTO.getCost()))
+                    .collect(Collectors.joining(CommonConstant.STR_SEMI_COLON));
+            availablePlayer.setServices(listServiceString);
             avaPlayerRepo.save(availablePlayer);
             return true;
         }

@@ -63,7 +63,7 @@ function DateTimeBar() {
   return (
     <div className="d-flex justify-content-between align-items-center px-3 date-time-bar">
       {/* End Session Button */}
-      <div class="d-grid gap-2 d-md-flex justify-content-md-start">
+      <div class="d-grid gap-2 d-md-flex d-flex bd-highlight align-items-center">
         {isHomePage && (
           <button
             className="btn btn-outline-danger btn-sm w-auto"

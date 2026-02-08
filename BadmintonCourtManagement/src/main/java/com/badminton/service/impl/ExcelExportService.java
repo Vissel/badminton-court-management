@@ -25,9 +25,7 @@ import com.badminton.util.TimeUtils;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.streaming.SXSSFCell;
 import org.apache.poi.xssf.streaming.SXSSFRow;
@@ -61,8 +59,12 @@ public class ExcelExportService implements ExportService {
     @Autowired
     GameRepository gameRepo;
 
-    private static final int HEADER_ROW_INDEX = 2;
+    private static final int HEADER_ROW_INDEX = 0;
+    private static final int HEADER_CELL_INDEX = HEADER_ROW_INDEX;
+    private static final int START_HEADER_ROW_INDEX = 2;
     private static final int START_DATA_ROW_INDEX = 3;
+    private static final int START_HEADER_ROW_SINGLE_RPT_INDEX = 5;
+    private static final int START_DATA_ROW_SINGLE_RPT_INDEX = 6;
     private static final String DATE_VN = "Ngày";
     private static final String FORMATED_DATE_VN = "Ngày đinh dạng";
     private static final String DURING_VN = "Thời gian";
@@ -72,6 +74,31 @@ public class ExcelExportService implements ExportService {
     private static final String PAY_AMOUNT_VN = "Số tiền thanh toán";
     private static final String LEAVE_TIME_VN = "Thời gian rời sân";
     private static final String COURT_FEE_VN = "Tiền sân";
+    private static final String TITLE_VN = "Bảng thống kê" + CommonConstant.COLON;
+
+    private static final int DATE_COL = 0;
+    private static final int DATE_FORMAT_COL = 1;
+    private static final int DURING_COL = 2;
+    private static final int TOTAL_COL = 3;
+    private static final int PLAYER_NO_COL = 4;
+    private static final int PLAYER_NAME_COL = 5;
+    private static final int PAY_AMT_COL = 6;
+    private static final int LEAVE_TIME_COL = 7;
+    private static final int COURT_FEE_COL = 8;
+    private static final List<Integer> columns;
+
+    static {
+        columns = new ArrayList<>();
+        columns.add(DATE_COL);
+        columns.add(DATE_FORMAT_COL);
+        columns.add(DURING_COL);
+        columns.add(TOTAL_COL);
+        columns.add(PLAYER_NO_COL);
+        columns.add(PLAYER_NAME_COL);
+        columns.add(PAY_AMT_COL);
+        columns.add(LEAVE_TIME_COL);
+        columns.add(COURT_FEE_COL);
+    }
 
     @Override
     public Result<PageResponse<ReportResponse>> reportList(ReportListRequest rptListRequest) {
@@ -138,21 +165,24 @@ public class ExcelExportService implements ExportService {
         for (Integer sessionId : exportedRptRequest.getSessionIds()) {
             listReport.add(retrieveReport(String.valueOf(sessionId))); // query report data from database - success
         }
+        String title = TITLE_VN + listReport.size() + " phiên làm việc.";
+
         try (SXSSFWorkbook workbook = new SXSSFWorkbook();
         ) {
             SXSSFSheet sheet = workbook.createSheet("Report");
-            writeSessionHeader(sheet);
+            writeTitle(title, workbook, sheet);
+            writeSessionHeader(sheet, workbook);
 
             int rowIndex = START_DATA_ROW_INDEX;
             for (int i = 0; i < listReport.size(); i++) {
-                rowIndex = writeReportData(i, listReport, rowIndex, sheet);
+                rowIndex = writeReportData(listReport.get(i), rowIndex, sheet);
             }
 
             // Auto-size columns for basic info
             for (int i = 0; i < columns.size(); i++) {
                 sheet.autoSizeColumn(i);
             }
-            sheet.setAutoFilter(new CellRangeAddress(HEADER_ROW_INDEX, HEADER_ROW_INDEX, DATE_COL, COURT_FEE_COL));
+            sheet.setAutoFilter(new CellRangeAddress(START_HEADER_ROW_INDEX, START_HEADER_ROW_INDEX, DATE_COL, COURT_FEE_COL));
             workbook.write(outputStream);
 
             // Ensure all bytes are pushed out
@@ -163,43 +193,29 @@ public class ExcelExportService implements ExportService {
         }
     }
 
-    private static final int DATE_COL = 0;
-    private static final int DATE_FORMAT_COL = 1;
-    private static final int DURING_COL = 2;
-    private static final int TOTAL_COL = 3;
-    private static final int PLAYER_NO_COL = 4;
-    private static final int PLAYER_NAME_COL = 5;
-    private static final int PAY_AMT_COL = 6;
-    private static final int LEAVE_TIME_COL = 7;
-    private static final int COURT_FEE_COL = 8;
-    private static final List<Integer> columns;
-
-    static {
-        columns = new ArrayList<>();
-        columns.add(DATE_COL);
-        columns.add(DATE_FORMAT_COL);
-        columns.add(DURING_COL);
-        columns.add(TOTAL_COL);
-        columns.add(PLAYER_NO_COL);
-        columns.add(PLAYER_NAME_COL);
-        columns.add(PAY_AMT_COL);
-        columns.add(LEAVE_TIME_COL);
-        columns.add(COURT_FEE_COL);
+    private void writeTitle(String title, Workbook workbook, Sheet sheet) {
+        CellStyle titleStyle = workbook.createCellStyle();
+        Font titleFont = workbook.createFont();
+        titleFont.setBold(true);
+        titleFont.setFontHeightInPoints((short) 18);
+        titleStyle.setFont(titleFont);
+        Cell titleCell = sheet.createRow(HEADER_ROW_INDEX).createCell(HEADER_CELL_INDEX);
+        titleCell.setCellValue(title);
+        titleCell.setCellStyle(titleStyle);
     }
 
     /**
      * return next row index
      *
-     * @param i
-     * @param listReport
+     * @param reportData
      * @param rowIndex
      * @param sheet
      * @return
      */
-    private int writeReportData(int i, List<ReportDTO> listReport, int rowIndex, SXSSFSheet sheet) {
-        Session session = listReport.get(i).getSession();
-        List<AvailablePlayer> players = listReport.get(i).getAvailablePlayers();
-        List<Game> games = listReport.get(i).getGames();
+    private int writeReportData(ReportDTO reportData, int rowIndex, SXSSFSheet sheet) {
+        Session session = reportData.getSession();
+        List<AvailablePlayer> players = reportData.getAvailablePlayers();
+        List<Game> games = reportData.getGames();
 
         Map<Long, String> partnerMap = players.stream()
                 .collect(Collectors.toMap(
@@ -266,22 +282,23 @@ public class ExcelExportService implements ExportService {
         Session session = reportDTO.getSession();
         List<AvailablePlayer> players = reportDTO.getAvailablePlayers();
         List<Game> games = reportDTO.getGames();
-
+        String title = TITLE_VN + TimeUtils.toDateDisplay(session.getFromTime(), TimeUtils.newVNLocal());
         // If you have a template, use: Workbook workbook = WorkbookFactory.create(new File("template.xlsx"));
         Workbook workbook = new XSSFWorkbook();
         Sheet sheet = workbook.createSheet("Report");
-// 1. Session Summary Header (Rows 1-4)
-        writeSessionHeader(sheet, session, players);
+        writeTitle(title, workbook, sheet);
+        writeSessionHeader(sheet, workbook, session, players);
 
-        // 2. Data Table Header (Row 8)
-        Row tableHeader = sheet.createRow(7);
-        String[] tblHeaders = {"No", "playerName", "payAmount", "leaveTime", "courtFee"};
+        Row tableHeader = sheet.createRow(START_HEADER_ROW_SINGLE_RPT_INDEX);
+        String[] tblHeaders = {PLAYER_NO_VN, PLAYER_NAME_VN, PAY_AMOUNT_VN, LEAVE_TIME_VN, COURT_FEE_VN};
         for (int i = 0; i < tblHeaders.length; i++) tableHeader.createCell(i).setCellValue(tblHeaders[i]);
 
         // 3. Map for Partner Names (AvaId -> Name)
-        Map<Long, String> partnerMap = players.stream().collect(Collectors.toMap(AvailablePlayer::getAvaId, p -> p.getPlayer().getPlayerName(), (a, b) -> a));
+        Map<Long, String> partnerMap = players.stream().collect(
+                Collectors.toMap(AvailablePlayer::getAvaId,
+                        p -> p.getPlayer().getPlayerName(), (a, b) -> a));
 
-        int currentRow = 8;
+        int currentRow = START_DATA_ROW_SINGLE_RPT_INDEX;
         int no = 1;
 
         for (AvailablePlayer avaPlayer : players) {
@@ -291,14 +308,16 @@ public class ExcelExportService implements ExportService {
             rowHeader.createCell(1).setCellValue(avaPlayer.getPlayer().getPlayerName());
             rowHeader.createCell(2).setCellValue(getPayAmount(avaPlayer));
             rowHeader.createCell(3).setCellValue(TimeUtils.convertInstantToTimeStr(avaPlayer.getLeaveTime()));
-            rowHeader.createCell(4).setCellValue(extractCourtFee(avaPlayer.getServices()));
+            rowHeader.createCell(4);
 
             // --- ROW N+1: Empty A-E + Game Values ---
-            Row rowValues = sheet.createRow(currentRow++);
-
+            Row rowNumber = sheet.createRow(currentRow++);
+            rowNumber.createCell(0).setCellValue(no - 1);
+            rowNumber.createCell(1).setCellValue(avaPlayer.getPlayer().getPlayerName());
+            rowNumber.createCell(4).setCellValue(extractCourtFee(avaPlayer.getServices()));
             int colIndex = 5;
             for (Game game : games) {
-                setServiceValueIntoNextTwoColumn(game, avaPlayer, partnerMap, colIndex, rowHeader, rowValues);
+                setServiceValueIntoNextTwoColumn(game, avaPlayer, partnerMap, colIndex, rowHeader, rowNumber);
                 colIndex += 2; // Move to next game pair (F, H, J...)
             }
         }
@@ -306,7 +325,8 @@ public class ExcelExportService implements ExportService {
         for (int i = 0; i < 5; i++) {
             sheet.autoSizeColumn(i);
         }
-
+        sheet.setAutoFilter(new CellRangeAddress(START_HEADER_ROW_SINGLE_RPT_INDEX, START_HEADER_ROW_SINGLE_RPT_INDEX,
+                0, tblHeaders.length - 1));
         // Write to file
         try (ByteArrayOutputStream out = new ByteArrayOutputStream();) {
             workbook.write(out);
@@ -365,24 +385,25 @@ public class ExcelExportService implements ExportService {
         return anotherPlayer;
     }
 
-    private void writeSessionHeader(Sheet sheet, Session session, List<AvailablePlayer> players) {
+    private void writeSessionHeader(Sheet sheet, Workbook workbook, Session session, List<AvailablePlayer> players) {
         double totalPay = players.stream().mapToDouble(p -> p.getPayAmount() != null ? p.getPayAmount() : 0).sum();
 
-        Row r1 = sheet.createRow(2); // Row 3
-        r1.createCell(0).setCellValue("session id");
-        r1.createCell(1).setCellValue("date");
-        r1.createCell(2).setCellValue("during");
-        r1.createCell(3).setCellValue("total");
+        Row r1 = sheet.createRow(START_HEADER_ROW_INDEX); // Row 3
+        r1.createCell(DATE_COL).setCellValue(DATE_VN);
+        r1.createCell(DATE_FORMAT_COL).setCellValue(FORMATED_DATE_VN);
+        r1.createCell(DURING_COL).setCellValue(DURING_VN);
+        r1.createCell(TOTAL_COL).setCellValue(TOTAL_VN);
+        r1.setRowStyle(createTblStyle(workbook));
 
-        Row r2 = sheet.createRow(3); // Row 4
-        r2.createCell(0).setCellValue(session.getSessionId());
-        r2.createCell(1).setCellValue(TimeUtils.toDateDisplay(session.getFromTime(), TimeUtils.newVNLocal())); // Format as needed
-        r2.createCell(2).setCellValue(TimeUtils.convertInstantsToString(session.getFromTime(), session.getToTime()));
-        r2.createCell(3).setCellValue(totalPay);
+        Row r2 = sheet.createRow(START_DATA_ROW_INDEX); // Row 4
+        r2.createCell(DATE_COL).setCellValue(TimeUtils.toDateDisplay(session.getFromTime(), TimeUtils.newVNLocal()));
+        r2.createCell(DATE_FORMAT_COL).setCellValue(TimeUtils.toVNDateFormat(session.getFromTime())); // Format as needed
+        r2.createCell(DURING_COL).setCellValue(TimeUtils.convertInstantsToString(session.getFromTime(), session.getToTime()));
+        r2.createCell(TOTAL_COL).setCellValue(totalPay);
     }
 
-    private void writeSessionHeader(SXSSFSheet sheet) {
-        Row r1 = sheet.createRow(HEADER_ROW_INDEX); // Row 3
+    private void writeSessionHeader(SXSSFSheet sheet, Workbook workbook) {
+        Row r1 = sheet.createRow(START_HEADER_ROW_INDEX); // Row 3
         r1.createCell(DATE_COL).setCellValue(DATE_VN);
         r1.createCell(DATE_FORMAT_COL).setCellValue(FORMATED_DATE_VN);
         r1.createCell(DURING_COL).setCellValue(DURING_VN);
@@ -393,6 +414,15 @@ public class ExcelExportService implements ExportService {
         r1.createCell(LEAVE_TIME_COL).setCellValue(LEAVE_TIME_VN);
         r1.createCell(COURT_FEE_COL).setCellValue(COURT_FEE_VN);
         sheet.trackColumnsForAutoSizing(columns);
+        r1.setRowStyle(createTblStyle(workbook));
+    }
+
+    private CellStyle createTblStyle(Workbook workbook) {
+        CellStyle tblHeaderStyle = workbook.createCellStyle();
+        Font tblFont = workbook.createFont();
+        tblFont.setFontHeightInPoints((short) (tblFont.getFontHeightInPoints() + 3));
+        tblFont.setBold(true);
+        return tblHeaderStyle;
     }
 
     private String extractCourtFee(String services) {

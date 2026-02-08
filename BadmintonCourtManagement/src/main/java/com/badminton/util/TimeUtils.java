@@ -13,6 +13,8 @@ import java.util.Locale;
 
 @Slf4j
 public class TimeUtils {
+    private static final ZoneOffset VN_ZONE = ZoneOffset.of("+7");
+
     /**
      * Converts a relative time string to a UTC Instant.
      * "today" -> Start of current day (00:00:00 UTC)
@@ -99,9 +101,10 @@ public class TimeUtils {
         if (instant == null) {
             return CommonConstant.EMPTY;
         }
-
+        // the instant from DB has already UTC+7
         LocalDate date = instant.atZone(ZoneOffset.UTC).toLocalDate();
-        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        // get today with UTC+7
+        LocalDate today = LocalDate.now(VN_ZONE);
 
         if (date.equals(today)) {
             return isVietnamese(locale) ? "Hôm nay" : "Today";
