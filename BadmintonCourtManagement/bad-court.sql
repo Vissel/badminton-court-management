@@ -55,6 +55,7 @@ select * from game;
 select * from game_shuttle_map;
 select * from team;
 select * from service;
+select * from available_player;
 
 insert into court(court_name)
 value ('Sân 8');
