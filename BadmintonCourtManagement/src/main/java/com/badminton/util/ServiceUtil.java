@@ -7,7 +7,7 @@ import com.badminton.entity.AvailablePlayer;
 import com.badminton.entity.GameShuttleMap;
 import com.badminton.entity.Team;
 import com.badminton.requestmodel.CourtAreaDTO;
-import com.badminton.response.result.ShuttleBallResult;
+import com.badminton.response.result.ShuttleBallResponse;
 
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -107,9 +107,10 @@ public class ServiceUtil {
         return courtArea.getPlayerInArea().getPlayerName();
     }
 
-    public static Map<ShuttleBallResult, Integer> retrievedShuttleBallMap(List<GameShuttleMap> gameShuttleMapping) {
+    public static Map<ShuttleBallResponse, Integer> retrievedShuttleBallMap(List<GameShuttleMap> gameShuttleMapping) {
         return gameShuttleMapping.stream().collect(Collectors.toMap(
-                map -> new ShuttleBallResult(map.getShuttleBall().getShuttleName(), map.getShuttleBall().getCost()),
+                map -> new ShuttleBallResponse(map.getShuttleBall().getShuttleName(), map.getShuttleBall().getCost(),
+                        map.getShuttleBall().isSelected()),
                 map -> Integer.valueOf(map.getShuttleNumber()),
                 Integer::sum // merge function — sum counts if duplicates exist
         ));

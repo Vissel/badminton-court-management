@@ -76,14 +76,30 @@ public class SessionServiceImpl {
     }
 
     @Transactional
-    public SessionResult checkAndCreateNewSessionInDay() {
-        Boolean available = checkAvailableSession();
-        if (!available) {
-            Session createdSession = new Session();
-            sessionRepo.save(createdSession);
-            return createdSessionResult(createdSession);
-        }
-        return availableSessionResult();
+    public Result<SessionResult> checkAndCreateNewSessionInDay() {
+        Boolean request = Boolean.FALSE;
+        return serviceTemple.execute(new ProcessCallback<Boolean, SessionResult>() {
+            @Override
+            public Boolean getRequest() {
+                return request;
+            }
+
+            @Override
+            public void preProcess(Boolean request) {
+            }
+
+            @Override
+            public SessionResult process() throws BusinessException {
+
+                if (!checkAvailableSession()) {
+                    Session createdSession = new Session();
+                    sessionRepo.save(createdSession);
+                    return createdSessionResult(createdSession);
+                }
+                return availableSessionResult();
+            }
+        });
+
     }
 
     private SessionResult availableSessionResult() {

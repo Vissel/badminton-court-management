@@ -11,9 +11,11 @@ import java.util.List;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class SetUpServiceDTO {
+public class SetUpServiceRequest {
     private int totalCourt;
     private float costInPerson;
-    private List<ShuttleBallDTO> shuttleBalls;
-    private List<ServiceDTO> services;
+    private List<ShuttleBallDTO> addedShuttleBalls;
+    private List<ShuttleBallDTO> deletedShuttleBalls;
+    private List<ServiceDTO> addedServices;
+    private List<ServiceDTO> deletedServices;
 }

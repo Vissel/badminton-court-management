@@ -17,6 +17,7 @@ import com.badminton.service.ProcessCallback;
 import com.badminton.service.ServiceTemple;
 import com.badminton.service.calculator.GameExpenseCalculator;
 import com.badminton.util.CommonUtil;
+import com.badminton.util.MoneyUtils;
 import com.badminton.util.ServiceUtil;
 import com.badminton.util.TimeUtils;
 import lombok.extern.slf4j.Slf4j;
@@ -66,7 +67,7 @@ public class GameServiceImpl implements GameService {
             Game startedGame = optGame.get();
             result.setGameId(startedGame.getGameId());
             result.setCourtResult(new CourtResult(startedGame.getCourt().getCourtId(), startedGame.getCourt().getCourtName()));
-            final Map<ShuttleBallResult, Integer> ballResMap = ServiceUtil.retrievedShuttleBallMap(startedGame.getShuttleMap());
+            final Map<ShuttleBallResponse, Integer> ballResMap = ServiceUtil.retrievedShuttleBallMap(startedGame.getShuttleMap());
             result.setBallResultMap(ballResMap);
             result.setTeamOneResult(buildTeamResult(startedGame.getTeamOne(), ballResMap, startedGame));
             result.setTeamTwoResult(buildTeamResult(startedGame.getTeamTwo(), ballResMap, startedGame));
@@ -151,7 +152,7 @@ public class GameServiceImpl implements GameService {
         return Boolean.TRUE;
     }
 
-    private TeamResult buildTeamResult(Team team, Map<ShuttleBallResult, Integer> shuttleMap, Game startedGame) {
+    private TeamResult buildTeamResult(Team team, Map<ShuttleBallResponse, Integer> shuttleMap, Game startedGame) {
         TeamResult teamResult = new TeamResult();
         Float totalBallCost = gameExpenseCalculator.getTotalBallCost(shuttleMap);
 
@@ -223,7 +224,7 @@ public class GameServiceImpl implements GameService {
     private GameType findGameType(Map<String, CourtAreaDTO> areaCourtMap) {
         for (Map.Entry<String, CourtAreaDTO> entry : areaCourtMap.entrySet()) {
             if (entry.getValue().isWin()) {
-                if (entry.getValue().getPlayerInArea().getExpense() != 0.0f) {
+                if (entry.getValue().getPlayerInArea().getExpense() != MoneyUtils.DEFAULT) {
                     return GameType.NEGO;
                 }
             }
@@ -309,7 +310,7 @@ public class GameServiceImpl implements GameService {
         boolean hasWinner = false;
         int numTeamOne = 0;
         int numTeamTwo = 0;
-        float actualExpenseTotal = 0.0f;
+        float actualExpenseTotal = MoneyUtils.DEFAULT;
         for (CourtAreaDTO area : courtAreas) {
             if (validCourtArea(area)) {
                 hasWinner = checkWinner(area.isWin(), hasWinner);
@@ -353,7 +354,7 @@ public class GameServiceImpl implements GameService {
     }
 
     private String buildService(String courtName, float expense) {
-        if (expense > 0.0f) {
+        if (expense > MoneyUtils.DEFAULT) {
             return ServiceUtil.buildService("Tiền ".concat(courtName), expense);
         }
         return null;

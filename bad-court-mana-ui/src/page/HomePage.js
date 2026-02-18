@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 
@@ -13,6 +13,7 @@ import GameDialog from "./dialog/GameDialog";
 import ShuttleBallDialog from "./dialog/ShuttleBallDialog";
 import CancelConfirm from "./dialog/CancelConfirm";
 import PayConfirm from "./dialog/PayConfirm";
+import { VN_CURRENCY, formatVND, rawNumber } from "./MoneyUtils";
 
 const COST_IN_PERSON = "costInPerson";
 const VN_COST_IN_PERSON = "Tiền sân";
@@ -44,9 +45,10 @@ function HomePage() {
   });
 
   // shuttle_ball selection
-  const [selectedBall, setSelectedBall] = useState("");
-  const selectedBallRef = useRef("");
+  const [selectedBall, setSelectedBall] = useState(0);
+  const ballOptionsRef = useRef([]);
   const [ballOptions, setBallOptions] = useState([]);
+  const [selectedBallVO, setSelectedBallVO] = useState("");
   const [services, setServices] = useState([]);
   const [costInPerson, setCostInPerson] = useState();
   const [availablePlayers, setAvailablePlayers] = useState([]);
@@ -68,22 +70,19 @@ function HomePage() {
     return responseSuccess(response) && response.data === true;
   };
 
-  // Get shuttleName
-  const getShuttleBallName = (ballString) => {
-    return ballString.slice(0, ballString.lastIndexOf("-")).trim();
+  const getCurrentBall = () => {
+    return ballOptionsRef.current[selectedBall];
   };
-  const getShuttleBallCost = (ballString) => {
-    return Number(ballString.slice(ballString.lastIndexOf("-") + 1).trim());
-  };
-
   //
-  const handleSelectedBall = (ballChangeOption) => {
+  const handleSelectedBall = (index) => {
+    const ballChangeOption = ballOptions[index];
     api.post(`/court-mana/changeSelectedBall`, {
-      shuttleName: getShuttleBallName(ballChangeOption),
-      shuttleCost: getShuttleBallCost(ballChangeOption),
+      shuttleName: ballChangeOption.shuttleName,
+      shuttleCost: ballChangeOption.cost,
       selected: true,
     });
-    setSelectedBall(ballChangeOption);
+    setSelectedBall(index);
+    setSelectedBallVO(ballChangeOption);
   };
   // Get shuttleCost
   const removePlayerFromCourtApi = (playerName, courtId, areaKey) => {
@@ -119,71 +118,60 @@ function HomePage() {
     setAvailablePlayerBack(playerName);
   };
 
-  const onDropPlayerOntoCourt = (
-    playerName,
-    courtId,
-    areaKey,
-    fromCourtId,
-    fromArea
-  ) => {
-    const selectedBallValue = selectedBallRef.current;
+  const onDropPlayerOntoCourt = useCallback(
+    (playerName, courtId, areaKey, fromCourtId, fromArea) => {
+      const currentBall = ballOptionsRef.current[selectedBall];
+      if (currentBall === null) return;
 
-    if (!selectedBallValue) {
-      alert("Please select a shuttle ball before dropping a player.");
-      return;
-    }
-    //
-    // 1. If the player was already in another court → remove first
-    if (fromCourtId != null && fromArea != null) {
+      // 1. If the player was already in another court → remove first
+      if (fromCourtId != null && fromArea != null) {
+        console.info(
+          `Moving player from court ${fromCourtId}-${fromArea} to another court.`
+        );
+        removePlayerFromCourtApi(playerName, fromCourtId, fromArea);
+      }
+
+      // 2. api to add player to court area
       console.info(
-        `Moving player from court ${fromCourtId}-${fromArea} to another court.`
+        `Calling post api to add player:${playerName} to court:${courtId}-${areaKey}, selectedBallValue ${ballOptions[selectedBall]}`
       );
-      removePlayerFromCourtApi(playerName, fromCourtId, fromArea);
-    }
-
-    // 2. api to add player to court area
-    console.info(
-      `Calling post api to add player:${playerName} to court:${courtId}-${areaKey}, selectedBallValue ${selectedBallValue}`
-    );
-    const ball = selectedBallValue
-      .slice(0, selectedBallValue.lastIndexOf("-"))
-      .trim();
-    const cost = selectedBallValue
-      .slice(selectedBallValue.lastIndexOf("-") + 1)
-      .trim();
-    const gameDTO = {
-      playerName: playerName,
-      court: {
-        courtId: courtId,
-        courtName: "",
-        courtAreas: [
+      const ball = currentBall.shuttleName;
+      const cost = currentBall.cost;
+      const gameDTO = {
+        playerName: playerName,
+        court: {
+          courtId: courtId,
+          courtName: "",
+          courtAreas: [
+            {
+              area: areaKey,
+              playerInArea: {},
+            },
+          ],
+        },
+        shuttleBalls: [
           {
-            area: areaKey,
-            playerInArea: {},
+            shuttleName: ball,
+            shuttleCost: cost,
           },
         ],
-      },
-      shuttleBalls: [
-        {
-          shuttleName: ball,
-          shuttleCost: parseFloat(cost),
-        },
-      ],
-    };
+      };
 
-    api.post(`/court-mana/addPlayerToCourt`, gameDTO);
-    setCourts((prev) => {
-      const updated = { ...prev };
-      for (const id in updated) {
-        for (const key in updated[id]) {
-          if (updated[id][key] === playerName) updated[id][key] = null;
+      api.post(`/court-mana/addPlayerToCourt`, gameDTO);
+      setCourts((prev) => {
+        const updated = { ...prev };
+        for (const id in updated) {
+          for (const key in updated[id]) {
+            if (updated[id][key] === playerName) updated[id][key] = null;
+          }
         }
-      }
-      updated[courtId][areaKey] = playerName;
-      return updated;
-    });
-    setAvailablePlayers((prev) => prev.filter((p) => p !== playerName));
-  };
+        updated[courtId][areaKey] = playerName;
+        return updated;
+      });
+      setAvailablePlayers((prev) => prev.filter((p) => p !== playerName));
+    },
+    [ballOptions, selectedBall]
+  );
 
   const setAvailablePlayerBack = (playerName) => {
     if (!availablePlayers.includes(playerName)) {
@@ -204,9 +192,9 @@ function HomePage() {
     removePlayerFromCourtApi(playerName, courtId, areaKey);
   };
 
-  const onAddPlayer = async (name) => {
+  const onAddPlayer = (name) => {
     try {
-      await api.post("/court-mana/addPlayer", name);
+      api.post("/court-mana/addPlayer", name);
       console.log("Adding new player successfully.");
       setAvailablePlayers((prev) => [...prev, name]);
       // set costInPerson
@@ -254,7 +242,7 @@ function HomePage() {
   const [lockedCourts, setLockedCourts] = useState([]);
   const startGame = async (courtId) => {
     console.log(`Selected shuttle ball: ${selectedBall}`);
-
+    const ball = getCurrentBall();
     await api
       .post(`/court-mana/changeGameState`, {
         court: {
@@ -262,8 +250,8 @@ function HomePage() {
         },
         shuttleBalls: [
           {
-            shuttleName: getShuttleBallName(selectedBall),
-            shuttleCost: getShuttleBallCost(selectedBall),
+            shuttleName: ball.shuttleName,
+            shuttleCost: ball.cost,
             quantity: 1,
           },
         ],
@@ -503,42 +491,40 @@ function HomePage() {
     });
   };
 
-  // helper setter — ALWAYS use this to set selectedBall
-  const setSelectedBallAndRef = (value) => {
-    selectedBallRef.current = value; // update ref immediately
-    setSelectedBall(value); // update state as well
-  };
-
-  const [endSessionPage, setEndSessionPage] = useState(false);
   // HomePage useEffect
   useEffect(() => {
     const fetchCourtInfor = async () => {
       try {
         // check available session
-        const avaSession = await api.post("/session/checkCreateNewSession");
-        console.log(`Init message: ${avaSession.data.message}`);
+        const response = await api.post("/session/checkCreateNewSession");
+        const avaSession = response.data;
+        console.log(`Init message: ${avaSession.message}`);
 
         // fetch shuttle_balls
         const ballResponse = await api.get("/court-mana/getShuttleBalls");
-        if (ballResponse.status === 200 && ballResponse.data !== "") {
+        if (ballResponse.status === 200 && ballResponse.data.length !== 0) {
           const listBall = ballResponse.data;
           setBallOptions(
-            listBall.map((b) => `${b.shuttleName} - ${b.shuttleCost}`)
+            listBall.map((b) => {
+              return {
+                shuttleName: b.shuttleName,
+                cost: b.cost,
+                costFormat: b.costFormat,
+                currency: b.currency,
+              };
+            })
           );
+          ballOptionsRef.current = listBall;
           // choose a sensible default (first item if exists)
-          const selectedShuttleBall = listBall.find((b) => b.selected);
-          let selectedShuttleBallOption = `${listBall[0].shuttleName} - ${listBall[0].shuttleCost}`;
-          if (selectedShuttleBall) {
-            selectedShuttleBallOption = `${selectedShuttleBall.shuttleName} - ${selectedShuttleBall.shuttleCost}`;
+          const selectedShuttleBall = listBall.findIndex((b) => b.selected);
+          let selectedShuttleBallOption = 0;
+          if (selectedShuttleBall > -1) {
+            selectedShuttleBallOption = selectedShuttleBall;
           }
-          setSelectedBallAndRef(selectedShuttleBallOption);
+          setSelectedBall(selectedShuttleBallOption);
+          setSelectedBallVO(listBall[selectedShuttleBallOption]);
         } else {
           console.error(ballResponse.message);
-          setBallOptions([
-            "Vinastar - 28000",
-            "Cau 88 - 29000",
-            "Sunlight Hall - 31000",
-          ]);
         }
 
         // fetch services
@@ -547,7 +533,10 @@ function HomePage() {
           `Getting service response status:${servicesResponse.status}`
         );
         let costPersonService = "";
-        if (servicesResponse.status === 200 && servicesResponse.data !== "") {
+        if (
+          servicesResponse.status === 200 &&
+          servicesResponse.data.length !== 0
+        ) {
           const listService = servicesResponse.data;
           // set cost in person and remainning services
           costPersonService = listService.find(
@@ -631,20 +620,22 @@ function HomePage() {
   }, []);
 
   const handleUpdateServices = async (playerName, updatedServices) => {
-
     const payload = updatedServices.map((s) => {
       return {
-        serviceName: s.slice(0,s.lastIndexOf("-")).trim(),
-        cost: Number(s.slice(s.lastIndexOf("-")+1).trim())
+        serviceName: s.slice(0, s.lastIndexOf("-")).trim(),
+        cost: Number(s.slice(s.lastIndexOf("-") + 1).trim()),
       };
     });
-    const response = await api.post(`/court-mana/updateServiceToPlayer?playerName=${playerName}`, payload);
+    const response = await api.post(
+      `/court-mana/updateServiceToPlayer?playerName=${playerName}`,
+      payload
+    );
     if (responseDataTrue(response)) {
       setPlayerServiceMap((prev) => ({
         ...prev,
         [playerName]: updatedServices,
       }));
-      return ;
+      return;
     }
     alert(`Thay đổi dich vu không thành công.`);
     console.log(`Thay đổi dich vu không thành công.`);
@@ -652,9 +643,9 @@ function HomePage() {
 
   const onPayConfirm = (playerName, type, serviceList, expense) => {
     // show dialog type: pay, cancel.
-    let title = `Xác nhận XOÁ người chơi [${playerName}] : [${expense} vnd] ?`;
+    let title = `Xác nhận XOÁ người chơi [${playerName}] : [${expense} ${VN_CURRENCY}] ?`;
     if (TYPE.PAY === type) {
-      title = `Xác nhận THANH TOÁN cho người chơi [${playerName}]  : [${expense} vnd] ?`;
+      title = `Xác nhận THANH TOÁN cho người chơi [${playerName}]  : [${expense} ${VN_CURRENCY}] ?`;
     }
     setShowPayConfirmDialog(true);
     setPayConfirmData({
@@ -711,9 +702,16 @@ function HomePage() {
             }}
           >
             <h5> Tiền sân và Cầu: </h5>
-            <b>Tiền sân: {costInPerson} vnd</b>
+            <b>
+              Tiền sân: {formatVND(costInPerson)} {VN_CURRENCY}
+            </b>
             <br></br>
-            <b>Cầu: {selectedBall} vnd</b>
+            {selectedBall !== "" && (
+              <b>
+                Cầu: {selectedBallVO.shuttleName} - {selectedBallVO.costFormat}{" "}
+                {selectedBallVO.currency}
+              </b>
+            )}
           </div>
           <div className="service-area">
             <h5 style={{ margin: "15px 0 0 5px" }}> Thay đổi cầu: </h5>
@@ -724,9 +722,9 @@ function HomePage() {
               onChange={(e) => handleSelectedBall(e.target.value)}
               className="court-select selection-box"
             >
-              {ballOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
+              {ballOptions.map((ball, index) => (
+                <option key={ball.shuttleName} value={index}>
+                  {ball.shuttleName} - {ball.costFormat} {ball.currency}
                 </option>
               ))}
             </select>
@@ -738,6 +736,8 @@ function HomePage() {
                 key={s.serviceName}
                 serviceName={s.serviceName}
                 cost={s.cost}
+                costFormat={s.costFormat}
+                currency={s.currency}
               />
             ))}
           </div>

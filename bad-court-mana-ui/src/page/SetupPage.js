@@ -13,6 +13,8 @@ import {
 } from "react-bootstrap";
 import api from "../api/index";
 
+import {VN_CURRENCY, formatVND, rawNumber } from "./MoneyUtils";
+
 function SetupPage() {
   const [errorMess, setErrorMess] = useState(null);
   const [totalCourt, setTotalCourt] = useState(7);
@@ -23,6 +25,7 @@ function SetupPage() {
   const [tableServices, setTableServices] = useState([]);
   const tableRef = useRef(null);
   const tableBallRef = useRef(null);
+
 
   const handleAdd = () => {
     setServices([...services, { id: Date.now(), serviceName: "", cost: "" }]);
@@ -40,7 +43,7 @@ function SetupPage() {
     }
     setShuttleBall([
       ...shuttleBall,
-      { id: Date.now(), shuttleName: "", shuttleCost: "" },
+      { id: Date.now(), shuttleName: "", cost: "", costFormat: "" },
     ]);
     setOneBall(false);
   };
@@ -48,21 +51,47 @@ function SetupPage() {
     setShuttleBall(shuttleBall.filter((ball) => ball.id !== id));
     setOneBall(true);
   };
+
   const handleBallChange = (id, field, value) => {
     setShuttleBall(
-      shuttleBall.map((ball) =>
-        ball.id === id ? { ...ball, [field]: value } : ball
-      )
+      shuttleBall.map((ball) => {
+        if (ball.id === id) {
+          if (field === "cost") {
+            const raw = value.toString().replace(/\D/g, "");
+            return {
+              ...ball,
+              cost: raw,
+              costFormat: formatVND(raw),
+            };
+          }
+          return { ...ball, [field]: value };
+        }
+        return ball;
+      })
     );
   };
   const handleServiceChange = (id, field, value) => {
     setServices(
-      services.map((service) =>
-        service.id === id ? { ...service, [field]: value } : service
-      )
+      services.map((service) => {
+        if (service.id === id) {
+          if (field === "cost") {
+            const raw = value.toString().replace(/\D/g, "");
+            return {
+              ...service,
+              cost: raw,
+              costFormat: formatVND(raw),
+            };
+          }
+          return { ...service, [field]: value };
+        }
+        return service;
+      })
     );
   };
-
+  const handleServiceCostChange = (e, id) => {
+    const raw = e.target.value.replace(/\D/g, "");
+    handleServiceChange(id, "cost", raw);
+  };
   // service row clicking
   const [selectedRow, setSelectedRow] = useState(null);
   const [deletingRow, setDeletingRow] = useState(false);
@@ -70,18 +99,22 @@ function SetupPage() {
     setSelectedRow(index === selectedRow ? null : index);
   };
   // service delete handling
-  const handleDelete = async (serviceToDelete, index) => {
+  const handleDeleteService = (serviceToDelete, idx) => {
     try {
       setDeletingRow(true);
-      const res = await api.put("/api/deleteService", {
-        serviceName: serviceToDelete.serviceName,
-        cost: serviceToDelete.cost,
-      });
+      // const res = await api.put("/api/deleteService", {
+      //   serviceName: serviceToDelete.serviceName,
+      //   cost: serviceToDelete.cost,
+      // });
 
-      if (res.status === 200) {
-        setTableServices((prev) => prev.filter((_, i) => i !== index));
-        setSelectedRow(null);
-      }
+      // if (res.status === 200) {
+      setTableServices((prev) =>
+        prev.map((item, i) =>
+          i === idx ? { ...item, isDeleted: !item.isDeleted } : item
+        )
+      );
+      setSelectedRow(null);
+      // }
     } catch (err) {
       console.error("Error deleting service:", err);
       setErrorMess(`Có lỗi khi xoá dich vụ:${serviceToDelete.serviceName}`);
@@ -96,18 +129,22 @@ function SetupPage() {
     setSelectedBall(index === selectedBall ? null : index);
   };
   // shuttle ball delete handling
-  const handleDeleteBall = async (ball, idx) => {
+  const handleDeleteBall = (ball, idx) => {
     try {
       setDeletingBall(true);
-      const res = await api.put("/api/deleteShuttleBall", {
-        shuttleName: ball.shuttleName,
-        shuttleCost: ball.shuttleCost,
-      });
+      // const res = await api.put("/api/deleteShuttleBall", {
+      //   shuttleName: ball.shuttleName,
+      //   shuttleCost: ball.shuttleCost,
+      // });
 
-      if (res.status === 200) {
-        setTableShuttleBalls((prev) => prev.filter((_, i) => i !== idx));
-        setSelectedBall(null);
-      }
+      // if (res.status === 200) {+++++++++++++++
+      // setTableShuttleBalls((prev) => prev.filter((_, i) => i !== idx));
+      setTableShuttleBalls((prev) =>
+        prev.map((item, i) =>
+          i === idx ? { ...item, isDeleted: !item.isDeleted } : item
+        )
+      );
+      setSelectedBall(null);
     } catch (err) {
       console.error("Error deleting shuttle ball:", err);
       setErrorMess(`Có lỗi khi xoá loại cầu: ${ball.shuttleName}`);
@@ -172,25 +209,41 @@ function SetupPage() {
     const payload = {
       totalCourt: totalCourt,
       costInPerson: costInPerson,
-      shuttleBalls: shuttleBall.map(({ shuttleName, shuttleCost }) => ({
-        shuttleName: shuttleName,
-        shuttleCost: parseFloat(shuttleCost),
-      })),
-      services: services.map(({ serviceName, cost }) => ({
-        serviceName: serviceName,
-        cost: parseFloat(cost),
-      })),
+      addedShuttleBalls: shuttleBall.map((b) => {
+        return {
+          shuttleName: b.shuttleName,
+          shuttleCost: b.cost,
+        };
+      }),
+      deletedShuttleBalls: tableShuttleBalls
+        .filter((b) => b.isDeleted)
+        .map(({ shuttleName, cost }) => ({
+          shuttleName: shuttleName,
+          shuttleCost: cost,
+        })),
+      addedServices: services,
+      deletedServices: tableServices
+        .filter((s) => s.isDeleted)
+        .map(({ serviceName, cost }) => ({
+          serviceName: serviceName,
+          cost: parseFloat(cost),
+        })),
     };
 
     try {
-      const response = await api.post(`/api/addSetupService`, payload, {});
+      const response = await api.post(`/api/updateSetupService`, payload, {});
       if (response.status === 200) {
         alert("Lưu thiết lập thành công!");
-        setTableServices((prevServices) => [...prevServices, ...services]);
-        setTableShuttleBalls((prevShuttleBalls) => [
-          ...prevShuttleBalls,
+        setTableShuttleBalls([
+          ...tableShuttleBalls.filter((ball) => !ball.isDeleted),
           ...shuttleBall,
         ]);
+
+        setTableServices([
+          ...tableServices.filter((ser) => !ser.isDeleted),
+          ...services,
+        ]);
+
         // remove input fields of shuttle_ball and service
         setShuttleBall([]);
         setOneBall(true);
@@ -203,6 +256,13 @@ function SetupPage() {
     }
   };
 
+  const handleCostInPerson=(e)=>{
+    setCostInPerson(rawNumber(e.target.value) );
+  }
+  const handleCostInput = (e, id) => {
+    const raw = e.target.value.replace(/\D/g, ""); // remove non digits
+    handleBallChange(id, "cost", raw);
+  };
   const fetchEntries = async () => {
     try {
       const res = await api.get(`/api/getSetupServices`);
@@ -264,9 +324,10 @@ function SetupPage() {
             <InputGroup className="mb-3">
               <Form.Control
                 type="number"
-                defaultValue="7"
-                value={totalCourt}
+                defaultValue="8"
+                // value={totalCourt}
                 onChange={(e) => setTotalCourt(e.target.value)}
+                disabled={true}
               />
               <InputGroup.Text>sân</InputGroup.Text>
             </InputGroup>
@@ -279,12 +340,12 @@ function SetupPage() {
           <Col sm="4">
             <InputGroup className="mb-3">
               <Form.Control
-                type="number"
+                type="text"
                 defaultValue="12000"
-                value={costInPerson}
-                onChange={(e) => setCostInPerson(e.target.value)}
+                value={formatVND(costInPerson)}
+                onChange={(e) => handleCostInPerson(e)}
               />
-              <InputGroup.Text>vnd/người</InputGroup.Text>
+              <InputGroup.Text>{VN_CURRENCY}/người</InputGroup.Text>
             </InputGroup>
           </Col>
         </Form.Group>
@@ -323,14 +384,11 @@ function SetupPage() {
             <Col sm={3}>
               <InputGroup className="mb-2">
                 <Form.Control
-                  type="number"
-                  defaultValue="26000"
-                  value={ball.shuttleCost}
-                  onChange={(e) =>
-                    handleBallChange(ball.id, "shuttleCost", e.target.value)
-                  }
+                  type="text"
+                  value={formatVND(ball.cost)}
+                  onChange={(e) => handleCostInput(e, ball.id)}
                 />
-                <InputGroup.Text>vnd/trái</InputGroup.Text>
+                <InputGroup.Text>{VN_CURRENCY}/trái</InputGroup.Text>
               </InputGroup>
             </Col>
             <Col md={1}>
@@ -353,41 +411,71 @@ function SetupPage() {
                   <thead>
                     <tr>
                       <th>Loại cầu</th>
-                      <th>Giá</th>
-                      <th style={{ width: "50px" }}></th>
+                      <th>Giá ({VN_CURRENCY}/trái)</th>
+                      <th style={{ width: "50px" }}>Xoá</th>
                     </tr>
                   </thead>
                   <tbody>
                     {tableShuttleBalls.map((ball, idx) => (
                       <tr
                         key={idx}
-                        onClick={() => handleBallClick(idx)}
+                        onClick={() => !ball.isDeleted && handleBallClick(idx)}
                         className={selectedBall === idx ? "table-active" : ""}
-                        style={{ cursor: "pointer" }}
+                        style={{
+                          cursor: ball.isDeleted ? "not-allowed" : "pointer",
+                          textDecoration: ball.isDeleted
+                            ? "line-through"
+                            : "none",
+                          opacity: ball.isDeleted ? 0.5 : 1,
+                          transition: "all 0.2s ease", // Smooth transition for the strike-through
+                        }}
                       >
                         <td>{ball.shuttleName}</td>
-                        <td>{ball.shuttleCost} vnd/trái</td>
+                        <td>{ball.costFormat}</td>
                         <td>
-                          {selectedBall === idx && (
+                          {/* display the delete/undo button */}
+                          {(selectedBall === idx || ball.isDeleted) && (
                             <button
-                              className="btn btn-outline-danger btn-sm"
+                              title={`${ball.isDeleted ? "Quay lại" : "Xoá"}`}
+                              className={`btn btn-sm ${
+                                ball.isDeleted
+                                  ? "btn-outline-primary"
+                                  : "btn-outline-danger"
+                              }`}
                               onClick={(e) => {
-                                e.stopPropagation(); // Prevent row re-select
+                                e.stopPropagation();
                                 handleDeleteBall(ball, idx);
                               }}
                               disabled={deletingBall}
                             >
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                width="16"
-                                height="16"
-                                fill="currentColor"
-                                className="bi bi-trash"
-                                viewBox="0 0 16 16"
-                              >
-                                <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z" />
-                                <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z" />
-                              </svg>
+                              {ball.isDeleted ? (
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="16"
+                                  height="16"
+                                  fill="currentColor"
+                                  class="bi bi-arrow-counterclockwise"
+                                  viewBox="0 0 16 16"
+                                >
+                                  <path
+                                    fill-rule="evenodd"
+                                    d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.417A6 6 0 1 0 8 2z"
+                                  />
+                                  <path d="M8 4.466V.534a.25.25 0 0 0-.41-.192L5.23 2.308a.25.25 0 0 0 0 .384l2.36 1.966A.25.25 0 0 0 8 4.466" />
+                                </svg>
+                              ) : (
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="16"
+                                  height="16"
+                                  fill="currentColor"
+                                  className="bi bi-trash"
+                                  viewBox="0 0 16 16"
+                                >
+                                  <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z" />
+                                  <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z" />
+                                </svg>
+                              )}
                             </button>
                           )}
                         </td>
@@ -408,7 +496,7 @@ function SetupPage() {
             </Button>
           </Col>
         </Row>
-        {services.map((service, index) => (
+        {services.map((service) => (
           <Row key={service.id} className="align-items-center mb-2 row-space">
             <Form.Label column sm="1">
               Dịch vụ:
@@ -426,13 +514,11 @@ function SetupPage() {
             <Col sm={3}>
               <InputGroup className="mb-2">
                 <Form.Control
-                  type="number"
-                  value={service.cost}
-                  onChange={(e) =>
-                    handleServiceChange(service.id, "cost", e.target.value)
-                  }
+                  type="text"
+                  value={formatVND(service.cost)}
+                  onChange={(e) => handleServiceCostChange(e, service.id)}
                 />
-                <InputGroup.Text>vnd</InputGroup.Text>
+                <InputGroup.Text>{VN_CURRENCY}</InputGroup.Text>
               </InputGroup>
             </Col>
 
@@ -454,41 +540,70 @@ function SetupPage() {
                   <thead>
                     <tr>
                       <th>Dịch vụ</th>
-                      <th>Giá</th>
-                      <th style={{ width: "50px" }}></th>
+                      <th>Giá ({VN_CURRENCY})</th>
+                      <th style={{ width: "50px" }}>Xoá </th>
                     </tr>
                   </thead>
                   <tbody>
                     {tableServices.map((ser, index) => (
                       <tr
                         key={index}
-                        onClick={() => handleRowClick(index)}
+                        onClick={() => !ser.isDeleted && handleRowClick(index)}
                         className={selectedRow === index ? "table-active" : ""}
-                        style={{ cursor: "pointer" }}
+                        style={{
+                          cursor: ser.isDeleted ? "not-allowed" : "pointer",
+                          textDecoration: ser.isDeleted
+                            ? "line-through"
+                            : "none",
+                          opacity: ser.isDeleted ? 0.5 : 1,
+                          transition: "all 0.2s ease", // Smooth transition for the strike-through
+                        }}
                       >
                         <td>{ser.serviceName}</td>
-                        <td>{ser.cost}</td>
+                        <td>{ser.costFormat}</td>
                         <td>
-                          {selectedRow === index && (
+                          {(selectedRow === index || ser.isDeleted) && (
                             <button
-                              className="btn btn-outline-danger btn-sm"
+                              title={`${ser.isDeleted ? "Quay lại" : "Xoá"}`}
+                              className={`btn btn-sm ${
+                                ser.isDeleted
+                                  ? "btn-outline-primary"
+                                  : "btn-outline-danger"
+                              }`}
                               onClick={(e) => {
                                 e.stopPropagation(); // Prevent row re-select
-                                handleDelete(ser, index);
+                                handleDeleteService(ser, index);
                               }}
                               disabled={deletingRow}
                             >
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                width="16"
-                                height="16"
-                                fill="currentColor"
-                                class="bi bi-trash"
-                                viewBox="0 0 16 16"
-                              >
-                                <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z" />
-                                <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z" />
-                              </svg>
+                              {ser.isDeleted ? (
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="16"
+                                  height="16"
+                                  fill="currentColor"
+                                  class="bi bi-arrow-counterclockwise"
+                                  viewBox="0 0 16 16"
+                                >
+                                  <path
+                                    fill-rule="evenodd"
+                                    d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.417A6 6 0 1 0 8 2z"
+                                  />
+                                  <path d="M8 4.466V.534a.25.25 0 0 0-.41-.192L5.23 2.308a.25.25 0 0 0 0 .384l2.36 1.966A.25.25 0 0 0 8 4.466" />
+                                </svg>
+                              ) : (
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="16"
+                                  height="16"
+                                  fill="currentColor"
+                                  class="bi bi-trash"
+                                  viewBox="0 0 16 16"
+                                >
+                                  <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z" />
+                                  <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z" />
+                                </svg>
+                              )}
                             </button>
                           )}
                         </td>

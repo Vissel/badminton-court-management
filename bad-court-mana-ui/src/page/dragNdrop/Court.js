@@ -70,7 +70,7 @@ export default function Court({
         <div
           style={{
             backgroundColor: "white",
-            backgroundImage: 'url("/bad-court2.jpg")',
+            backgroundImage: 'url("bad-court2.jpg")',
             backgroundSize: "cover",
             backgroundRepeat: "no-repeat",
             backgroundPosition: "center",

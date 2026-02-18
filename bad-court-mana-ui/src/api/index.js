@@ -1,18 +1,18 @@
 import axios from "axios";
-import Cookies from "js-cookie";
+import config from './config'
 
 // import { useNavigate } from 'react-router';
 
 export const currentHost = `${window.location.protocol}//${window.location.hostname}:${window.location.port}/#/`;
 
-const localHost = "http://localhost:9080";
+const localHost = "http://localhost:8080";
 const context = "bad-court-management-dev";
 export const backendHost = `${localHost}/${context}`;
 
 const api = axios.create({
-  baseURL: `${localHost}/${context}`, // Update with your backend base URL
+  baseURL: config.baseURL, // Update with your backend base URL
   withCredentials: true,
-  // timeout: 3000,
+  timeout: config.timeout,
 });
 api.interceptors.request.use((config) => {
   const csrfToken = sessionStorage.getItem("csrfToken");

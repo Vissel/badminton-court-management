@@ -4,7 +4,7 @@ import com.badminton.constant.GameConstant;
 import com.badminton.entity.Game;
 import com.badminton.response.result.CourtResult;
 import com.badminton.response.result.GameResult;
-import com.badminton.response.result.ShuttleBallResult;
+import com.badminton.response.result.ShuttleBallResponse;
 import com.badminton.response.result.TeamResult;
 import com.badminton.util.ServiceUtil;
 import lombok.extern.slf4j.Slf4j;
@@ -21,7 +21,7 @@ public class GameExpenseCalculator {
      * @param ballResMap
      * @return
      */
-    public Float getTotalBallCost(Map<ShuttleBallResult, Integer> ballResMap) {
+    public Float getTotalBallCost(Map<ShuttleBallResponse, Integer> ballResMap) {
         return ballResMap.entrySet().stream().map(
                 e -> (float) e.getKey().getCost() * e.getValue()
         ).reduce(0f, Float::sum);
@@ -51,7 +51,7 @@ public class GameExpenseCalculator {
     }
 
     private void calculateTeamExpensesOfGameByBallUsed(GameResult gameResult, Game game) {
-        Map<ShuttleBallResult, Integer> ballResMap = ServiceUtil.retrievedShuttleBallMap(game.getShuttleMap());
+        Map<ShuttleBallResponse, Integer> ballResMap = ServiceUtil.retrievedShuttleBallMap(game.getShuttleMap());
         gameResult.setBallResultMap(ballResMap);
         // normal divided cost to both
         float totalBallCost = getTotalBallCost(ballResMap);

@@ -1,7 +1,9 @@
 package com.badminton.controller;
 
 import com.badminton.requestmodel.*;
+import com.badminton.response.ServiceResponse;
 import com.badminton.response.result.Result;
+import com.badminton.response.result.ShuttleBallResponse;
 import com.badminton.service.CourtServicesServiceImpl;
 import com.badminton.service.ShuttleBallServiceImpl;
 import com.badminton.util.CommonUtil;
@@ -27,8 +29,8 @@ public class CourtManagementController {
     private CourtServicesServiceImpl courtService;
 
     @GetMapping(value = "/getShuttleBalls")
-    public ResponseEntity<List<ShuttleBallDTO>> getShuttleBalls() {
-        List<ShuttleBallDTO> res = ballService.getListActiveShuttleBallDTOs();
+    public ResponseEntity<List<ShuttleBallResponse>> getShuttleBalls() {
+        List<ShuttleBallResponse> res = ballService.getListActiveShuttleBallDTOs();
         log.info("Size active shuttle balls is:{}", res.size());
         // Error cases are not handled
         return ResponseEntity.ok().body(res);
@@ -46,8 +48,8 @@ public class CourtManagementController {
     }
 
     @GetMapping(value = "/getServices")
-    public ResponseEntity<List<ServiceDTO>> getServices() {
-        List<ServiceDTO> res = courtService.getActiveServices();
+    public ResponseEntity<List<ServiceResponse>> getServices() {
+        List<ServiceResponse> res = courtService.getActiveServices();
         log.info("Size active services is:{}", res.size());
         // Error cases are not handled
         return ResponseEntity.ok().body(res);

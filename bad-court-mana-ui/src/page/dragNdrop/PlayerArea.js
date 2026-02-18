@@ -53,7 +53,12 @@ export default function PlayerArea({
         placeholder="Tên người chơi"
         value={newPlayer}
         onChange={(e) => setNewPlayer(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+        onKeyDown={(e) => {
+          // Check if Enter is pressed AND we are not in the middle of a Vietnamese composition
+    if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+      handleAdd();
+    }
+        }}
         style={{
           width: "100%",
           padding: "5px",

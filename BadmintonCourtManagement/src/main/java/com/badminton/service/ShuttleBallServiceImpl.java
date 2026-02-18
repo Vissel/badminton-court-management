@@ -11,6 +11,7 @@ import com.badminton.repository.GameShuttleMapRepository;
 import com.badminton.repository.ShuttleBallRepositoty;
 import com.badminton.requestmodel.ShuttleBallDTO;
 import com.badminton.response.result.Result;
+import com.badminton.response.result.ShuttleBallResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -34,9 +35,9 @@ public class ShuttleBallServiceImpl {
     @Autowired
     ServiceTemple serviceTemple;
 
-    public List<ShuttleBallDTO> getListActiveShuttleBallDTOs() {
+    public List<ShuttleBallResponse> getListActiveShuttleBallDTOs() {
         List<ShuttleBall> activeBalls = ballRepo.findAllByIsActive(true);
-        return activeBalls.stream().map(b -> new ShuttleBallDTO(b)).collect(Collectors.toList());
+        return activeBalls.stream().map(b -> new ShuttleBallResponse(b)).collect(Collectors.toList());
     }
 
     public Boolean addListOfShuttleBallIntoCourt(int courtId, List<ShuttleBallDTO> listOfShuttleBall) {

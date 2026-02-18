@@ -2,7 +2,7 @@ import React from "react";
 import { useDrag } from "react-dnd";
 import { ItemTypes } from "../ItemTypes";
 
-const DraggableService = ({ serviceName, cost }) => {
+const DraggableService = ({ serviceName, cost, costFormat, currency }) => {
   const [{ isDragging }, drag] = useDrag(
     () => ({
       type: ItemTypes.SERVICE,
@@ -21,7 +21,7 @@ const DraggableService = ({ serviceName, cost }) => {
         opacity: isDragging ? 0.5 : 1
       }}
     >
-      {serviceName} - {cost}
+      {serviceName} - {costFormat} {currency}
     </div>
   );
 };

@@ -25,8 +25,8 @@ public class SessionController {
     }
 
     @PostMapping(value = "/checkCreateNewSession")
-    public ResponseEntity<SessionResult> checkCreateNewSession() {
-        return ResponseEntity.ok(sessionService.checkAndCreateNewSessionInDay());
+    public ResponseEntity<Result<SessionResult>> checkCreateNewSession() {
+        return ResponseConvertor.convert(sessionService.checkAndCreateNewSessionInDay());
     }
 
     @PostMapping(value = "/deleteSession")

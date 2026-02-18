@@ -48,4 +48,14 @@ public class ShuttleBall {
     public boolean theSameDTO(ShuttleBallDTO ballDTO) {
         return this.shuttleName.equals(ballDTO.getShuttleName()) && this.cost == ballDTO.getShuttleCost();
     }
+
+    public ShuttleBall setActiveBall() {
+        this.setActive(true);
+        return this;
+    }
+
+    public ShuttleBall setDeActiveBall() {
+        this.setActive(false);
+        return this;
+    }
 }

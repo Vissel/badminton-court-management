@@ -128,9 +128,27 @@
                 <activeProfile>dev</activeProfile>
             </properties>
         </profile>
-
         <profile>
             <id>qa</id>
+            <activation>
+                <activeByDefault>false</activeByDefault>
+            </activation>
+            <build>
+                <finalName>bad-court-management-qa</finalName>
+                <plugins>
+                    <plugin>
+                        <groupId>org.springframework.boot</groupId>
+                        <artifactId>spring-boot-maven-plugin</artifactId>
+                    </plugin>
+                </plugins>
+            </build>
+            <properties>
+                <activeProfile>qa</activeProfile>
+            </properties>
+        </profile>
+
+        <profile>
+            <id>prod</id>
             <activation>
                 <activeByDefault>false</activeByDefault>
             </activation>

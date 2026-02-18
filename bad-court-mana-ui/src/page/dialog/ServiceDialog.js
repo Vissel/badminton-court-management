@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import "./ServiceDialog.css";
 import { TYPE } from "../HomePage";
+import {VN_CURRENCY, formatVND, rawNumber } from "./../MoneyUtils";
 
 const ServiceDialog = ({
   playerName,
@@ -13,7 +14,7 @@ const ServiceDialog = ({
   const [totalCost, setTotalCost] = useState(0);
   const [serviceName, setServiceName] = useState("");
   const [serviceCost, setServiceCost] = useState("");
-
+  const [servicesVO, setServicesVO] = useState([]);
   const recalcTotal = useCallback((serviceList) => {
     return serviceList.reduce((sum, item) => {
       const amount = Number(item.slice(item.lastIndexOf("-") + 1).trim()) || 0;
@@ -69,6 +70,9 @@ const ServiceDialog = ({
 );
 
   useEffect(() => {
+    // setServicesVO(
+    //   services.map(s=> {return `${s.slice(0, s.lastIndexOf("-")).trim()} - ${formatVND(s.slice(s.lastIndexOf("-") + 1).trim())}`;}
+    // ));
     setTotalCost(recalcTotal(services));
     document.addEventListener("keydown", handleKeyDown);
     return () => {
@@ -92,7 +96,7 @@ const ServiceDialog = ({
         </div>
 
         <h3>Bảng chi phí của: {playerName}</h3>
-        <h6 style={{ color: "blue" }}>Tổng cộng: {totalCost} vnd</h6>
+        <h6 style={{ color: "blue" }}>Tổng cộng: {formatVND(totalCost)} {VN_CURRENCY}</h6>
 
         {/* ➕ ADD SERVICE */}
         <div className="d-flex bd-highlight align-items-center">
@@ -106,7 +110,7 @@ const ServiceDialog = ({
           </div>
           <div className="p-2 bd-highlight">
             <input
-              type="number"
+              type="text"
               placeholder="Giá"
               value={serviceCost}
               onChange={(e) => setServiceCost(e.target.value)}
@@ -128,7 +132,7 @@ const ServiceDialog = ({
               <li key={idx} className="service-item">
                 <div className="d-flex justify-content-between">
                   <div className="p-2 bd-highlight">
-                    <span>{service} vnd</span>
+                    <span>{service} {VN_CURRENCY}</span>
                   </div>
 
                   <div className="p-2 bd-highlight">

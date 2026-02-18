@@ -10,6 +10,7 @@ import com.badminton.exception.ErrorMess;
 import com.badminton.exception.enums.ErrorCodeEnum;
 import com.badminton.repository.*;
 import com.badminton.requestmodel.*;
+import com.badminton.response.ServiceResponse;
 import com.badminton.response.result.Result;
 import com.badminton.service.calculator.GameExpenseCalculator;
 import com.badminton.util.ServiceUtil;
@@ -68,9 +69,9 @@ public class CourtServicesServiceImpl {
         this.badmintonCourtManagementApplication = badmintonCourtManagementApplication;
     }
 
-    public List<ServiceDTO> getActiveServices() {
+    public List<ServiceResponse> getActiveServices() {
         List<Service> activeServices = serviceRepo.findAllByIsActive(true);
-        return activeServices.stream().map(s -> new ServiceDTO(s)).collect(Collectors.toList());
+        return activeServices.stream().map(s -> new ServiceResponse(s)).collect(Collectors.toList());
     }
 
     @Transactional
@@ -301,6 +302,7 @@ public class CourtServicesServiceImpl {
             game = new Game(courtOpt.get(), balls.get(0));
             gameRepo.save(game);
         }
+
 
         // create team 1 or 2 if there is new, update otherwise
         return addAvailablePlayerIntoGame(game, playerName, courtDTO.getCourtAreas().getFirst().getArea());

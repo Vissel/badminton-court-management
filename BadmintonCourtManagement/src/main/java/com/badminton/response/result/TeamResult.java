@@ -1,6 +1,7 @@
 package com.badminton.response.result;
 
 import com.badminton.constant.GameConstant;
+import com.badminton.util.MoneyUtils;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -11,11 +12,11 @@ import lombok.NoArgsConstructor;
 public class TeamResult {
     private String playerOneName;
 
-    private float expenseOne = 0.0f;
+    private float expenseOne = MoneyUtils.DEFAULT;
 
     private String playerTwoName;
 
-    private float expenseTwo = 0.0f;
+    private float expenseTwo = MoneyUtils.DEFAULT;
 
     /**
      * Default is lose team

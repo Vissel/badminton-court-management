@@ -15,7 +15,7 @@ public class GameResult {
 
     private CourtResult courtResult;
 
-    private Map<ShuttleBallResult, Integer> ballResultMap;
+    private Map<ShuttleBallResponse, Integer> ballResultMap;
 
     private TeamResult teamOneResult;
 

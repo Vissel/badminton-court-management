@@ -2,6 +2,7 @@
   "name": "bad-court-mana-ui",
   "version": "0.1.0",
   "private": true,
+  "homepage": "/caulong-tc-qa/",
   "dependencies": {
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
@@ -25,6 +26,7 @@
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
+    "build:qa": "env-cmd -f .env.qa react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
@@ -45,5 +47,8 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "env-cmd": "^11.0.0"
   }
 }

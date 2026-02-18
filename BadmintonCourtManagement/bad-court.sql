@@ -2,6 +2,12 @@ use `bad-court-management-db`;
 select * from service;
 SELECT * FROM player;
 
+SELECT 'thach'
+FROM (SELECT 1) AS tmp
+WHERE NOT EXISTS (
+    SELECT player_name FROM player WHERE player_name = 'thach'
+) LIMIT 1;
+
 -- session queries
 select * from `session`
 order by from_time limit 1, 10
