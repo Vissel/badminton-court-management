@@ -1,17 +1,22 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import { useLocation } from "react-router-dom";
 import "./DateTimeBar.css";
 import api from "./api/index";
 import PayConfirm from "./page/dialog/PayConfirm";
+import {AuthContext} from "./context/AuthContext";
 
 function DateTimeBar() {
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
   const [ending, setEnding] = useState(false); // prevent double click
   const [show, setShow] = useState(false);
   const [data, setData] = useState();
-
+  const { logout } = useContext(AuthContext);
   useEffect(() => {
-    setData({ title: "Bạn có chắc Kết thúc phiên làm việc ?" });
+    const endedSessionTitle = `Sau kết thúc phiên làm việc:\n 
+    1) Tất cả trận cầu đang diễn ra trên sân sẽ kết thúc.\n
+    2) Tất cả người chơi sẽ được xoá khỏi phiên làm việc.\n
+    Bạn có chắc Kết thúc phiên làm việc ?`;
+    setData({ title: endedSessionTitle });
     const timerId = setInterval(() => {
       setCurrentDateTime(new Date());
     }, 1000);
@@ -45,12 +50,18 @@ function DateTimeBar() {
   const handleEndSession = async () => {
     console.log("Clicking on End session.");
     try {
-      await api.post(`/session/deleteSession`);
+      const closedSessionResp = await api.post(`/session/deleteSession`);
+      if (closedSessionResp.status !== 200) {
+        const errorMessage = `Có lỗi khi kết thúc phiên làm việc. ${closedSessionResp.data.message}.\n Thử lại.`;
+
+        alert(errorMessage);
+        console.log(errorMessage);
+        return;
+      }
+      alert("Kết thúc phiên làm việc thành công.");
+      logout();
     } catch (error) {
-      console.log(
-        `Error while performing end session. Error:name=[${error.name}]; message=[${error.message}]`
-      );
-      alert(`Có lỗi khi kết thúc phiên làm việc. Thử lại.`);
+      console.log(`Unexpected error: ${error}`);
     } finally {
       setShow(false);
     }

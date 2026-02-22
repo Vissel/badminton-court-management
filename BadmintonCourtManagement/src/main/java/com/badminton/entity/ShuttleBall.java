@@ -1,6 +1,6 @@
 package com.badminton.entity;
 
-import com.badminton.requestmodel.ShuttleBallDTO;
+import com.badminton.model.dto.ShuttleBallDTO;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;

@@ -192,13 +192,13 @@ function HomePage() {
     removePlayerFromCourtApi(playerName, courtId, areaKey);
   };
 
-  const onAddPlayer = (name) => {
+  const onAddPlayer = async(name) => {
     try {
-      api.post("/court-mana/addPlayer", name);
+      await api.post("/court-mana/addPlayer", name);
       console.log("Adding new player successfully.");
       setAvailablePlayers((prev) => [...prev, name]);
       // set costInPerson
-      handleDropService(name, VN_COST_IN_PERSON, costInPerson);
+      handleDropService(name, VN_COST_IN_PERSON, costInPerson, formatVND(costInPerson));
     } catch (error) {
       console.error("Error while adding player to available session.");
       alert("Có lỗi khi thêm người chơi. Refresh lại trang này!");
@@ -210,19 +210,16 @@ function HomePage() {
   const [courtProcessing, setCourtProcessing] = useState(0);
   const saveBallOntoCourt = (courtId, ballQuantityMap) => {
     // Build List<ShuttleBallDTO>
-    const shuttleBallDTOList = Object.entries(ballQuantityMap).map(
-      ([name, quantity]) => ({
-        shuttleName: name.slice(0, name.lastIndexOf("-")).trim(),
-        shuttleCost: Number(name.slice(name.lastIndexOf("-") + 1).trim()),
-        ballQuantity: quantity,
-      })
-    );
+    const ballPayload = ballQuantityMap.map((ball) => {
+      return {
+        shuttleName: ball.shuttleName,
+        cost: ball.cost,
+        quantity: ball.quantity,
+      };
+    });
 
     api
-      .post(
-        `/court-mana/addListBallIntoCourt?courtId=${courtId}`,
-        shuttleBallDTOList
-      )
+      .post(`/court-mana/addListBallIntoCourt?courtId=${courtId}`, ballPayload)
       .then((res) => {
         if (responseDataTrue(res)) {
           setShowShuttleDialog(false);
@@ -411,15 +408,15 @@ function HomePage() {
       },
     ].filter((p) => p.name && p.cost > 0);
 
-    await Promise.all(
-      participants.map((p) => {
-        saveServiceToPlayer(
-          p.name,
-          "Tiền Sân " + formData.courtResult.courtId,
-          p.cost
-        );
-      })
-    );
+    // await Promise.all(
+    //   participants.map((p) => {
+    //     saveServiceToPlayer(
+    //       p.name,
+    //       "Tiền Sân " + formData.courtResult.courtId,
+    //       p.cost
+    //     );
+    //   })
+    // );
     // 4. Update the local UI state for services all at once
     setPlayerServiceMap((prev) => {
       const newMap = { ...prev };
@@ -427,12 +424,15 @@ function HomePage() {
         const existing = newMap[p.name] || [];
         newMap[p.name] = [
           ...existing,
-          `Tiền sân ${formData.courtResult.courtId}-${p.cost}`,
+          {
+            serviceName: `Tiền sân ${formData.courtResult.courtId}`,
+            cost: p.cost,
+            costFormat: formatVND(p.cost)
+          },
         ];
       });
       return newMap;
     });
-    // alert("Kết thúc trận đấu.");
   };
 
   /**On Cancel */
@@ -462,10 +462,10 @@ function HomePage() {
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [showDialog, setShowDialog] = useState(false);
 
-  const handleDropService = (playerName, serviceName, cost) => {
+  const handleDropService = (playerName, serviceName, cost, costFormat) => {
     if (!playerName) return;
     // add to db
-    saveServiceToPlayer(playerName, serviceName, cost);
+    saveServiceToPlayer(playerName, serviceName, cost, costFormat);
 
     // player: Array[Services]
     setPlayerServiceMap((prev) => {
@@ -473,7 +473,14 @@ function HomePage() {
       // if (existing.includes(serviceName)) return prev;
       return {
         ...prev,
-        [playerName]: [...existing, serviceName.concat("-", cost)],
+        [playerName]: [
+          ...existing,
+          {
+            serviceName: serviceName,
+            cost: cost,
+            costFormat: costFormat,
+          },
+        ],
       };
     });
   };
@@ -484,10 +491,10 @@ function HomePage() {
     setSelectedPlayer(p);
     setShowDialog(true);
   };
-  const saveServiceToPlayer = (playerName, serviceName, cost) => {
-    return api.post(`/court-mana/addServiceToPlayer?playerName=${playerName}`, {
+const saveServiceToPlayer = async(playerName, serviceName, cost) => {
+    return await api.post(`/court-mana/addServiceToPlayer?playerName=${playerName}`, {
       serviceName: serviceName,
-      cost: parseFloat(cost),
+      cost: cost,
     });
   };
 
@@ -581,12 +588,17 @@ function HomePage() {
             setAvailablePlayers(resAvaPlayers.map((p) => p.playerName));
 
             resAvaPlayers.forEach((player) => {
-              const playerServiceList = player.serviceDTOs.map((service) => {
-                if (service.includes(COST_IN_PERSON)) {
-                  return service.replace(COST_IN_PERSON, VN_COST_IN_PERSON);
-                }
-                return service;
-              });
+              const playerServiceList = player.serviceResponses;
+              //  player.serviceDTOs.map((service) => {
+              //   let serviceString = service;
+              //   if (service.includes(COST_IN_PERSON)) {
+              //     serviceString = service.replace(
+              //       COST_IN_PERSON,
+              //       VN_COST_IN_PERSON
+              //     );
+              //   }
+              //   return convertStringToService(serviceString);
+              // });
 
               setPlayerServiceMap((prevMap) => {
                 return {
@@ -622,8 +634,8 @@ function HomePage() {
   const handleUpdateServices = async (playerName, updatedServices) => {
     const payload = updatedServices.map((s) => {
       return {
-        serviceName: s.slice(0, s.lastIndexOf("-")).trim(),
-        cost: Number(s.slice(s.lastIndexOf("-") + 1).trim()),
+        serviceName: s.serviceName,
+        cost: s.cost,
       };
     });
     const response = await api.post(
@@ -666,8 +678,8 @@ function HomePage() {
 
     api.post(`/api/v1/pay/payToPlayer`, {
       playerName: data.playerName,
-      serviceDTOs: data.services,
-      expense: data.expense,
+      serviceRequests: data.services,
+      totalExpense: data.expense,
       payType: data.type,
     });
     setShowPayConfirmDialog(false);

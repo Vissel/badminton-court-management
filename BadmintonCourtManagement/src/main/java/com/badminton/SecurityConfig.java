@@ -105,10 +105,9 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         // Allow all origins (use specific origins in production)
         configuration.setAllowedOriginPatterns(Arrays.asList(
-                "http://localhost:3000", "http://localhost:8080",
-                "http://localhost:9080"));
+                "http://localhost:3000", "http://localhost:8080"));
         // Allow all HTTP methods
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE"));
         // Allow all headers
         configuration.setAllowedHeaders(Arrays.asList("*"));
         // Allow credentials (e.g., cookies, authorization headers)

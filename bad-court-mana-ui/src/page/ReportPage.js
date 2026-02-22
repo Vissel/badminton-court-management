@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 
-import api, {backendHost} from "../api/index";
+import api, { backendHost } from "../api/index";
 
 // -------- dummy data for UI testing --------
 const DUMMY_REPORTS = Array.from({ length: 23 }).map((_, i) => ({
@@ -13,6 +13,7 @@ const DUMMY_REPORTS = Array.from({ length: 23 }).map((_, i) => ({
 
 export default function ReportPage() {
   const [reports, setReports] = useState([]);
+  const [originalReports, setOriginalReports] = useState([]);
   const [searchText, setSearchText] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -69,6 +70,7 @@ export default function ReportPage() {
       setTotalPages(pagination.totalPage);
 
       setReports(list);
+      setOriginalReports(list);
       setNumberRows(list.length);
       setTotalRows(pageResponse.total);
     } catch (error) {
@@ -134,10 +136,11 @@ export default function ReportPage() {
     try {
       const sessionIds = reports.map((r) => r.sessionId);
 
-      const response = await api.post(`/api/v1/manager/reportToken`,{ sessionIds: sessionIds });
+      const response = await api.post(`/api/v1/manager/reportToken`, {
+        sessionIds: sessionIds,
+      });
 
       window.location.href = `${backendHost}/api/v1/manager/stream/reportExportList/${response.data.reportToken}`;
-
     } catch (error) {
       console.error("Failed to export report", error);
       alert("Export failed. Please try again.");
@@ -155,9 +158,33 @@ export default function ReportPage() {
     setMonth(month);
   };
 
+  const handleFilter = (text) => {
+    setSearchText(text);
+    const keyword = text.trim().toLowerCase();
+
+    if (!keyword) {
+      setReports(originalReports);
+      setNumberRows(originalReports.length);
+      return;
+    }
+
+    const filtered = originalReports.filter((row, index) => {
+      const searchString = `
+      ${(currentPage - 1) * pageSize + index + 1}
+      ${row.date?.viDateString ?? ""}
+      ${row.during ?? ""}
+      ${row.grossRevenueFormat ?? ""}
+    `.toLowerCase();
+
+      return searchString.includes(keyword);
+    });
+
+    setReports(filtered);
+    setNumberRows(filtered.length);
+  };
   return (
     <div className="container mt-4">
-      <h3 className="mb-3">Manager</h3>
+      <h3 className="mb-3">Trang quản lý</h3>
 
       {/* Search + Month filter + Total rows */}
       <div className="row mb-4 align-items-center">
@@ -165,9 +192,9 @@ export default function ReportPage() {
           <input
             type="text"
             className="form-control"
-            placeholder="Search by date, time, total..."
+            placeholder="Tìm kiếm bằng ngày, thời gian, số tổng,..."
             value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
+            onChange={(e) => handleFilter(e.target.value)}
           />
         </div>
         <div className="col-md-3">
@@ -183,15 +210,15 @@ export default function ReportPage() {
             ))}
           </select>
         </div>
-        <div className="col-md-3 text-end text-muted">
-          Total : <strong>{numberRows}</strong>
+        <div className="col-md-3 text-muted">
+          Tổng hiển thị: <strong>{numberRows}</strong>
         </div>
         <div className="col-md-3 text-end">
           <button
             className="btn btn-success btn-sm"
             onClick={() => handleExportReport()}
           >
-            Export list
+            Xuất Excel tất cả hàng hiển thị
           </button>
         </div>
       </div>
@@ -201,29 +228,29 @@ export default function ReportPage() {
         <table className="table table-bordered table-hover align-middle">
           <thead className="table-light">
             <tr>
-              <th style={{ width: "60px" }}>No</th>
+              <th style={{ width: "60px" }}>STT</th>
               <th
                 onClick={() => toggleSort("date")}
                 style={{ cursor: "pointer" }}
               >
-                Date{" "}
+                Ngày{" "}
                 {sortField === "date" ? (sortDir === "ASC" ? "▲" : "▼") : ""}
               </th>
               <th
                 onClick={() => toggleSort("fromTo")}
                 style={{ cursor: "pointer" }}
               >
-                From - To{" "}
+                Khoảng thời gian{" "}
                 {sortField === "fromTo" ? (sortDir === "ASC" ? "▲" : "▼") : ""}
               </th>
               <th
                 onClick={() => toggleSort("total")}
                 style={{ cursor: "pointer" }}
               >
-                Total{" "}
+                Tồng tiền đã thanh toán{" "}
                 {sortField === "total" ? (sortDir === "ASC" ? "▲" : "▼") : ""}
               </th>
-              <th style={{ width: "120px" }}>Export</th>
+              <th style={{ width: "120px" }}>Xuất</th>
             </tr>
           </thead>
           <tbody>
@@ -249,13 +276,13 @@ export default function ReportPage() {
                   </td>
                   <td>{row.date.viDateString}</td>
                   <td>{row.during}</td>
-                  <td>{row.grossRevenue}</td>
+                  <td>{row.grossRevenueFormat}</td>
                   <td className="text-center">
                     <button
                       className="btn btn-success btn-sm"
                       onClick={() => handleExport(row.sessionId)}
                     >
-                      Export
+                      Excel
                     </button>
                   </td>
                 </tr>
@@ -265,56 +292,61 @@ export default function ReportPage() {
       </div>
 
       {/* Pagination + page size */}
-      <div className="d-flex justify-content-between align-items-center mt-3">
-        <select
-          className="form-select w-auto"
-          value={pageSize}
-          onChange={(e) => handlePageSizeChange(Number(e.target.value))}
-        >
-          <option value={10}>10</option>
-          <option value={20}>20</option>
-          <option value={30}>30</option>
-          <option value={50}>50</option>
-          <option value={100}>100</option>
-        </select>
-        <div className="col-md-3 text-end text-muted">
-          Total: <strong>{totalRows}</strong> rows
+      <div className="d-flex justify-content-between align-items-center">
+        <div className="p-2">
+          <select
+            className="form-select w-auto"
+            value={pageSize}
+            onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+          >
+            <option value={10}>10</option>
+            <option value={20}>20</option>
+            <option value={30}>30</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+          </select>
         </div>
-        <ul className="pagination mb-0">
-          <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
-            <button
-              className="page-link"
-              onClick={() => handlePageChange(currentPage - 1)}
-            >
-              <i className="bi bi-chevron-left"></i>
-            </button>
-          </li>
-          {[...Array(totalPages)].map((_, i) => (
+        <div className="p-2 text-muted">
+          Tổng số phiên làm việc: <strong>{totalRows}</strong>
+        </div>
+
+        <div className="p-2">
+          <ul className="pagination mb-0">
+            <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
+              <button
+                className="page-link"
+                onClick={() => handlePageChange(currentPage - 1)}
+              >
+                <i className="bi bi-chevron-left"></i>
+              </button>
+            </li>
+            {[...Array(totalPages)].map((_, i) => (
+              <li
+                key={i}
+                className={`page-item ${currentPage === i + 1 ? "active" : ""}`}
+              >
+                <button
+                  className="page-link"
+                  onClick={() => handlePageChange(i + 1)}
+                >
+                  {i + 1}
+                </button>
+              </li>
+            ))}
             <li
-              key={i}
-              className={`page-item ${currentPage === i + 1 ? "active" : ""}`}
+              className={`page-item ${
+                currentPage === totalPages ? "disabled" : ""
+              }`}
             >
               <button
                 className="page-link"
-                onClick={() => handlePageChange(i + 1)}
+                onClick={() => handlePageChange(currentPage + 1)}
               >
-                {i + 1}
+                <i className="bi bi-chevron-right"></i>
               </button>
             </li>
-          ))}
-          <li
-            className={`page-item ${
-              currentPage === totalPages ? "disabled" : ""
-            }`}
-          >
-            <button
-              className="page-link"
-              onClick={() => handlePageChange(currentPage + 1)}
-            >
-              <i className="bi bi-chevron-right"></i>
-            </button>
-          </li>
-        </ul>
+          </ul>
+        </div>
       </div>
     </div>
   );

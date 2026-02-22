@@ -7,10 +7,11 @@ import com.badminton.entity.Game;
 import com.badminton.entity.Team;
 import com.badminton.exception.BusinessException;
 import com.badminton.exception.enums.ErrorCodeEnum;
+import com.badminton.model.dto.ServiceDTO;
+import com.badminton.model.dto.ShuttleBallDTO;
 import com.badminton.repository.GameRepository;
 import com.badminton.requestmodel.CourtAreaDTO;
 import com.badminton.requestmodel.GameDTO;
-import com.badminton.requestmodel.ShuttleBallDTO;
 import com.badminton.response.result.*;
 import com.badminton.service.GameService;
 import com.badminton.service.ProcessCallback;
@@ -284,9 +285,9 @@ public class GameServiceImpl implements GameService {
         }
     }
 
-    private void setServiceInToAvaPlayer(AvailablePlayer playerOne, String addedService) {
+    private void setServiceInToAvaPlayer(AvailablePlayer playerOne, ServiceDTO addedService) {
         if (addedService == null) return;
-        playerOne.setServices(ServiceUtil.concatService(playerOne.getCurrentServices(), addedService));
+        playerOne.setServices(ServiceUtil.addServiceToJsonArray(playerOne.getCurrentServices(), addedService));
     }
 
     private void validateGameFinishField(GameDTO gameRequest) {
@@ -353,9 +354,12 @@ public class GameServiceImpl implements GameService {
                 area.getPlayerInArea() != null && CommonUtil.isNotNullEmpty(area.getArea(), area.getPlayerInArea().getPlayerName());
     }
 
-    private String buildService(String courtName, float expense) {
+    private ServiceDTO buildService(String courtName, float expense) {
         if (expense > MoneyUtils.DEFAULT) {
-            return ServiceUtil.buildService("Tiền ".concat(courtName), expense);
+            ServiceDTO expenseSer = new ServiceDTO();
+            expenseSer.setServiceName("Tiền ".concat(courtName));
+            expenseSer.setCost(expense);
+            return expenseSer;
         }
         return null;
     }

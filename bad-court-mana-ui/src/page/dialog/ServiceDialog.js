@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import "./ServiceDialog.css";
 import { TYPE } from "../HomePage";
-import {VN_CURRENCY, formatVND, rawNumber } from "./../MoneyUtils";
+import { VN_CURRENCY, formatVND, rawNumber } from "./../MoneyUtils";
 
 const ServiceDialog = ({
   playerName,
@@ -17,7 +17,7 @@ const ServiceDialog = ({
   const [servicesVO, setServicesVO] = useState([]);
   const recalcTotal = useCallback((serviceList) => {
     return serviceList.reduce((sum, item) => {
-      const amount = Number(item.slice(item.lastIndexOf("-") + 1).trim()) || 0;
+      const amount = item.cost || 0;
       return sum + amount;
     }, 0);
   }, []);
@@ -34,7 +34,11 @@ const ServiceDialog = ({
   const handleAddService = () => {
     if (!serviceName || !serviceCost) return;
 
-    const newService = `${serviceName}-${serviceCost}`;
+    const newService = {
+      serviceName: serviceName,
+      cost: Number(serviceCost),
+      costFormat: formatVND(serviceCost)
+    };
     const updated = [...services, newService];
 
     onUpdateServices(playerName, updated);
@@ -56,18 +60,18 @@ const ServiceDialog = ({
   //   [onClose]
   // );
   const handleKeyDown = useCallback(
-  (event) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      handleAddService();
-    }
+    (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        handleAddService();
+      }
 
-    if (event.key === "Escape") {
-      onClose(false); // close dialog
-    }
-  },
-  [handleAddService, onClose]
-);
+      if (event.key === "Escape") {
+        onClose(false); // close dialog
+      }
+    },
+    [handleAddService, onClose]
+  );
 
   useEffect(() => {
     // setServicesVO(
@@ -95,9 +99,13 @@ const ServiceDialog = ({
           </div>
         </div>
 
-        <h3>Bảng chi phí của: {playerName}</h3>
-        <h6 style={{ color: "blue" }}>Tổng cộng: {formatVND(totalCost)} {VN_CURRENCY}</h6>
-
+        <h3 style={{ textAlign: "center" }}>Bảng chi phí của: </h3>
+        <h4 style={{ textAlign: "center" }}>{playerName} </h4>
+        <div className="d-flex bd-highlight align-items-start">
+          <h6 style={{ color: "blue" }}>
+            Tổng cộng: {formatVND(totalCost)} {VN_CURRENCY}
+          </h6>
+        </div>
         {/* ➕ ADD SERVICE */}
         <div className="d-flex bd-highlight align-items-center">
           <div className="p-2 flex-grow-1 bd-highlight">
@@ -123,34 +131,36 @@ const ServiceDialog = ({
           </div>
         </div>
 
-        <div className="add-service"></div>
+        <div className="add-service">
+          {/* SERVICE LIST */}
+          {services.length > 0 ? (
+            <ul className="service-list">
+              {services.map((service, idx) => (
+                <li key={idx} className="service-item">
+                  <div className="d-flex justify-content-between">
+                    <div className="p-2 bd-highlight">
+                      <span>
+                        {service.serviceName} - {service.costFormat}{" "}
+                        {VN_CURRENCY}
+                      </span>
+                    </div>
 
-        {/* SERVICE LIST */}
-        {services.length > 0 ? (
-          <ul className="service-list">
-            {services.map((service, idx) => (
-              <li key={idx} className="service-item">
-                <div className="d-flex justify-content-between">
-                  <div className="p-2 bd-highlight">
-                    <span>{service} {VN_CURRENCY}</span>
+                    <div className="p-2 bd-highlight">
+                      <button
+                        className="btn btn-sm btn-outline-danger"
+                        onClick={() => handleRemoveService(idx)}
+                      >
+                        ✕
+                      </button>
+                    </div>
                   </div>
-
-                  <div className="p-2 bd-highlight">
-                    <button
-                      className="btn btn-sm btn-outline-danger"
-                      onClick={() => handleRemoveService(idx)}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p>No services assigned.</p>
-        )}
-
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>Không có dịch vụ nào.</p>
+          )}
+        </div>
         <div className="dialog-actions">
           <button className="btn btn-primary" onClick={onPrePay}>
             Thanh toán

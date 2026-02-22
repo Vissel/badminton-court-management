@@ -21,6 +21,7 @@ import com.badminton.service.ExportService;
 import com.badminton.service.ProcessCallback;
 import com.badminton.service.ServiceTemple;
 import com.badminton.service.SessionServiceImpl;
+import com.badminton.util.MoneyUtils;
 import com.badminton.util.TimeUtils;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -453,7 +454,9 @@ public class ExcelExportService implements ExportService {
         rptResponse.setSessionId(s.getSessionId());
         rptResponse.setDate(s.getFromTime());
         rptResponse.setDuring(TimeUtils.convertInstantsToString(s.getFromTime(), s.getToTime()));
-        rptResponse.setGrossRevenue(getTotalGrossRevenue(s.getAvailablePlayers()));
+        float revenue = getTotalGrossRevenue(s.getAvailablePlayers());
+        rptResponse.setGrossRevenue(revenue);
+        rptResponse.setGrossRevenueFormat(MoneyUtils.formatToVND(revenue));
         return rptResponse;
     }
 

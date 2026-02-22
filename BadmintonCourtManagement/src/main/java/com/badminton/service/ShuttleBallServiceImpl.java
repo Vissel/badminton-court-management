@@ -6,12 +6,14 @@ import com.badminton.entity.GameShuttleMap;
 import com.badminton.entity.ShuttleBall;
 import com.badminton.exception.BusinessException;
 import com.badminton.exception.enums.ErrorCodeEnum;
+import com.badminton.model.dto.ShuttleBallDTO;
 import com.badminton.repository.GameRepository;
 import com.badminton.repository.GameShuttleMapRepository;
 import com.badminton.repository.ShuttleBallRepositoty;
-import com.badminton.requestmodel.ShuttleBallDTO;
+import com.badminton.requestmodel.ShuttleBallRequest;
 import com.badminton.response.result.Result;
 import com.badminton.response.result.ShuttleBallResponse;
+import com.badminton.util.ShuttleBallConverter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -40,13 +42,14 @@ public class ShuttleBallServiceImpl {
         return activeBalls.stream().map(b -> new ShuttleBallResponse(b)).collect(Collectors.toList());
     }
 
-    public Boolean addListOfShuttleBallIntoCourt(int courtId, List<ShuttleBallDTO> listOfShuttleBall) {
+    public Boolean addListOfShuttleBallIntoCourt(int courtId, List<ShuttleBallRequest> listBallRequest) {
         log.info("Adding List<ShuttleBallDTO> into courtId {}", courtId);
         // get game by court id
         Optional<Game> optGame = gameRepo.findByCourtIdAndEndedDateIsNull(courtId);
         if (!optGame.isPresent()) {
             return Boolean.FALSE;
         }
+        List<ShuttleBallDTO> listOfShuttleBall = ShuttleBallConverter.convertRequestToDTO(listBallRequest);
         Game game = optGame.get();
         listOfShuttleBall.stream().forEach(ballDTO -> {
             GameShuttleMap gameShuttleMap = getExistGameShuttleBall(ballDTO, game.getShuttleMap());

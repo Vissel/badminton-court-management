@@ -17,7 +17,7 @@ function DraggablePlayer({ name, isLocked, onDropService, onClick, courtId, area
     () => ({
       accept: ItemTypes.SERVICE,
       drop: (item) => {
-        onDropService?.(name, item.serviceName, item.cost);
+        onDropService?.(name, item.serviceName, item.cost, item.costFormat);
         // trigger highlight animation
         setAnimate(true);
         setTimeout(() => setAnimate(false), 600);

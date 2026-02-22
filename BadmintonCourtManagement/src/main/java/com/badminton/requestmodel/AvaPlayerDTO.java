@@ -2,7 +2,9 @@ package com.badminton.requestmodel;
 
 import com.badminton.constant.CommonConstant;
 import com.badminton.entity.AvailablePlayer;
+import com.badminton.response.ServiceResponse;
 import com.badminton.util.CommonUtil;
+import com.badminton.util.ServiceUtil;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -27,6 +29,7 @@ public class AvaPlayerDTO extends ResponseDTO {
     @JsonIgnore
     private transient Instant to;
     private List<String> serviceDTOs;
+    private List<ServiceResponse> serviceResponses;
 
     private float expense;
 
@@ -39,6 +42,8 @@ public class AvaPlayerDTO extends ResponseDTO {
         if (CommonUtil.isNotNullEmpty(avaPlayerEntity.getServices())) {
             this.serviceDTOs = Arrays.asList(avaPlayerEntity.getServices().split(CommonConstant.STR_SEMI_COLON))
                     .stream().filter(CommonUtil::isNotNullEmpty).collect(Collectors.toList());
+            this.serviceResponses = ServiceUtil.getServiceDTOFromString(avaPlayerEntity.getServices()).stream()
+                    .map(dto -> new ServiceResponse(dto)).collect(Collectors.toList());
         }
     }
 }

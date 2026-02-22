@@ -2,6 +2,7 @@ package com.badminton.requestmodel;
 
 import com.badminton.entity.Game;
 import com.badminton.entity.GameShuttleMap;
+import com.badminton.model.dto.ShuttleBallDTO;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.AllArgsConstructor;
 import lombok.Getter;

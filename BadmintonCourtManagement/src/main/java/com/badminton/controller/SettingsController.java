@@ -1,9 +1,9 @@
 package com.badminton.controller;
 
-import com.badminton.requestmodel.ServiceDTO;
+import com.badminton.model.dto.ServiceDTO;
+import com.badminton.model.dto.ShuttleBallDTO;
 import com.badminton.requestmodel.SetUpServiceDTO;
 import com.badminton.requestmodel.SetUpServiceRequest;
-import com.badminton.requestmodel.ShuttleBallDTO;
 import com.badminton.response.SetUpServiceResponse;
 import com.badminton.service.AdminService;
 import org.springframework.beans.factory.annotation.Autowired;

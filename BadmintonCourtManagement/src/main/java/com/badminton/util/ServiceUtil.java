@@ -6,13 +6,20 @@ import com.badminton.constant.GameState;
 import com.badminton.entity.AvailablePlayer;
 import com.badminton.entity.GameShuttleMap;
 import com.badminton.entity.Team;
+import com.badminton.model.dto.ServiceDTO;
 import com.badminton.requestmodel.CourtAreaDTO;
 import com.badminton.response.result.ShuttleBallResponse;
+import com.google.gson.Gson;
+import com.google.gson.JsonSyntaxException;
+import com.google.gson.reflect.TypeToken;
+import org.springframework.util.Assert;
 
+import java.lang.reflect.Type;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -27,8 +34,43 @@ public class ServiceUtil {
      * @param cost
      * @return
      */
+    @Deprecated
     public static String buildService(String serviceName, float cost) {
         return serviceName.concat(CommonConstant.HYPHEN).concat(String.valueOf(cost));
+    }
+
+    public static List<ServiceDTO> getServiceDTOFromString(String string) {
+        // Define the type of the target list using TypeToken
+        Type objectListType = new TypeToken<ArrayList<ServiceDTO>>() {
+        }.getType();
+        List<ServiceDTO> dtos;
+        try {
+            dtos = new Gson().fromJson(string, objectListType);
+            Assert.notNull(dtos, "current service is null");
+        } catch (JsonSyntaxException | IllegalArgumentException e) {
+            dtos = new ArrayList<>();
+        }
+        return dtos;
+    }
+
+    public static String buildJsonArray(ServiceDTO serviceDTO) {
+        return new Gson().toJson(serviceDTO);
+    }
+
+    public static <T> String buildJsonArrayStr(List<T> service) {
+        return new Gson().toJson(service);
+    }
+
+    public static String addServiceToJsonArray(String existedService, ServiceDTO newService) {
+        List<ServiceDTO> dtos = getServiceDTOFromString(existedService);
+        dtos.add(newService);
+        return new Gson().toJson(dtos);
+    }
+
+    public static String divideServiceFromJsonArray(String existedService, ServiceDTO deletedService) {
+        List<ServiceDTO> dtos = getServiceDTOFromString(existedService);
+        List<ServiceDTO> dividedList = dtos.stream().filter(s -> s.getServiceName().equals(deletedService.getServiceName()) && s.getCost() == deletedService.getCost()).collect(Collectors.toList());
+        return new Gson().toJson(dividedList);
     }
 
     /**
@@ -38,6 +80,7 @@ public class ServiceUtil {
      * @param newServices
      * @return
      */
+    @Deprecated
     public static String concatService(String currentServices, String... newServices) {
         return currentServices.concat(CommonConstant.STR_SEMI_COLON).concat(Arrays.stream(newServices).collect(Collectors.joining(CommonConstant.STR_SEMI_COLON)));
     }
@@ -49,6 +92,7 @@ public class ServiceUtil {
      * @param removedServices
      * @return
      */
+    @Deprecated
     public static String divideService(String currentServices, String... removedServices) {
         Arrays.stream(removedServices).forEach(s -> currentServices.replace(CommonConstant.STR_SEMI_COLON + s, CommonConstant.EMPTY));
         return currentServices;
@@ -64,8 +108,7 @@ public class ServiceUtil {
      * @return
      */
     public static boolean validGameStateUpdate(GameState current, GameState change) {
-        return (current.equals(GameState.NOT_START) && change.equals(GameState.START))
-                || (current.equals(GameState.START) && isEndedState(change));
+        return (current.equals(GameState.NOT_START) && change.equals(GameState.START)) || (current.equals(GameState.START) && isEndedState(change));
     }
 
     public static boolean isEndedState(GameState change) {
@@ -108,11 +151,7 @@ public class ServiceUtil {
     }
 
     public static Map<ShuttleBallResponse, Integer> retrievedShuttleBallMap(List<GameShuttleMap> gameShuttleMapping) {
-        return gameShuttleMapping.stream().collect(Collectors.toMap(
-                map -> new ShuttleBallResponse(map.getShuttleBall().getShuttleName(), map.getShuttleBall().getCost(),
-                        map.getShuttleBall().isSelected()),
-                map -> Integer.valueOf(map.getShuttleNumber()),
-                Integer::sum // merge function — sum counts if duplicates exist
+        return gameShuttleMapping.stream().collect(Collectors.toMap(map -> new ShuttleBallResponse(map.getShuttleBall().getShuttleName(), map.getShuttleBall().getCost(), map.getShuttleBall().isSelected()), map -> Integer.valueOf(map.getShuttleNumber()), Integer::sum // merge function — sum counts if duplicates exist
         ));
     }
 

@@ -28,4 +28,7 @@ public interface AvailablePlayerRepository extends JpaRepository<AvailablePlayer
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     List<AvailablePlayer> findAllForUpdateBySessionAndPlayerAndLeaveTimeIsNull(Session session, Player player);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    List<AvailablePlayer> findAllForUpdateBySessionAndLeaveTimeIsNull(Session session);
 }

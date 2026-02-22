@@ -9,8 +9,7 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class ShuttleBallRequest extends ResponseDTO {
-    private String shuttleName;
+public class ServiceRequest extends ResponseDTO {
+    private String serviceName;
     private String cost;
-    private int quantity;
 }

@@ -1,11 +1,18 @@
 use `bad-court-management-db`;
 select * from service;
 SELECT * FROM player;
+SELECT * FROM court;
+select * from available_player 
+order by ava_id desc;
 
-SELECT 'thach'
+select * from `session` order by session_id desc limit  5;
+
+
+INSERT INTO player (player_name,`password`)
+SELECT 'rootuser', '$2a$10$l0NHT7MaEB2Y.wKyQMIcRe8CPAOgznd4lx1ZXQmnsyLu2qF.4w.Ti'
 FROM (SELECT 1) AS tmp
 WHERE NOT EXISTS (
-    SELECT player_name FROM player WHERE player_name = 'thach'
+    SELECT 1 FROM player WHERE player_name = 'root' AND `password` = '$2a$10$l0NHT7MaEB2Y.wKyQMIcRe8CPAOgznd4lx1ZXQmnsyLu2qF.4w.Ti'
 ) LIMIT 1;
 
 -- session queries
@@ -29,7 +36,7 @@ values (current_time(),true);
 
 -- update `session`
 -- set to_time = null, is_active = b'1'
--- where session_id between 1 and 12;
+-- where session_id =69;
 
 -- available players
 select a.ava_id, p.player_id, p. player_name, a.services
@@ -125,3 +132,4 @@ from available_player a inner join player p on a.player_id = p.player_id
 		left join court c on c.court_id = g.court_id
 	where a.session_id = 14
 ;
+

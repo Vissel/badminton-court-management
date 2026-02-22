@@ -6,12 +6,12 @@ const DraggableService = ({ serviceName, cost, costFormat, currency }) => {
   const [{ isDragging }, drag] = useDrag(
     () => ({
       type: ItemTypes.SERVICE,
-      item: { serviceName, cost },
+      item: { serviceName, cost, costFormat },
       collect: (monitor) => ({
         isDragging: !!monitor.isDragging(),
       }),
     }),
-    [serviceName, cost]
+    [serviceName, cost, costFormat]
   );
 
   return (

@@ -1,9 +1,9 @@
 package com.badminton.service.impl;
 
-import com.badminton.constant.CommonConstant;
 import com.badminton.entity.AvailablePlayer;
 import com.badminton.exception.BusinessException;
 import com.badminton.exception.enums.ErrorCodeEnum;
+import com.badminton.model.dto.ServiceDTO;
 import com.badminton.repository.AvailablePlayerRepository;
 import com.badminton.requestmodel.PayRequest;
 import com.badminton.response.PayResponse;
@@ -12,6 +12,7 @@ import com.badminton.service.PayService;
 import com.badminton.service.ProcessCallback;
 import com.badminton.service.ServiceTemple;
 import com.badminton.service.SessionServiceImpl;
+import com.badminton.util.ServiceConverter;
 import com.badminton.util.ServiceUtil;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -44,7 +46,7 @@ public class PayServiceImpl implements PayService {
             public void preProcess(PayRequest request) {
                 Assert.notNull(request, "Request must not be null");
                 Assert.isTrue(StringUtils.isNotBlank(request.getPlayerName()), "playerName must not be blank");
-                Assert.notNull(request.getServiceDTOs(), "Service must not be null");
+                Assert.notNull(request.getServiceRequests(), "Service must not be null");
                 Assert.isTrue(StringUtils.isNotBlank(request.getPayType()), "Pay type  must not be blank");
             }
 
@@ -56,10 +58,14 @@ public class PayServiceImpl implements PayService {
                     throw new BusinessException(ErrorCodeEnum.PLAYER_NOT_FOUND, "Available player is not found.");
                 }
                 AvailablePlayer availablePlayer = optPlayer.get();
-                availablePlayer.setServices(payRequest.getServiceDTOs().stream().collect(Collectors.joining(CommonConstant.STR_SEMI_COLON)));
+                List<ServiceDTO> dtos = payRequest.getServiceRequests().stream()
+                        .map(req -> ServiceConverter.convertRequestToDTO(req))
+                        .collect(Collectors.toList());
+                availablePlayer.setServices(
+                        ServiceUtil.buildJsonArrayStr(dtos));
                 availablePlayer.setLeaveTime(ServiceUtil.getCurrentInstant());
                 availablePlayer.setPayType(payRequest.getPayType());
-                availablePlayer.setPayAmount(payRequest.getExpense());
+                availablePlayer.setPayAmount(Float.valueOf(payRequest.getTotalExpense()));
                 return convertToPayResult(availablePlayerRepository.save(availablePlayer));
             }
         });

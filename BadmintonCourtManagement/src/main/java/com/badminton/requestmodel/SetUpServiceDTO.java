@@ -1,5 +1,7 @@
 package com.badminton.requestmodel;
 
+import com.badminton.model.dto.ServiceDTO;
+import com.badminton.model.dto.ShuttleBallDTO;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;

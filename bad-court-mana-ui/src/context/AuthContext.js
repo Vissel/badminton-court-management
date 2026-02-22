@@ -19,7 +19,7 @@ export const AuthProvider = ({ children }) => {
       if (res.status === 200) {
         const tokenFromCookie = res.data.csrfToken;
         setCsrfToken(tokenFromCookie);
-        sessionStorage.setItem('csrfToken',tokenFromCookie)
+        sessionStorage.setItem("csrfToken", tokenFromCookie);
 
         setAuthenticated(res.data.valid);
       }
@@ -50,10 +50,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
   const logout = async () => {
     console.log("Calling logout.");
-    const res = await api.post(
-      `/logout`,
-      {}
-    );
+    const res = await api.post(`/logout`, {});
 
     if (res.status === 200) {
       setAuthenticated(false);
@@ -71,7 +68,7 @@ export const AuthProvider = ({ children }) => {
         setCsrfToken,
         logout,
         loading,
-        setLoading
+        setLoading,
       }}
     >
       {children}

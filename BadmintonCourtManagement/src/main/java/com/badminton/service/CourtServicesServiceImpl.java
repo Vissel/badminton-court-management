@@ -8,11 +8,14 @@ import com.badminton.exception.BusinessException;
 import com.badminton.exception.ElementNotExistException;
 import com.badminton.exception.ErrorMess;
 import com.badminton.exception.enums.ErrorCodeEnum;
+import com.badminton.model.dto.ServiceDTO;
+import com.badminton.model.dto.ShuttleBallDTO;
 import com.badminton.repository.*;
 import com.badminton.requestmodel.*;
 import com.badminton.response.ServiceResponse;
 import com.badminton.response.result.Result;
 import com.badminton.service.calculator.GameExpenseCalculator;
+import com.badminton.util.ServiceConverter;
 import com.badminton.util.ServiceUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -210,16 +213,15 @@ public class CourtServicesServiceImpl {
     /**
      * Add service to available player
      *
-     * @param serviceDTO
      * @param playerName
      * @return
      */
     @Transactional
-    public Boolean addServiceToAvailablePlayer(ServiceDTO serviceDTO, String playerName) {
+    public Boolean addServiceToAvailablePlayer(ServiceRequest serviceRequest, String playerName) {
         AvailablePlayer availablePlayer = session.getAvailablePlayerInActiveSession(playerName);
         if (availablePlayer != null) {
-            availablePlayer.setServices(ServiceUtil.concatService(availablePlayer.getCurrentServices(),
-                    ServiceUtil.buildService(serviceDTO.getServiceName(), serviceDTO.getCost())));
+            ServiceDTO serviceDTO = ServiceConverter.convertRequestToDTO(serviceRequest);
+            availablePlayer.setServices(ServiceUtil.addServiceToJsonArray(availablePlayer.getCurrentServices(), serviceDTO));
             avaPlayerRepo.save(availablePlayer);
             return true;
         }
@@ -237,8 +239,11 @@ public class CourtServicesServiceImpl {
     public Boolean removeServiceOutAvailablePlayer(ServiceDTO serviceDTO, String playerName) {
         AvailablePlayer availablePlayer = session.getAvailablePlayerInActiveSession(playerName);
         if (availablePlayer != null) {
-            availablePlayer.setServices(ServiceUtil.divideService(availablePlayer.getCurrentServices(),
-                    ServiceUtil.buildService(serviceDTO.getServiceName(), serviceDTO.getCost())));
+            availablePlayer.setServices(
+                    ServiceUtil.divideServiceFromJsonArray(availablePlayer.getCurrentServices(),
+                            serviceDTO));
+//                    ServiceUtil.divideService(availablePlayer.getCurrentServices(),
+//                    ServiceUtil.buildService(serviceDTO.getServiceName(), serviceDTO.getCost())));
             avaPlayerRepo.save(availablePlayer);
             return true;
         }
@@ -252,12 +257,15 @@ public class CourtServicesServiceImpl {
      * @return
      */
     @Transactional
-    public Boolean updateServicesToAvailablePlayer(List<ServiceDTO> listServices, String playerName) {
+    public Boolean updateServicesToAvailablePlayer(List<ServiceRequest> listServiceRequest, String playerName) {
         AvailablePlayer availablePlayer = session.getAvailablePlayerInActiveSession(playerName);
         if (availablePlayer != null) {
-            String listServiceString = listServices.stream().map(serviceDTO ->
-                            ServiceUtil.buildService(serviceDTO.getServiceName(), serviceDTO.getCost()))
-                    .collect(Collectors.joining(CommonConstant.STR_SEMI_COLON));
+            List<ServiceDTO> listServiceDTO = listServiceRequest.stream().map(req -> ServiceConverter.convertRequestToDTO(req))
+                    .collect(Collectors.toList());
+            String listServiceString = ServiceUtil.buildJsonArrayStr(listServiceDTO);
+//                    listServiceDTO.stream().map(serviceDTO ->
+//                            ServiceUtil.buildJsonService(serviceDTO))
+//                    .collect(Collectors.joining(CommonConstant.STR_SEMI_COLON));
             availablePlayer.setServices(listServiceString);
             avaPlayerRepo.save(availablePlayer);
             return true;
@@ -494,6 +502,7 @@ public class CourtServicesServiceImpl {
         return Boolean.TRUE;
     }
 
+    @Transactional
     public Result<Boolean> removeAvaPlayerOutSession(String playerName) {
         return serviceTemple.execute(new ProcessCallback<String, Boolean>() {
             @Override
@@ -511,27 +520,10 @@ public class CourtServicesServiceImpl {
                 return transactionTemplate.execute(new TransactionCallback<Boolean>() {
                     @Override
                     public Boolean doInTransaction(TransactionStatus status) {
-                        return transactionRemovePlayerToCurrentSession(playerName.replace(CommonConstant.DOUBLE_QUOTES, CommonConstant.EMPTY).trim());
-
+                        return session.removePlayerOutCurrentSession(playerName.replace(CommonConstant.DOUBLE_QUOTES, CommonConstant.EMPTY).trim());
                     }
                 });
             }
         });
-    }
-
-    //    @Transactional(rollbackFor = {BusinessException.class, Exception.class})
-    public Boolean transactionRemovePlayerToCurrentSession(String playerName) {
-        // add to current session
-        Session currSession = session.findListCurrentSession().getFirst();
-        Assert.notNull(currSession, "Not available session.");
-
-        List<Player> listPlayer = userRepo.findAllByPlayerName(playerName);
-        Assert.notEmpty(listPlayer, "Cannot find player");
-        List<AvailablePlayer> availablePlayerList = avaPlayerRepo.findAllForUpdateBySessionAndPlayerAndLeaveTimeIsNull(currSession, listPlayer.getFirst());
-        Assert.isTrue(!availablePlayerList.isEmpty(), "There is no Available player for update.");
-
-        availablePlayerList.stream().forEach(a -> a.setLeaveTime(ServiceUtil.getCurrentInstant()));
-        avaPlayerRepo.saveAll(availablePlayerList);
-        return Boolean.TRUE;
     }
 }

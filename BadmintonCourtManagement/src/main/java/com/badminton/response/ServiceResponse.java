@@ -1,6 +1,7 @@
 package com.badminton.response;
 
 import com.badminton.entity.Service;
+import com.badminton.model.dto.ServiceDTO;
 import com.badminton.requestmodel.ResponseDTO;
 import com.badminton.util.MoneyUtils;
 import lombok.Getter;
@@ -19,4 +20,11 @@ public class ServiceResponse extends ResponseDTO {
         this.cost = serviceEntity.getCost();
         this.costFormat = MoneyUtils.formatToVND(serviceEntity.getCost());
     }
+
+    public ServiceResponse(ServiceDTO serviceDTO) {
+        this.serviceName = serviceDTO.getServiceName();
+        this.cost = serviceDTO.getCost();
+        this.costFormat = MoneyUtils.formatToVND(serviceDTO.getCost());
+    }
+
 }

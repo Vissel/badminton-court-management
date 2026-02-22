@@ -1,6 +1,6 @@
 package com.badminton.entity;
 
-import com.badminton.requestmodel.ServiceDTO;
+import com.badminton.model.dto.ServiceDTO;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;

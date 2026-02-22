@@ -1,6 +1,7 @@
-package com.badminton.requestmodel;
+package com.badminton.model.dto;
 
 import com.badminton.entity.ShuttleBall;
+import com.badminton.requestmodel.ResponseDTO;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;

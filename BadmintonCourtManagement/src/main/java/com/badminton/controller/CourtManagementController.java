@@ -1,5 +1,7 @@
 package com.badminton.controller;
 
+import com.badminton.model.dto.ServiceDTO;
+import com.badminton.model.dto.ShuttleBallDTO;
 import com.badminton.requestmodel.*;
 import com.badminton.response.ServiceResponse;
 import com.badminton.response.result.Result;
@@ -37,7 +39,7 @@ public class CourtManagementController {
     }
 
     @PostMapping(value = "/addListBallIntoCourt")
-    public ResponseEntity<Boolean> addListBallIntoCourt(@RequestParam String courtId, @RequestBody List<ShuttleBallDTO> listBall) {
+    public ResponseEntity<Boolean> addListBallIntoCourt(@RequestParam String courtId, @RequestBody List<ShuttleBallRequest> listBall) {
         Boolean res = ballService.addListOfShuttleBallIntoCourt(Integer.valueOf(courtId), listBall);
         return ResponseEntity.ok().body(res);
     }
@@ -96,7 +98,7 @@ public class CourtManagementController {
 
     @PostMapping(value = "/updateServiceToPlayer")
     public ResponseEntity<Boolean> updateServiceToAvaPlayer(@RequestParam String playerName,
-                                                            @RequestBody List<ServiceDTO> listServiceDTO) {
+                                                            @RequestBody List<ServiceRequest> listServiceDTO) {
         Boolean res = courtService.updateServicesToAvailablePlayer(listServiceDTO, playerName);
         // Error cases are not handled
         return ResponseEntity.ok(res);
@@ -104,8 +106,8 @@ public class CourtManagementController {
 
     @PostMapping(value = "/addServiceToPlayer")
     public ResponseEntity<Boolean> addServiceToAvaPlayer(@RequestParam String playerName,
-                                                         @RequestBody ServiceDTO serviceDTO) {
-        Boolean res = courtService.addServiceToAvailablePlayer(serviceDTO, playerName);
+                                                         @RequestBody ServiceRequest serviceRequest) {
+        Boolean res = courtService.addServiceToAvailablePlayer(serviceRequest, playerName);
         // Error cases are not handled
         return ResponseEntity.ok(res);
     }

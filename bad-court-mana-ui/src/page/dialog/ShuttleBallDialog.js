@@ -10,7 +10,7 @@ const ShuttleBallDialog = ({
   onCancel,
 }) => {
   const [options, setOptions] = useState([]);
-  const [selectedValue, setSelectedValue] = useState("");
+  const [selectedIndex, setSelectedIndex] = useState();
   const [quantity, setQuantity] = useState(0);
   const [addedItems, setAddedItems] = useState([]);
 
@@ -28,8 +28,19 @@ const ShuttleBallDialog = ({
         .get("/court-mana/getShuttleBalls")
         .then((res) => res.data)
         .then((data) => {
-          setOptions(data.map((b) => `${b.shuttleName} - ${b.shuttleCost}`));
-          setSelectedValue("");
+          // setOptions(data.map((b) => `${b.shuttleName} - ${b.shuttleCost}`));
+          setOptions(
+            data.map((b) => {
+              return {
+                shuttleName: b.shuttleName,
+                cost: b.cost,
+                costFormat: b.costFormat,
+                currency: b.currency,
+              };
+            })
+          );
+          setSelectedIndex(0);
+          setQuantity(1);
         })
         .catch((err) => console.error("Error fetching shuttle balls:", err));
 
@@ -48,40 +59,57 @@ const ShuttleBallDialog = ({
   };
 
   const handleAdd = () => {
-    if (!selectedValue || Number.isNaN(quantity) || quantity < 1) {
+    if (Number.isNaN(quantity) || quantity < 1) {
       return;
     }
     const intQuantity = parseInt(quantity);
     // Check if item already exists → update quantity
+    const selectedValue = options[selectedIndex]; // This is the full object: {shuttleName, cost, ...}
+
     setAddedItems((prev) => {
-      const existing = prev.find((it) => it.name === selectedValue);
+      // 1. Search using 'shuttleName' since that is the key in your objects
+      const existing = prev.find(
+        (it) => it.shuttleName === selectedValue.shuttleName
+      );
+
       if (existing) {
+        // 2. Update quantity of the existing object
         return prev.map((it) =>
-          it.name === selectedValue
+          it.shuttleName === selectedValue.shuttleName
             ? { ...it, quantity: it.quantity + intQuantity }
             : it
         );
       }
-      return [...prev, { name: selectedValue, quantity: intQuantity }];
+
+      // 3. Add new item with all required fields + initial quantity
+      return [
+        ...prev,
+        {
+          shuttleName: selectedValue.shuttleName,
+          cost: selectedValue.cost,
+          costFormat: selectedValue.costFormat,
+          currency: selectedValue.currency,
+          quantity: intQuantity,
+        },
+      ];
     });
     setQuantity(1);
   };
 
   const handleSave = (courtProcessing) => {
     // convert to {key:value} map format
-    const resultMap = [];
-    addedItems.forEach((item) => {
-      resultMap[item.name] = item.quantity;
-    });
-    console.log("✅ Saved shuttle balls map:", resultMap);
-    onSaveBallOntoCourt(courtProcessing, resultMap);
+    // const resultMap = [];
+    // addedItems.forEach((item) => {
+    //   resultMap[item] = item.quantity;
+    // });
+    console.log("✅ Saved shuttle balls map:", addedItems);
+    onSaveBallOntoCourt(courtProcessing, addedItems);
   };
 
   const checkAndSetQuantity = (newQuantity) => {
     if (!Number.isNaN(newQuantity)) {
       setQuantity(newQuantity);
     }
-   
   };
 
   if (!show) return null;
@@ -99,13 +127,13 @@ const ShuttleBallDialog = ({
           <div className="d-flex align-items-center mb-2">
             <select
               className="form-select me-2"
-              value={selectedValue}
-              onChange={(e) => setSelectedValue(e.target.value)}
+              value={selectedIndex}
+              onChange={(e) => setSelectedIndex(e.target.value)}
             >
-              <option value="">-- Chọn cầu --</option>
-              {options.map((opt, i) => (
-                <option key={i} value={opt}>
-                  {opt}
+              {/* <option value="">-- Chọn cầu --</option> */}
+              {options.map((ball, index) => (
+                <option key={ball.shuttleName} value={index}>
+                  {ball.shuttleName} - {ball.costFormat} {ball.currency}
                 </option>
               ))}
             </select>
@@ -116,8 +144,8 @@ const ShuttleBallDialog = ({
               onChange={(e) => checkAndSetQuantity(e.target.value)}
               style={{ width: "25%", margin: "0 7px 0 0" }}
             />
-            <button className="btn btn-primary" onClick={handleAdd}>
-              Thêm
+            <button className="btn btn-success" onClick={handleAdd}>
+              +
             </button>
           </div>
         </div>
@@ -136,7 +164,9 @@ const ShuttleBallDialog = ({
                 className="added-item d-flex justify-content-between align-items-center"
               >
                 <div>
-                  <strong>{item.name}</strong> &nbsp;–&nbsp;
+                  <strong>{item.shuttleName}</strong>
+                  &nbsp;–&nbsp;
+                  <span>{item.costFormat}</span> &nbsp;–&nbsp;
                   <span className="text-secondary">
                     Số lượng: {item.quantity}
                   </span>
