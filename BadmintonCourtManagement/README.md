@@ -10,4 +10,3 @@ tomcat:
    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
    xsi:
    schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
-3) 

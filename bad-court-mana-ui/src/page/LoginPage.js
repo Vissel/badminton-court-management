@@ -1,6 +1,7 @@
 // src/LoginPage.js
 import { useState, useContext } from "react";
 import { Form, Row, Col, Button, Container } from "react-bootstrap";
+import { JSEncrypt } from 'jsencrypt';
 
 import { useNavigate } from "react-router";
 import { AuthContext } from "../context/AuthContext";
@@ -18,10 +19,17 @@ function LoginPage() {
     // e.preventDefault();
 
     try {
+      const { data: pubKey } = await api.get("/get-public-key");
+      const encryptor = new JSEncrypt();
+      encryptor.setPublicKey(pubKey);
+      const securePassword = encryptor.encrypt(password);
+
+      // Proceed with login...
+
       const res = await api.post(
         `/login?${new URLSearchParams({
           username,
-          password,
+          securePassword,
         })}`,
         {
           headers: {

@@ -133,3 +133,4 @@ from available_player a inner join player p on a.player_id = p.player_id
 	where a.session_id = 14
 ;
 
+select * from `user`;

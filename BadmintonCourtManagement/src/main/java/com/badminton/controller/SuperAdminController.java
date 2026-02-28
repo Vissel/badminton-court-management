@@ -37,4 +37,13 @@ public class SuperAdminController {
                 .removeAvaPlayerOutSession(playerName);
         return ResponseConvertor.convert(res);
     }
+
+    @PostMapping("/createAdminUser")
+    public ResponseEntity<Result<?>> createUser(@RequestBody RegisterUserDTO requestCreateUser) {
+        boolean created = userService.createAdminUser(requestCreateUser);
+        if (created) {
+            return ResponseEntity.ok(null);
+        }
+        return ResponseEntity.status(410).body(null);
+    }
 }

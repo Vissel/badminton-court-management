@@ -4,8 +4,9 @@ import com.badminton.requestmodel.RegisterUserDTO;
 
 public interface UserService {
 
-	public boolean saveAdminUser(RegisterUserDTO userDTO);
+    boolean saveAdminUser(RegisterUserDTO userDTO);
 
-	public boolean savePlayer(RegisterUserDTO userDTO);
+    boolean savePlayer(RegisterUserDTO userDTO);
 
+    boolean createAdminUser(RegisterUserDTO requestCreateUser);
 }

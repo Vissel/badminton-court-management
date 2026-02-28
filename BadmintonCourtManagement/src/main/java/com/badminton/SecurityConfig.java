@@ -15,7 +15,6 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
 import org.springframework.stereotype.Component;
 import org.springframework.web.cors.CorsConfiguration;
@@ -40,16 +39,19 @@ public class SecurityConfig {
         http
                 // Disable CSRF for simpler development (be cautious in production)
                 .csrf(csrf ->
-
-                        csrf.ignoringRequestMatchers("/login", "/logout")
-                                .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                                csrf.disable()
+//                        csrf.ignoringRequestMatchers("/login", "/secure-login", "/logout")
+//                                .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
 
                 )
                 // Configure CORS
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 // Authorize all requests (adjust as per your security requirements)
-                .authorizeHttpRequests(authorize -> authorize.requestMatchers("/login", "/logout", "/index", "/error",
-                        "/admin/internal/**", "/public/**", "/csrf").permitAll().anyRequest().authenticated())
+                .authorizeHttpRequests(authorize -> authorize.requestMatchers("/login", "/secure-login", "/logout", "/index", "/error",
+                                "/admin/internal/**", "/public/**", "/csrf",
+                                "/get-public-key").permitAll()
+
+                        .anyRequest().authenticated())
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
                 )

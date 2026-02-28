@@ -1,14 +1,8 @@
 import React, { useState, useEffect } from "react";
 
 import api, { backendHost } from "../api/index";
+import { VN_CURRENCY } from "./MoneyUtils";
 
-// -------- dummy data for UI testing --------
-const DUMMY_REPORTS = Array.from({ length: 23 }).map((_, i) => ({
-  id: i + 1,
-  date: `2025-01-${String((i % 28) + 1).padStart(2, "0")}`,
-  fromTo: i % 2 === 0 ? "08:00 - 10:00" : "18:00 - 20:00",
-  total: 100000 + i * 5000,
-}));
 // ------------------------------------------
 
 export default function ReportPage() {
@@ -228,29 +222,11 @@ export default function ReportPage() {
         <table className="table table-bordered table-hover align-middle">
           <thead className="table-light">
             <tr>
-              <th style={{ width: "60px" }}>STT</th>
-              <th
-                onClick={() => toggleSort("date")}
-                style={{ cursor: "pointer" }}
-              >
-                Ngày{" "}
-                {sortField === "date" ? (sortDir === "ASC" ? "▲" : "▼") : ""}
-              </th>
-              <th
-                onClick={() => toggleSort("fromTo")}
-                style={{ cursor: "pointer" }}
-              >
-                Khoảng thời gian{" "}
-                {sortField === "fromTo" ? (sortDir === "ASC" ? "▲" : "▼") : ""}
-              </th>
-              <th
-                onClick={() => toggleSort("total")}
-                style={{ cursor: "pointer" }}
-              >
-                Tồng tiền đã thanh toán{" "}
-                {sortField === "total" ? (sortDir === "ASC" ? "▲" : "▼") : ""}
-              </th>
-              <th style={{ width: "120px" }}>Xuất</th>
+              <th>STT</th>
+              <th>Ngày</th>
+              <th>Khoảng thời gian</th>
+              <th>Tồng tiền đã thanh toán ({VN_CURRENCY})</th>
+              <th>Xuất</th>
             </tr>
           </thead>
           <tbody>
