@@ -13,7 +13,7 @@ public class MoneyUtils {
      * @param amount The float value to format
      * @return String formatted with dots as thousand separators
      */
-    public static String formatToVND(float amount) {
+    public static String formatToVND(double amount) {
         // Create a Locale for Vietnam
         Locale localeVN = new Locale("vi", "VN");
 

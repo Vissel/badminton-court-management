@@ -39,13 +39,13 @@ public class ServiceUtil {
         return serviceName.concat(CommonConstant.HYPHEN).concat(String.valueOf(cost));
     }
 
-    public static List<ServiceDTO> getServiceDTOFromString(String string) {
+    public static List<ServiceDTO> convertStringToListService(String serviceString) {
         // Define the type of the target list using TypeToken
         Type objectListType = new TypeToken<ArrayList<ServiceDTO>>() {
         }.getType();
         List<ServiceDTO> dtos;
         try {
-            dtos = new Gson().fromJson(string, objectListType);
+            dtos = new Gson().fromJson(serviceString, objectListType);
             Assert.notNull(dtos, "current service is null");
         } catch (JsonSyntaxException | IllegalArgumentException e) {
             dtos = new ArrayList<>();
@@ -53,22 +53,18 @@ public class ServiceUtil {
         return dtos;
     }
 
-    public static String buildJsonArray(ServiceDTO serviceDTO) {
-        return new Gson().toJson(serviceDTO);
-    }
-
     public static <T> String buildJsonArrayStr(List<T> service) {
         return new Gson().toJson(service);
     }
 
     public static String addServiceToJsonArray(String existedService, ServiceDTO newService) {
-        List<ServiceDTO> dtos = getServiceDTOFromString(existedService);
+        List<ServiceDTO> dtos = convertStringToListService(existedService);
         dtos.add(newService);
         return new Gson().toJson(dtos);
     }
 
     public static String divideServiceFromJsonArray(String existedService, ServiceDTO deletedService) {
-        List<ServiceDTO> dtos = getServiceDTOFromString(existedService);
+        List<ServiceDTO> dtos = convertStringToListService(existedService);
         List<ServiceDTO> dividedList = dtos.stream().filter(s -> s.getServiceName().equals(deletedService.getServiceName()) && s.getCost() == deletedService.getCost()).collect(Collectors.toList());
         return new Gson().toJson(dividedList);
     }

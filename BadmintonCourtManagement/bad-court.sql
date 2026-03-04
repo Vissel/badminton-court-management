@@ -1,5 +1,5 @@
 use `bad-court-management-db`;
-select * from service;
+select * from service where is_active = true;
 SELECT * FROM player;
 SELECT * FROM court;
 select * from available_player 
@@ -41,7 +41,7 @@ values (current_time(),true);
 -- available players
 select a.ava_id, p.player_id, p. player_name, a.services
  from available_player a inner join player p on a.player_id = p.player_id
-where session_id = 26;
+where session_id = 85;
 
 select * from available_player a inner join player p on a.player_id = p.player_id;
 

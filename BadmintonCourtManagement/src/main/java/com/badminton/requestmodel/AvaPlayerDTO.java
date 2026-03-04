@@ -42,7 +42,7 @@ public class AvaPlayerDTO extends ResponseDTO {
         if (CommonUtil.isNotNullEmpty(avaPlayerEntity.getServices())) {
             this.serviceDTOs = Arrays.asList(avaPlayerEntity.getServices().split(CommonConstant.STR_SEMI_COLON))
                     .stream().filter(CommonUtil::isNotNullEmpty).collect(Collectors.toList());
-            this.serviceResponses = ServiceUtil.getServiceDTOFromString(avaPlayerEntity.getServices()).stream()
+            this.serviceResponses = ServiceUtil.convertStringToListService(avaPlayerEntity.getServices()).stream()
                     .map(dto -> new ServiceResponse(dto)).collect(Collectors.toList());
         }
     }
