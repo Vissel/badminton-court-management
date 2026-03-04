@@ -1,6 +1,6 @@
 package com.badminton.service;
 
-import com.badminton.SecurityConfig;
+import com.badminton.config.SecurityConfig;
 import com.badminton.constant.ApiConstant;
 import com.badminton.constant.CommonConstant;
 import com.badminton.entity.Court;

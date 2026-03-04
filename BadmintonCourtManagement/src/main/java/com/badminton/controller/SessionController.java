@@ -1,5 +1,6 @@
 package com.badminton.controller;
 
+import com.badminton.exception.enums.ErrorCodeEnum;
 import com.badminton.requestmodel.SessionRequest;
 import com.badminton.response.result.Result;
 import com.badminton.response.result.SessionResult;
@@ -25,8 +26,18 @@ public class SessionController {
     }
 
     @PostMapping(value = "/checkCreateNewSession")
-    public ResponseEntity<Result<SessionResult>> checkCreateNewSession() {
-        return ResponseConvertor.convert(sessionService.checkAndCreateNewSessionInDay());
+    public Result<SessionResult> checkCreateNewSession() {
+        Result<SessionResult> result = new Result<>();
+        try {
+            SessionResult data = sessionService.checkCreateSession();
+            result.setData(data);
+            result.setSuccess(true);
+        } catch (Exception e) {
+            result.setSuccess(false);
+            result.setErrorCode(Integer.parseInt(ErrorCodeEnum.SESSION_ERROR.getCode()));
+            result.setErrorMessage("checkCreateSession got error. Message:" + e.getMessage());
+        }
+        return result;
     }
 
     @PostMapping(value = "/deleteSession")

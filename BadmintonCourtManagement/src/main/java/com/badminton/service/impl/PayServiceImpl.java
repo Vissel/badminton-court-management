@@ -63,7 +63,7 @@ public class PayServiceImpl implements PayService {
                         .collect(Collectors.toList());
                 availablePlayer.setServices(
                         ServiceUtil.buildJsonArrayStr(dtos));
-                availablePlayer.setLeaveTime(ServiceUtil.getCurrentInstant());
+                availablePlayer.setLeaveTime(sessionService.getUTCPlus7Instant());
                 availablePlayer.setPayType(payRequest.getPayType());
                 availablePlayer.setPayAmount(Float.valueOf(payRequest.getTotalExpense()));
                 return convertToPayResult(availablePlayerRepository.save(availablePlayer));

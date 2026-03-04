@@ -394,7 +394,7 @@ public class CourtServicesServiceImpl {
                     setSelectedBallIntoGame(game, gameDTO.getShuttleBalls(), stateChange);
                     // update ended time for FINISH & CANCEL state
                     if (ServiceUtil.isEndedState(changeGameState)) {
-                        game.setEndedDate(ServiceUtil.getCurrentInstant());
+                        game.setEndedDate(session.getUTCPlus7Instant());
                         // calculate and save the expense of game.
                         gameCalculator.calculateGameResult(game);
                     }

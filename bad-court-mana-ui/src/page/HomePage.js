@@ -504,8 +504,12 @@ const saveServiceToPlayer = async(playerName, serviceName, cost) => {
       try {
         // check available session
         const response = await api.post("/session/checkCreateNewSession");
-        const avaSession = response.data;
-        console.log(`Init message: ${avaSession.message}`);
+        if(response.success === false){
+          console.error("checkCreateNewSession got error.")
+          return;
+        }
+
+        console.log(`Session is created: ${response.data}`);
 
         // fetch shuttle_balls
         const ballResponse = await api.get("/court-mana/getShuttleBalls");
@@ -620,7 +624,6 @@ const saveServiceToPlayer = async(playerName, serviceName, cost) => {
         console.error(
           `Error while checking available session. Error: ${error}`
         );
-        console.error("Lỗi khi load trang chủ .");
       }
     };
 

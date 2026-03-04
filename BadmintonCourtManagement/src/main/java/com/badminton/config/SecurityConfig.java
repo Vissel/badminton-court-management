@@ -1,9 +1,11 @@
-package com.badminton;
+package com.badminton.config;
 
+import com.badminton.CustomUserDetailsService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -49,7 +51,9 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 // Authorize all requests (adjust as per your security requirements)
                 .authorizeHttpRequests(authorize -> authorize.requestMatchers("/login", "/logout", "/index", "/error",
-                        "/admin/internal/**", "/public/**", "/csrf").permitAll().anyRequest().authenticated())
+                                "/admin/internal/**", "/public/**", "/csrf").permitAll()
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()// a part to handle OPTIONs from FE
+                        .anyRequest().authenticated())
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
                 )
@@ -107,7 +111,7 @@ public class SecurityConfig {
         configuration.setAllowedOriginPatterns(Arrays.asList(
                 "http://localhost:3000", "http://localhost:8080"));
         // Allow all HTTP methods
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE"));
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         // Allow all headers
         configuration.setAllowedHeaders(Arrays.asList("*"));
         // Allow credentials (e.g., cookies, authorization headers)

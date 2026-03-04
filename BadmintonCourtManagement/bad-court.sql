@@ -6,7 +6,7 @@ select * from available_player
 order by ava_id desc;
 
 select * from `session` order by session_id desc limit  5;
-
+-- delete from `session` where session_id = 83;
 
 INSERT INTO player (player_name,`password`)
 SELECT 'rootuser', '$2a$10$l0NHT7MaEB2Y.wKyQMIcRe8CPAOgznd4lx1ZXQmnsyLu2qF.4w.Ti'
@@ -29,7 +29,7 @@ order by from_time desc;
 
 SELECT * FROM `session` 
 where is_active = true and from_time < current_timestamp();
-SELECT * FROM `session` where session_id=10;
+SELECT * FROM `session` where session_id = $session_id;
 
 insert into session(from_time,is_active)
 values (current_time(),true);
@@ -133,3 +133,5 @@ from available_player a inner join player p on a.player_id = p.player_id
 	where a.session_id = 14
 ;
 
+select * from `user` 
+order by created_at desc;

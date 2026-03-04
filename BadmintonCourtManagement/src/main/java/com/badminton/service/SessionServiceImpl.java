@@ -15,7 +15,6 @@ import com.badminton.requestmodel.SessionRequest;
 import com.badminton.response.result.Result;
 import com.badminton.response.result.SessionResult;
 import com.badminton.util.Converter;
-import com.badminton.util.ServiceUtil;
 import com.badminton.util.TimeUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -70,41 +69,37 @@ public class SessionServiceImpl {
         return calendar.toInstant();
     }
 
+    /**
+     *
+     * @return
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public SessionResult checkCreateSession() {
+        Boolean check = checkAvailableSession();
+        if (check != null && check.equals(Boolean.FALSE)) {
+            return createNewSessionInDay();
+        }
+        return null;
+    }
+
+    @Transactional(readOnly = true)
     public Boolean checkAvailableSession() {
+        log.info("checkAvailableSession ...");
         Instant current = getUTCPlus7Instant();
         List<Session> availableSession = sessionRepo.findByFromTimeLessThanAndToTimeIsNullAndIsActive(current, true,
                 Sort.by(Order.desc("sessionId")));
         if (!availableSession.isEmpty()) {
             return inTheSameUTCPlus7Date(availableSession.getFirst().getFromTime());
         }
-        return false;
+        return Boolean.FALSE;
     }
 
     @Transactional
-    public Result<SessionResult> checkAndCreateNewSessionInDay() {
-        Boolean request = Boolean.FALSE;
-        return serviceTemple.execute(new ProcessCallback<Boolean, SessionResult>() {
-            @Override
-            public Boolean getRequest() {
-                return request;
-            }
-
-            @Override
-            public void preProcess(Boolean request) {
-            }
-
-            @Override
-            public SessionResult process() throws BusinessException {
-
-                if (!checkAvailableSession()) {
-                    Session createdSession = new Session();
-                    sessionRepo.save(createdSession);
-                    return createdSessionResult(createdSession);
-                }
-                return availableSessionResult();
-            }
-        });
-
+    public SessionResult createNewSessionInDay() {
+        log.info("createNewSessionInDay...");
+        Session createdSession = new Session();
+        sessionRepo.save(createdSession);
+        return createdSessionResult(createdSession);
     }
 
     private SessionResult availableSessionResult() {
@@ -319,7 +314,7 @@ public class SessionServiceImpl {
      * @throws IllegalArgumentException
      */
     public Boolean removeListPlayerOutCurrentSession(List<AvailablePlayer> availablePlayerList) throws IllegalArgumentException {
-        availablePlayerList.stream().forEach(a -> a.setLeaveTime(ServiceUtil.getCurrentInstant()));
+        availablePlayerList.stream().forEach(a -> a.setLeaveTime(getUTCPlus7Instant()));
         avaPlayerRepo.saveAll(availablePlayerList);
         return Boolean.TRUE;
     }

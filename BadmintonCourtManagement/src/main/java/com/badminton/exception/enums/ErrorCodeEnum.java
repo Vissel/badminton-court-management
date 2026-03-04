@@ -11,8 +11,8 @@ public enum ErrorCodeEnum {
     INCORRECT_TYPE("411", "INCORRECT_TYPE", "Provided data type is incorrect."),
     FLOW_ERROR("412", "FLOW_ERROR", "Consequence flow has error."),
     INTERNAL_SERVER_ERROR("500", "INTERNAL_SERVER_ERROR", "Server error."),
-    EXPORTING_ERROR("413", "EXPORTING_ERROR", "Error while exporting.");
-
+    EXPORTING_ERROR("413", "EXPORTING_ERROR", "Error while exporting."),
+    SESSION_ERROR("510", "SESSION_ERROR", "Session error");
     private String code;
     private String name;
     private String description;
