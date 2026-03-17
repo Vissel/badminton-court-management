@@ -7,7 +7,7 @@ export const currentHost = `${window.location.protocol}//${window.location.hostn
 
 const localHost = "http://localhost:8080";
 const context = "bad-court-management-dev";
-export const backendHost = `${localHost}/${context}`;
+export const backendHost = `${config.baseURL}`;
 
 const api = axios.create({
   baseURL: config.baseURL, // Update with your backend base URL

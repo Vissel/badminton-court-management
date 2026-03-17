@@ -264,7 +264,7 @@ public class ExcelExportService implements ExportService {
                 setServiceValueIntoNextTwoColumn(game, avaPlayer, partnerMap, colIndex, row, rowNumber);
                 colIndex += 2; // Move to next game pair (F, H, J...)
             }
-
+            setRemainingServices(avaPlayer.getServices(), colIndex, row, rowNumber);
             // sum player payAmount
             totalAmt = Float.sum(totalAmt, getPayAmount(avaPlayer));
         }
@@ -568,6 +568,6 @@ public class ExcelExportService implements ExportService {
     }
 
     private Float getPayAmount(AvailablePlayer availablePlayer) {
-        return availablePlayer.getPayAmount() != null ? availablePlayer.getPayAmount() : Float.MIN_NORMAL;
+        return availablePlayer.getPayAmount() != null ? availablePlayer.getPayAmount() : MoneyUtils.DEFAULT;
     }
 }
