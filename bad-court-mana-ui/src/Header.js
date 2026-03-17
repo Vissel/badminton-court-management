@@ -12,7 +12,7 @@ function Header() {
   return (
     <Navbar bg="dark" variant="dark" expand="lg">
       <Container>
-        <Navbar.Brand href="/"> Quản lý sân cầu lông Tân Châu </Navbar.Brand>
+        <Navbar.Brand onClick={() => navigate("/home")} style={{ cursor: "pointer" }}> Quản lý sân cầu lông Tân Châu </Navbar.Brand>
         <Navbar.Toggle aria-controls="basic-navbar-nav" />
         <Navbar.Collapse id="basic-navbar-nav">
           <Nav className="ms-auto" style={{ gap: "20px" }}>

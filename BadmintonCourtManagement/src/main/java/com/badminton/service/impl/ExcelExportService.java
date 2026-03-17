@@ -179,8 +179,11 @@ public class ExcelExportService implements ExportService {
             writeSessionHeader(sheet, workbook);
 
             int rowIndex = START_DATA_ROW_INDEX;
+            int playerNo = 1;
             for (int i = 0; i < listReport.size(); i++) {
-                rowIndex = writeReportData(listReport.get(i), rowIndex, sheet);
+                int[] playerNoArray = {playerNo};
+                rowIndex = writeReportData(listReport.get(i), rowIndex, playerNoArray, sheet);
+                playerNo = playerNoArray[0];
             }
 
             // Auto-size columns for basic info
@@ -214,10 +217,11 @@ public class ExcelExportService implements ExportService {
      *
      * @param reportData
      * @param rowIndex
+     * @param playerNoArray array containing player number (passed by reference)
      * @param sheet
      * @return
      */
-    private int writeReportData(ReportDTO reportData, int rowIndex, SXSSFSheet sheet) {
+    private int writeReportData(ReportDTO reportData, int rowIndex, int[] playerNoArray, SXSSFSheet sheet) {
         Session session = reportData.getSession();
         List<AvailablePlayer> players = reportData.getAvailablePlayers();
         List<Game> games = reportData.getGames();
@@ -231,7 +235,6 @@ public class ExcelExportService implements ExportService {
         Float totalAmt = Float.MIN_NORMAL;
 
         int currentRowI = rowIndex;
-        int playerNo = 1;
         SXSSFRow row;
         SXSSFRow rowNumber;
         for (AvailablePlayer avaPlayer : players) {
@@ -245,7 +248,7 @@ public class ExcelExportService implements ExportService {
             if (totalAmtCell == null) {
                 totalAmtCell = row.createCell(TOTAL_COL); // set value later
             }
-            row.createCell(PLAYER_NO_COL).setCellValue(playerNo++);
+            row.createCell(PLAYER_NO_COL).setCellValue(playerNoArray[0]++);
             row.createCell(PLAYER_NAME_COL).setCellValue(avaPlayer.getPlayer().getPlayerName());
             row.createCell(PAY_AMT_COL).setCellValue(getPayAmount(avaPlayer));
             row.createCell(LEAVE_TIME_COL).setCellValue(TimeUtils.convertInstantToTimeStr(avaPlayer.getLeaveTime()));
@@ -256,7 +259,7 @@ public class ExcelExportService implements ExportService {
             rowNumber.createCell(DATE_COL).setCellValue(date);
             rowNumber.createCell(DATE_FORMAT_COL).setCellValue(dateFormat);
             rowNumber.createCell(COURT_FEE_COL).setCellValue(extractCourtFee(avaPlayer.getServices()));
-            rowNumber.createCell(PLAYER_NO_COL).setCellValue(playerNo - 1);
+            rowNumber.createCell(PLAYER_NO_COL).setCellValue(playerNoArray[0] - 1);
             rowNumber.createCell(PLAYER_NAME_COL).setCellValue(avaPlayer.getPlayer().getPlayerName());
 
             int colIndex = row.getLastCellNum();
