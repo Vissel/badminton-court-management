@@ -2,6 +2,7 @@ package com.badminton.config;
 
 import com.badminton.CustomUserDetailsService;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -25,6 +26,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
 
+@Slf4j
 @Component
 @EnableWebSecurity
 @EnableMethodSecurity
@@ -108,8 +110,15 @@ public class SecurityConfig {
     UrlBasedCorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         // Allow all origins (use specific origins in production)
+        final String protocol = "http://";
+        final String tomcatPort = "8080";
+        final String devFEPort = "3000";
+        String host = "localhost";
+
         configuration.setAllowedOriginPatterns(Arrays.asList(
-                "http://localhost:3000", "http://localhost:8080"));
+                concatOrigin(protocol, host, devFEPort),
+                concatOrigin(protocol, host, tomcatPort)
+        ));
         // Allow all HTTP methods
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         // Allow all headers
@@ -122,6 +131,10 @@ public class SecurityConfig {
         source.registerCorsConfiguration("/**", configuration);
 
         return source;
+    }
+
+    private String concatOrigin(String protocol, String host, String port) {
+        return protocol + host + ":" + port;
     }
 
     // Custom success handler to return JSON instead of redirecting

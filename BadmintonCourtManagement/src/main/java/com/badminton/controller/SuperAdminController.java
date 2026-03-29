@@ -1,6 +1,7 @@
 package com.badminton.controller;
 
 import com.badminton.requestmodel.RegisterUserDTO;
+import com.badminton.requestmodel.ResetUserRequest;
 import com.badminton.response.result.Result;
 import com.badminton.service.CourtServicesServiceImpl;
 import com.badminton.service.UserService;
@@ -8,10 +9,7 @@ import com.badminton.util.ResponseConvertor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/admin/internal")
@@ -37,4 +35,15 @@ public class SuperAdminController {
                 .removeAvaPlayerOutSession(playerName);
         return ResponseConvertor.convert(res);
     }
+
+    @GetMapping("/forgotPassword")
+    public ResponseEntity<String> forgotPassword(@RequestParam String username) {
+        return userService.generateResetPassToken(username);
+    }
+
+    @PostMapping("/resetPassword")
+    public ResponseEntity<String> resetPassword(@RequestBody ResetUserRequest resetUserRequest) {
+        return userService.resetPassword(resetUserRequest);
+    }
+
 }
