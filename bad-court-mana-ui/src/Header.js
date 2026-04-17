@@ -8,6 +8,7 @@ import { useNavigate } from "react-router";
 function Header() {
   const { logout } = useContext(AuthContext);
   let navigate = useNavigate();
+  const isRoot = sessionStorage.getItem("username") === "rootuser";
 
   return (
     <Navbar bg="dark" variant="dark" expand="lg">
@@ -19,6 +20,7 @@ function Header() {
             <Nav.Link onClick={() => navigate("/home")}>Trang chủ</Nav.Link>
             <Nav.Link onClick={() => navigate("/setup")}>Cài đặt</Nav.Link>
             <Nav.Link onClick={() => navigate("/report")}>Thống kê </Nav.Link>
+            {isRoot && <Nav.Link onClick={() => navigate("/super-admin")}>Super Admin</Nav.Link>}
             <Nav.Link onClick={logout}>Đăng xuất</Nav.Link>
           </Nav>
         </Navbar.Collapse>

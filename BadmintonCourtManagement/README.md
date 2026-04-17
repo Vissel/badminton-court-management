@@ -1,4 +1,5 @@
 deployment:
+
 tomcat:
 
 1) startup.sh:
@@ -10,4 +11,7 @@ tomcat:
    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
    xsi:
    schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
-3) 
+3) include Front-end and Back-end files in webapps folder of tomcat
+
+MySQL server
+

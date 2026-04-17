@@ -1,5 +1,6 @@
 import axios from "axios";
 import config from './config'
+import { authRef } from '../context/authRef';
 
 // import { useNavigate } from 'react-router';
 
@@ -45,15 +46,8 @@ api.interceptors.response.use(
       const isExcluded = excludePaths.some((p) => currentPath.includes(p));
 
       if (!isExcluded) {
-        console.warn("Unauthorized / Forbidden – redirecting to login");
-
-        localStorage.clear();
-        sessionStorage.clear();
-
-        alert("Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại!");
-        window.location.replace("/#/login");
-
-        // Stop promise chain cleanly
+        console.warn("Unauthorized / Forbidden – forcing logout");
+        authRef.logout?.();
         return new Promise(() => {});
       }
     }

@@ -36,11 +36,8 @@ public class UserServiceImpl implements UserService {
             Player user;
             if (!existedPlayer.isPresent()) {
                 user = new Player(userDTO.getUserName(), encoder.encode(userDTO.getPassword()));
-            } else {
-                user = existedPlayer.get();
-                user.setPassword(userDTO.getPassword());
+                isSaved = userRepo.save(user).getPlayerId() != 0;
             }
-            isSaved = userRepo.save(user).getPlayerId() != 0;
         }
         return isSaved;
     }

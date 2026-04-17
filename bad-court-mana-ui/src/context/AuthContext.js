@@ -1,8 +1,8 @@
 // src/context/AuthContext.js
 import React, { createContext, useState, useEffect } from "react";
-
 import Cookies from "js-cookie";
 import api from "../api";
+import { authRef } from "./authRef";
 
 export const AuthContext = createContext();
 
@@ -59,6 +59,19 @@ export const AuthProvider = ({ children }) => {
       alert("Đăng xuất thành công.");
     }
   };
+
+  const forceLogout = () => {
+    setAuthenticated(false);
+    setCsrfToken(null);
+    sessionStorage.clear();
+    alert("Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại!");
+    window.location.replace("/#/login");
+  };
+
+  useEffect(() => {
+    authRef.logout = forceLogout;
+  });
+
   return (
     <AuthContext.Provider
       value={{

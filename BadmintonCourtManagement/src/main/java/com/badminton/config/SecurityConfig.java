@@ -53,7 +53,7 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 // Authorize all requests (adjust as per your security requirements)
                 .authorizeHttpRequests(authorize -> authorize.requestMatchers("/login", "/logout", "/index", "/error",
-                                "/admin/internal/**", "/public/**", "/csrf").permitAll()
+                                "/public/**", "/csrf").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()// a part to handle OPTIONs from FE
                         .anyRequest().authenticated())
                 .sessionManagement(session ->

@@ -12,8 +12,9 @@ import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./context/ProtectedRoute";
 import HomePage2 from "./page/HomePage_mess";
 import HomePageError from "./page/HomePage_error";
-import HomeEmptyPage from "./page/HomeEmptyPage";
+
 import DateTimeBar from "./DateTimeBar";
+import SuperAdminPage from "./page/SuperAdminPage";
 
 function App() {
   return (
@@ -64,6 +65,14 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <ReportPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/super-admin"
+                element={
+                  <ProtectedRoute>
+                    <SuperAdminPage />
                   </ProtectedRoute>
                 }
               />
