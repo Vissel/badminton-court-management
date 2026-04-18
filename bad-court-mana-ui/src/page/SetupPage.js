@@ -18,7 +18,9 @@ import {VN_CURRENCY, formatVND, rawNumber } from "./MoneyUtils";
 function SetupPage() {
   const [errorMess, setErrorMess] = useState(null);
   const [totalCourt, setTotalCourt] = useState(7);
-  const [costInPerson, setCostInPerson] = useState(12000);
+  const [costInPerson, setCostInPerson] = useState();
+  const [costInPersonFormatted, setcostInPersonFormatted] = useState("");
+  const [costInPersonEditing, setCostInPersonEditing] = useState(false);
   const [shuttleBall, setShuttleBall] = useState([]);
   const [services, setServices] = useState([]);
   const [tableShuttleBalls, setTableShuttleBalls] = useState([]);
@@ -57,7 +59,7 @@ function SetupPage() {
       shuttleBall.map((ball) => {
         if (ball.id === id) {
           if (field === "cost") {
-            const raw = value.toString().replace(/\D/g, "");
+            const raw = Number(value.toString().replace(/\D/g, ""));
             return {
               ...ball,
               cost: raw,
@@ -75,7 +77,7 @@ function SetupPage() {
       services.map((service) => {
         if (service.id === id) {
           if (field === "cost") {
-            const raw = value.toString().replace(/\D/g, "");
+            const raw = Number(value.toString().replace(/\D/g, ""));
             return {
               ...service,
               cost: raw,
@@ -205,10 +207,10 @@ function SetupPage() {
       alert("Không thể lưu thiết lập. Kiểm tra lỗi trùng lặp.");
       return;
     }
-
+    const rawNumber =  Number(costInPerson.toString().replace(/\D/g, ""));
     const payload = {
       totalCourt: totalCourt,
-      costInPerson: costInPerson,
+      costInPerson: rawNumber,
       addedShuttleBalls: shuttleBall.map((b) => {
         return {
           shuttleName: b.shuttleName,
@@ -248,6 +250,7 @@ function SetupPage() {
         setShuttleBall([]);
         setOneBall(true);
         setServices([]);
+        setCostInPersonEditing(false);
       } else {
         setErrorMess(`${response.data.message}`);
       }
@@ -256,9 +259,11 @@ function SetupPage() {
     }
   };
 
-  const handleCostInPerson=(e)=>{
-    setCostInPerson(rawNumber(e.target.value) );
-  }
+  const handleCostInPerson = (e) => {
+    const raw = e.target.value.replace(/\D/g, "");
+    setCostInPerson(raw);
+    setcostInPersonFormatted(formatVND(raw));
+  };
   const handleCostInput = (e, id) => {
     const raw = e.target.value.replace(/\D/g, ""); // remove non digits
     handleBallChange(id, "cost", raw);
@@ -271,6 +276,7 @@ function SetupPage() {
       if (res.status === 200 && res.data !== "") {
         setTotalCourt(res.data.totalCourt);
         setCostInPerson(res.data.costInPerson);
+        setcostInPersonFormatted(formatVND(res.data.costInPerson));
         setTableShuttleBalls(res.data.shuttleBalls);
         setTableServices(res.data.services);
       }
@@ -339,12 +345,22 @@ function SetupPage() {
           </Form.Label>
           <Col sm="4">
             <InputGroup className="mb-3">
-              <Form.Control
-                type="text"
-                defaultValue="12000"
-                value={formatVND(costInPerson)}
-                onChange={(e) => handleCostInPerson(e)}
-              />
+              {costInPersonEditing ? (
+                <Form.Control
+                  type="text"
+                  value={costInPerson}
+                  onChange={(e) => handleCostInPerson(e)}
+                  autoFocus
+                />
+              ) : (
+                <Form.Control
+                  type="text"
+                  value={costInPersonFormatted}
+                  readOnly
+                  onClick={() => setCostInPersonEditing(true)}
+                  style={{ cursor: "pointer" }}
+                />
+              )}
               <InputGroup.Text>{VN_CURRENCY}/người</InputGroup.Text>
             </InputGroup>
           </Col>

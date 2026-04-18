@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 
@@ -23,26 +23,28 @@ export const TYPE = {
 };
 /* HomePage */
 function HomePage() {
-  const courtIds = [1, 2, 3, 4, 5, 6, 7, 8];
+  const [courtIds, setCourtIds] = useState([]);
+  const [activeCourts, setActiveCourts] = useState([]);
 
-  // Sort images for the right column (1, 2, 3) to display from bottom-up visually
-  // We need to reverse the order for rendering to achieve "right-end > up"
-  const rightColumn = courtIds
-    .filter((id) => id >= 1 && id <= 4)
-    .sort((a, b) => a - b); // Ensure 1, 2, 3 order, then reverse for display
+  const courtNumber = (court) => parseInt(court.courtName.replace("Sân ", ""), 10);
 
-  // Sort images for the left column (4, 5, 6, 7)
-  const leftColumn = courtIds
-    .filter((id) => id >= 5 && id <= 8)
-    .sort((a, b) => a - b);
+  const rightColumn = useMemo(() => {
+    const half = Math.ceil(activeCourts.length / 2);
+    return activeCourts
+      .filter((c) => courtNumber(c) <= half)
+      .sort((a, b) => courtNumber(a) - courtNumber(b))
+      .map((c) => ({ courtId: c.courtId, courtName: c.courtName }));
+  }, [activeCourts]);
 
-  const [courts, setCourts] = useState(() => {
-    const initialCourts = {};
-    courtIds.forEach((id) => {
-      initialCourts[id] = { A: null, B: null, C: null, D: null };
-    });
-    return initialCourts;
-  });
+  const leftColumn = useMemo(() => {
+    const half = Math.ceil(activeCourts.length / 2);
+    return activeCourts
+      .filter((c) => courtNumber(c) > half)
+      .sort((a, b) => courtNumber(a) - courtNumber(b))
+      .map((c) => ({ courtId: c.courtId, courtName: c.courtName }));
+  }, [activeCourts]);
+
+  const [courts, setCourts] = useState({});
 
   // shuttle_ball selection
   const [selectedBall, setSelectedBall] = useState(0);
@@ -331,7 +333,7 @@ function HomePage() {
     setCourts((prev) => {
       const updated = { ...prev };
       const playersToReturn = Object.values(updated[courtId]).filter(Boolean);
-      courtIds.forEach((id) => {
+      Object.keys(updated).forEach((id) => {
         for (const key in updated[id]) {
           if (playersToReturn.includes(updated[id][key]))
             updated[id][key] = null;
@@ -425,7 +427,7 @@ function HomePage() {
         newMap[p.name] = [
           ...existing,
           {
-            serviceName: `Tiền sân ${formData.courtResult.courtId}`,
+            serviceName: `Tiền ${formData.courtResult.courtName}`,
             cost: p.cost,
             costFormat: formatVND(p.cost)
           },
@@ -502,6 +504,18 @@ const saveServiceToPlayer = async(playerName, serviceName, cost) => {
   useEffect(() => {
     const fetchCourtInfor = async () => {
       try {
+        // fetch active courts
+        const courtRes = await api.get("/court-mana/getAllActiveCourt");
+        if (courtRes.status === 200 && courtRes.data.length > 0) {
+          const courts = courtRes.data;
+          setActiveCourts(courts);
+          const ids = courts.map((c) => c.courtId);
+          setCourtIds(ids);
+          setCourts(
+            ids.reduce((acc, id) => ({ ...acc, [id]: { A: null, B: null, C: null, D: null } }), {})
+          );
+        }
+
         // check available session
         const response = await api.post("/session/checkCreateNewSession");
         if(response.success === false){
@@ -784,44 +798,43 @@ const saveServiceToPlayer = async(playerName, serviceName, cost) => {
             {leftColumn
               .slice()
               .reverse()
-              .map((id) => (
-                <div key={id} className="image-card">
-                  {/* <h1>Item{id}</h1> */}
+              .map(({ courtId, courtName }) => (
+                <div key={courtId} className="image-card">
                   <Court
-                    key={id}
-                    id={id}
-                    players={courts[id]}
+                    key={courtId}
+                    id={courtId}
+                    name={courtName}
+                    players={courts[courtId]}
                     onDropPlayer={onDropPlayerOntoCourt}
                     occupied={occupied}
-                    isLocked={lockedCourts[id]}
+                    isLocked={lockedCourts[courtId]}
                     onStart={startGame}
                     showAddedBallDialog={showAddedBallDialog}
                     onFinish={onFinish}
-                    onCancel={() => onCancelGame(id)}
+                    onCancel={() => onCancelGame(courtId)}
                     onDropService={handleDropService}
                   />
                 </div>
               ))}
           </div>
           <div className="column right-column">
-            {/* Render in reverse order to achieve "right-end > up" visual stacking */}
             {rightColumn
               .slice()
               .reverse()
-              .map((id) => (
-                <div key={id} className="image-card">
-                  {/* <h1>Item{id}</h1> */}
+              .map(({ courtId, courtName }) => (
+                <div key={courtId} className="image-card">
                   <Court
-                    key={id}
-                    id={id}
-                    players={courts[id]}
+                    key={courtId}
+                    id={courtId}
+                    name={courtName}
+                    players={courts[courtId]}
                     onDropPlayer={onDropPlayerOntoCourt}
                     occupied={occupied}
-                    isLocked={lockedCourts[id]}
+                    isLocked={lockedCourts[courtId]}
                     onStart={startGame}
                     showAddedBallDialog={showAddedBallDialog}
                     onFinish={onFinish}
-                    onCancel={() => onCancelGame(id)}
+                    onCancel={() => onCancelGame(courtId)}
                     onDropService={handleDropService}
                   />
                 </div>

@@ -16,5 +16,5 @@ export const formatVND = (value) => {
   return new Intl.NumberFormat("vi-VN").format(number);
 };
 export const rawNumber = (value) => {
-  return value.toString().replace(/\D/g, "");
+  return Number(value.toString().replace(/\D/g, ""));
 };

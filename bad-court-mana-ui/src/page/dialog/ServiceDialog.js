@@ -37,7 +37,7 @@ const ServiceDialog = ({
     const newService = {
       serviceName: serviceName,
       cost: Number(serviceCost),
-      costFormat: formatVND(serviceCost)
+      costFormat: formatVND(serviceCost),
     };
     const updated = [...services, newService];
 
@@ -107,60 +107,49 @@ const ServiceDialog = ({
           </h6>
         </div>
         {/* ➕ ADD SERVICE */}
-        <div className="d-flex bd-highlight align-items-center">
-          <div className="p-2 flex-grow-1 bd-highlight">
-            <input
-              type="text"
-              placeholder="Tên dịch vụ"
-              value={serviceName}
-              onChange={(e) => setServiceName(e.target.value)}
-            />
-          </div>
-          <div className="p-2 bd-highlight">
-            <input
-              type="text"
-              placeholder="Giá"
-              value={serviceCost}
-              onChange={(e) => setServiceCost(e.target.value)}
-            />
-          </div>
-          <div className="p-2 bd-highlight">
-            <button className="btn btn-success" onClick={handleAddService}>
-              +
-            </button>
-          </div>
+        <div className="service-row">
+          <input
+            className="service-col-name"
+            type="text"
+            placeholder="Tên dịch vụ"
+            value={serviceName}
+            onChange={(e) => setServiceName(e.target.value)}
+          />
+          <input
+            className="service-col-cost"
+            type="text"
+            placeholder="Giá"
+            value={serviceCost}
+            onChange={(e) => setServiceCost(e.target.value)}
+          />
+          <button className="btn btn-success service-col-action" onClick={handleAddService}>
+            +
+          </button>
         </div>
 
-        <div className="add-service">
-          {/* SERVICE LIST */}
-          {services.length > 0 ? (
-            <ul className="service-list">
-              {services.map((service, idx) => (
-                <li key={idx} className="service-item">
-                  <div className="d-flex justify-content-between">
-                    <div className="p-2 bd-highlight">
-                      <span>
-                        {service.serviceName} - {service.costFormat}{" "}
-                        {VN_CURRENCY}
-                      </span>
-                    </div>
-
-                    <div className="p-2 bd-highlight">
-                      <button
-                        className="btn btn-sm btn-outline-danger"
-                        onClick={() => handleRemoveService(idx)}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p>Không có dịch vụ nào.</p>
-          )}
-        </div>
+        {/* SERVICE LIST */}
+        {services.length > 0 ? (
+          <ul className="service-list">
+            {services.map((service, idx) => (
+              <li key={idx} className="service-row">
+                <span className="service-col-name">
+                  {service.serviceName}
+                </span>
+                <span className="service-col-cost">
+                  {service.costFormat} {VN_CURRENCY}
+                </span>
+                <button
+                  className="btn btn-sm btn-outline-danger service-col-action"
+                  onClick={() => handleRemoveService(idx)}
+                >
+                  ✕
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-muted">Không có dịch vụ nào.</p>
+        )}
         <div className="dialog-actions">
           <button className="btn btn-primary" onClick={onPrePay}>
             Thanh toán

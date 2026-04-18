@@ -10,4 +10,7 @@
     <changeSet id="002" author="thach">
         <sqlFile path="db/changelog/root-user.sql"/>
     </changeSet>
+    <changeSet id="003" author="thach">
+        <sqlFile path="db/changelog/court-creation.sql"/>
+    </changeSet>
 </databaseChangeLog>

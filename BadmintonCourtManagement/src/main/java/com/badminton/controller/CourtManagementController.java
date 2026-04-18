@@ -57,6 +57,15 @@ public class CourtManagementController {
         return ResponseEntity.ok().body(res);
     }
 
+    @GetMapping(value = "/getAllActiveCourt")
+    public ResponseEntity<List<CourtDTO>> getAllActiveCourt() {
+        log.info("Received GET /getAllActiveCourt request");
+        List<CourtDTO> res = courtService.getAllActiveCourts();
+        log.info("Size of active courts is:{}", res.size());
+        // Error cases are not handled
+        return ResponseEntity.ok().body(res);
+    }
+
     @GetMapping(value = "/getAvailablePlayers")
     public ResponseEntity<List<AvaPlayerDTO>> getAvailablePlayers() {
         long currentMilis = System.currentTimeMillis();
@@ -149,5 +158,6 @@ public class CourtManagementController {
         // Error cases are not handled
         return ResponseEntity.ok().body(null);
     }
+
 
 }

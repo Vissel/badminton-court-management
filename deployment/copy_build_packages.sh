@@ -15,14 +15,14 @@ echo "--- Starting Package Collection for: $DEPLOYED_ENV ---"
 
 # --- 1st Copy: React UI ---
 if [ -d "$UI_SOURCE" ]; then
-    # Remove existing env folder if it exists, then create fresh
-    if [ -d "$DEPLOYED_ENV" ]; then
-        rm -rf "$DEPLOYED_ENV"
-    fi
+    # Remove existing env folder/zip if they exist, then create fresh
+    rm -rf "$DEPLOYED_ENV" "$DEPLOYED_ENV.zip"
     mkdir -p "$DEPLOYED_ENV"
-    
+
     cp -R "$UI_SOURCE/" "$DEPLOYED_ENV/"
-    echo "Success: Frontend packages copied to ./$DEPLOYED_ENV"
+    zip -rq "$DEPLOYED_ENV.zip" "$DEPLOYED_ENV"
+    rm -rf "$DEPLOYED_ENV"
+    echo "Success: Frontend packages zipped to ./$DEPLOYED_ENV.zip"
 else
     echo "Error: Source directory $UI_SOURCE does not exist. Skipping UI copy."
 fi

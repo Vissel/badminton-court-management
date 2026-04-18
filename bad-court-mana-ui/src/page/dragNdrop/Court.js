@@ -4,6 +4,7 @@ import DropZone from "./DropZone";
 const areaKeys = ["A", "C", "B", "D"];
 export default function Court({
   id,
+  name,
   players,
   onDropPlayer,
   occupied,
@@ -36,7 +37,7 @@ export default function Court({
             height: "45px",
           }}
         >
-          Sân {id} {isLocked && "(Đang diễn ra ...)"}{" "}
+          {name} {isLocked && "(Đang diễn ra ...)"}{" "}
         </div>
 
         {/* Finish and Cancel buttons */}

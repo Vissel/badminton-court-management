@@ -77,6 +77,20 @@ public class CourtServicesServiceImpl {
         return activeServices.stream().map(s -> new ServiceResponse(s)).collect(Collectors.toList());
     }
 
+    /**
+     * Get all active courts
+     *
+     * @return
+     */
+    public List<CourtDTO> getAllActiveCourts() {
+        log.info("Service getAllActiveCourts {}", CommonConstant.START);
+        List<Court> activeCourts = courtRepo.findAllByIsActive(true);
+        log.debug("Size of active courts: {}", activeCourts.size());
+        List<CourtDTO> courtDTOs = activeCourts.stream().map(court -> new CourtDTO(court)).collect(Collectors.toList());
+        log.info("Service getAllActiveCourts {}", CommonConstant.END);
+        return courtDTOs;
+    }
+
     @Transactional
     public List<AvaPlayerDTO> getCurrentAvailablePlayers() {
         List<Session> activeSessions = session.findListCurrentSession();

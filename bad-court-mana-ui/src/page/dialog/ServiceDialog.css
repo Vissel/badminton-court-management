@@ -20,7 +20,7 @@
   width: 600px;
   max-width: 100%;
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-  animation: fadeIn 0.3s ease-in-out;
+  /* animation: fadeIn 0.15s ease-out; */
 }
 
 /* Heading */
@@ -34,11 +34,29 @@
   list-style: none;
   padding-left: 0;
   margin: 10px 0 20px;
+  width: 100%;
 }
 
-.service-list li {
-  padding: 5px 0;
+.service-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
   border-bottom: 1px solid #eee;
+}
+
+.service-col-name {
+  flex: 2;
+  min-width: 0;
+}
+
+.service-col-cost {
+  flex: 1;
+  min-width: 0;
+}
+
+.service-col-action {
+  flex-shrink: 0;
 }
 
 
