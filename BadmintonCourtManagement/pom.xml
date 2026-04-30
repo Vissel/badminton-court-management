@@ -162,7 +162,7 @@
                 </plugins>
             </build>
             <properties>
-                <activeProfile>qa</activeProfile>
+                <activeProfile>prod</activeProfile>
             </properties>
         </profile>
     </profiles>

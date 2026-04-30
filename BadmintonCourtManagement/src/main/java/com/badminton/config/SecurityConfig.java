@@ -21,10 +21,12 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
 import org.springframework.stereotype.Component;
+import org.springframework.http.HttpHeaders;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
+import java.util.List;
 
 @Slf4j
 @Component
@@ -125,7 +127,7 @@ public class SecurityConfig {
         configuration.setAllowedHeaders(Arrays.asList("*"));
         // Allow credentials (e.g., cookies, authorization headers)
         configuration.setAllowCredentials(true);
-//		configuration.setExposedHeaders(List.of("csrfToken"));// set token
+        configuration.setExposedHeaders(List.of(HttpHeaders.CONTENT_DISPOSITION));
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         // Apply this CORS configuration to all paths
         source.registerCorsConfiguration("/**", configuration);

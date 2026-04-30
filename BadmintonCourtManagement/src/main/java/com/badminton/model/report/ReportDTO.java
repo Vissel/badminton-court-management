@@ -1,8 +1,10 @@
-package com.badminton.model.dto;
+package com.badminton.model.report;
 
 import com.badminton.entity.AvailablePlayer;
 import com.badminton.entity.Game;
 import com.badminton.entity.Session;
+import com.badminton.model.dto.ReportCost;
+import com.badminton.model.dto.TeamDTO;
 import com.badminton.util.TimeUtils;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -17,6 +19,8 @@ public class ReportDTO {
     private List<AvailablePlayer> availablePlayers;
     private List<Game> games;
     private List<ReportCost> listCost;
+    private List<RptShuttle> listTotalShuttle;
+    private List<RptService> listTotalService;
 
     public ReportDTO(Session session, List<AvailablePlayer> availablePlayers, List<Game> games) {
         this.session = session;

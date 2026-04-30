@@ -1,5 +1,6 @@
 package com.badminton.controller;
 
+import com.badminton.model.report.ExportReportResult;
 import com.badminton.requestmodel.ExportReportRequest;
 import com.badminton.requestmodel.ReportListRequest;
 import com.badminton.response.MonthYearResponse;
@@ -11,7 +12,6 @@ import com.badminton.service.ExportService;
 import com.badminton.util.ResponseConvertor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -48,15 +48,16 @@ public class ManagerController {
 
     @GetMapping("/reportExport/{sessionId}")
     public ResponseEntity<? extends Resource> exportReport(@PathVariable String sessionId) {
-        Result<ByteArrayResource> resourceResult = exportService.exportReport(sessionId);
-        return ResponseConvertor.convertToResource(resourceResult);
+        Result<ExportReportResult> resourceResult = exportService.exportReport(sessionId);
+        return ResponseConvertor.convertExportToResource(resourceResult);
     }
 
     @GetMapping("/stream/reportExportList/{token}")
-    public ResponseEntity<StreamingResponseBody> exportReportList(@PathVariable String token
-    ) {
-        com.badminton.requestmodel.ExportReportRequest exportedRptRequest = exportCache.remove(token); // Get and clear
+    public ResponseEntity<StreamingResponseBody> exportReportList(@PathVariable String token) {
+        com.badminton.requestmodel.ExportReportRequest exportedRptRequest = exportCache.remove(token);
         if (exportedRptRequest == null) return ResponseEntity.notFound().build();
+
+        String fileName = exportService.buildListReportFileName(exportedRptRequest);
 
         StreamingResponseBody responseBody = outputStream -> {
             try {
@@ -66,7 +67,7 @@ public class ManagerController {
             }
         };
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"report.xlsx\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .body(responseBody);
     }

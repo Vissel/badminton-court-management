@@ -1,5 +1,6 @@
 package com.badminton.util;
 
+import com.badminton.model.report.ExportReportResult;
 import com.badminton.response.result.Result;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ByteArrayResource;
@@ -16,6 +17,23 @@ public class ResponseConvertor {
             return ResponseEntity.ok(response);
         }
         return ResponseEntity.status(response.getErrorCode()).body(response);
+    }
+
+    public static <R extends Resource> ResponseEntity<R> convertExportToResource(Result<ExportReportResult> response) {
+        if (response.isSuccess()) {
+            ExportReportResult data = response.getData();
+            R resource = (R) data.getResource();
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + data.getFileName() + "\"")
+                    .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                    .body(resource);
+        }
+        String errorContent = "error while exporting";
+        ByteArrayResource errorByteArray = new ByteArrayResource(errorContent.getBytes());
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(HttpHeaders.CONTENT_TYPE, MediaType.TEXT_PLAIN_VALUE);
+        headers.setContentDispositionFormData("attachment", "error.txt");
+        return ResponseEntity.ok().headers(headers).body((R) errorByteArray);
     }
 
     /**

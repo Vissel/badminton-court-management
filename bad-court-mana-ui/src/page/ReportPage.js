@@ -117,10 +117,13 @@ export default function ReportPage() {
       // Create file download
       const blob = new Blob([response.data]);
       const url = window.URL.createObjectURL(blob);
+      const disposition = response.headers["content-disposition"] || "";
+      const match = disposition.match(/filename="?([^"]+)"?/);
+      const fileName = match ? match[1] : `report_${sessionId}.xlsx`;
 
       const link = document.createElement("a");
       link.href = url;
-      link.download = `report_${sessionId}.xlsx`; // or .pdf
+      link.download = fileName;
       document.body.appendChild(link);
       link.click();
 

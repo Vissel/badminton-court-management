@@ -2,7 +2,7 @@
   "name": "bad-court-mana-ui",
   "version": "0.1.0",
   "private": true,
-  "homepage": "/caulong-tc-qa/",
+  "homepage": "/caulong-tc/",
   "dependencies": {
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
