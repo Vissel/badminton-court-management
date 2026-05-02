@@ -133,4 +133,4 @@ npm run build:qa          # QA env file via env-cmd
 
 ## License
 
-Not specified in the repository; add a `LICENSE` file if you distribute the project.
+This project is licensed under the [MIT License](LICENSE) — Copyright (c) 2026 Jade.
