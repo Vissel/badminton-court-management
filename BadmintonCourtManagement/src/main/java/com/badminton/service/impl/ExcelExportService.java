@@ -1,6 +1,7 @@
 package com.badminton.service.impl;
 
 import com.badminton.constant.CommonConstant;
+import com.badminton.constant.ErrorConstant;
 import com.badminton.constant.GameConstant;
 import com.badminton.entity.AvailablePlayer;
 import com.badminton.entity.Game;
@@ -328,10 +329,7 @@ public class ExcelExportService implements ExportService {
             rowNumber.createCell(PLAYER_NAME_COL).setCellValue(avaPlayer.getPlayer().getPlayerName());
 
             int colIndex = row.getLastCellNum();
-            for (Game game : games) {
-                setServiceValueIntoNextTwoColumn(game, avaPlayer, partnerMap, colIndex, row, rowNumber);
-                colIndex += 2; // Move to next game pair (F, H, J...)
-            }
+            colIndex = writeGameInfoColumns(games, avaPlayer, partnerMap, colIndex, row, rowNumber);
             setRemainingServices(avaPlayer.getServices(), colIndex, row, rowNumber);
             // sum player payAmount
             totalAmt = Float.sum(totalAmt, getPayAmount(avaPlayer));
@@ -388,10 +386,7 @@ public class ExcelExportService implements ExportService {
             rowNumber.createCell(1).setCellValue(avaPlayer.getPlayer().getPlayerName());
             rowNumber.createCell(4).setCellValue(extractCourtFee(avaPlayer.getServices()));
             int colIndex = 5;
-            for (Game game : games) {
-                setServiceValueIntoNextTwoColumn(game, avaPlayer, partnerMap, colIndex, rowHeader, rowNumber);
-                colIndex += 2; // Move to next game pair (F, H, J...)
-            }
+            colIndex = writeGameInfoColumns(games, avaPlayer, partnerMap, colIndex, rowHeader, rowNumber);
             setRemainingServices(avaPlayer.getServices(), colIndex, rowHeader, rowNumber);
 //            for (ReportCost rptCost : listCost) {
 //                setServiceValueIntoNextTwoColumn(rptCost, avaPlayer, partnerMap, colIndex, rowHeader, rowNumber);
@@ -429,6 +424,19 @@ public class ExcelExportService implements ExportService {
         }
     }
 
+    private int writeGameInfoColumns(List<Game> games, AvailablePlayer avaPlayer, Map<Long, String> partnerMap,
+                                     int colIndex, Row row, Row rowNumber) {
+        for (Game game : games) {
+            try {
+                setServiceValueIntoNextTwoColumn(game, avaPlayer, partnerMap, colIndex, row, rowNumber);
+                colIndex += 2;
+            } catch (NullPointerException e) {
+                log.warn("{} There is no matching data.", ErrorConstant.ERROR_EXPORT_RPT_WRITE_DATA);
+            }
+        }
+        return colIndex;
+    }
+
     private void setRemainingServices(String services, int colIndex, Row row, Row rowNumber) {
         List<ServiceDTO> remainServices = ServiceUtil.convertStringToListService(services).stream()
                 .filter(s -> !s.getServiceName().toLowerCase().contains(GameConstant.COST_IN_PERSON_VN.toLowerCase()))
@@ -441,50 +449,40 @@ public class ExcelExportService implements ExportService {
     }
 
     private void setServiceValueIntoNextTwoColumn(Game game, AvailablePlayer avaPlayer, Map<Long, String> partnerMap,
-                                                  int colIndex, Row row, Row rowNumber) {
-        try {
-            Team matchingTeam = getPlayerTeamInGame(avaPlayer, game);
+                                                  int colIndex, Row row, Row rowNumber) throws NullPointerException {
+        Team matchingTeam = getPlayerTeamInGame(avaPlayer, game);
 
-            String gameTitle = String.format("%s (%s - %s) %s:", game.getCourt().getCourtName(), TimeUtils.convertInstantToTimeStr(game.getCreatedDate()), TimeUtils.convertInstantToTimeStr(game.getEndedDate()), matchingTeam.isWin() ? GameConstant.WIN_VN : GameConstant.LOSE_VN);
-            row.createCell(colIndex).setCellValue(gameTitle);
+        String gameTitle = String.format("%s (%s - %s) %s:", game.getCourt().getCourtName(), TimeUtils.convertInstantToTimeStr(game.getCreatedDate()), TimeUtils.convertInstantToTimeStr(game.getEndedDate()), matchingTeam.isWin() ? GameConstant.WIN_VN : GameConstant.LOSE_VN);
+        row.createCell(colIndex).setCellValue(gameTitle);
 
-            // Row N: "Court (Time):" and "partner: Name"
-            String partnerName = getPartnerName(avaPlayer, matchingTeam, partnerMap);
-
-            row.createCell(colIndex + 1).setCellValue(GameConstant.PARTNER_VN.concat(CommonConstant.COLON).concat(partnerName));
-            rowNumber.createCell(colIndex).setCellValue(getExpenseValue(avaPlayer, matchingTeam));
-        } catch (NullPointerException e) {
-            log.warn(e.getMessage());
-        }
+        // Row N: "Court (Time):" and "partner: Name"
+        String partnerName = getPartnerName(avaPlayer, matchingTeam, partnerMap);
+        row.createCell(colIndex + 1).setCellValue(GameConstant.PARTNER_VN.concat(CommonConstant.COLON).concat(partnerName));
+        rowNumber.createCell(colIndex).setCellValue(getExpenseValue(avaPlayer, matchingTeam));
 
     }
 
     private void setServiceValueIntoNextTwoColumn(ReportCost rptCost, AvailablePlayer avaPlayer, Map<Long, String> partnerMap,
                                                   int colIndex, Row row, Row rowNumber) {
-        try {
-            TeamDTO matchingTeam = getPlayerTeamInGame(avaPlayer, rptCost);
+        TeamDTO matchingTeam = getPlayerTeamInGame(avaPlayer, rptCost);
 
-            String gameTitle = String.format("%s (%s - %s) %s:",
-                    rptCost.getCourtName(), rptCost.getStart(),
-                    rptCost.getEnd(),
-                    matchingTeam.isWin() ? GameConstant.WIN_VN : GameConstant.LOSE_VN);
+        String gameTitle = String.format("%s (%s - %s) %s:",
+                rptCost.getCourtName(), rptCost.getStart(),
+                rptCost.getEnd(),
+                matchingTeam.isWin() ? GameConstant.WIN_VN : GameConstant.LOSE_VN);
 
-            row.createCell(colIndex).setCellValue(gameTitle);
+        row.createCell(colIndex).setCellValue(gameTitle);
 
-            // Row N: "Court (Time):" and "partner: Name"
-            String partnerName = getPartnerName(avaPlayer, matchingTeam);
+        // Row N: "Court (Time):" and "partner: Name"
+        String partnerName = getPartnerName(avaPlayer, matchingTeam);
 
-            row.createCell(colIndex + 1).setCellValue(GameConstant.PARTNER_VN.concat(CommonConstant.COLON).concat(partnerName));
-            rowNumber.createCell(colIndex).setCellValue(getExpenseValue(avaPlayer, null));
-        } catch (NullPointerException e) {
-            log.warn(e.getMessage());
-        }
-
+        row.createCell(colIndex + 1).setCellValue(GameConstant.PARTNER_VN.concat(CommonConstant.COLON).concat(partnerName));
+        rowNumber.createCell(colIndex).setCellValue(getExpenseValue(avaPlayer, null));
     }
 
     private String getPartnerName(AvailablePlayer currAvaPlayer, Team matchingTeam, Map<Long, String> partnerMap) {
         AvailablePlayer anotherPlayer = getAnotherPlayer(currAvaPlayer, matchingTeam);
-        return anotherPlayer != null ? partnerMap.getOrDefault(anotherPlayer.getAvaId(), "N/A") : "N/A";
+        return anotherPlayer != null ? partnerMap.getOrDefault(anotherPlayer.getAvaId(), GameConstant.NO_PARTNER) : GameConstant.NO_PARTNER;
     }
 
     private String getPartnerName(AvailablePlayer currAvaPlayer, TeamDTO matchingTeam) {
@@ -495,22 +493,22 @@ public class ExcelExportService implements ExportService {
         } else if (matchingTeam.getPlayer2().getId() == availableId) {
             partnerName = matchingTeam.getPlayer1().getName();
         } else {
-            partnerName = "N/A";
+            partnerName = GameConstant.NO_PARTNER;
         }
         return partnerName;
     }
 
     private float getExpenseValue(AvailablePlayer currAvaPlayer, Team matchingTeam) {
-        float expense;
+        float expense = MoneyUtils.DEFAULT;
         try {
-
-            if (matchingTeam.getPlayerOne().equals(currAvaPlayer)) {
+            if (matchingTeam.getPlayerOne() != null && matchingTeam.getPlayerOne().equals(currAvaPlayer)) {
                 expense = matchingTeam.getExpenseOne();
-            } else {
+            } else if (matchingTeam.getPlayerTwo() != null && matchingTeam.getPlayerTwo().equals(currAvaPlayer)) {
                 expense = matchingTeam.getExpenseTwo();
             }
         } catch (NullPointerException e) {
-            expense = MoneyUtils.DEFAULT;
+            log.warn("{} Failed to get expense value for availablePlayerId={}, teamId={}",
+                    ErrorConstant.ERROR_EXPORT_RPT_WRITE_DATA, currAvaPlayer.getAvaId(), matchingTeam.getTeamId());
         }
         return expense;
     }
@@ -520,13 +518,17 @@ public class ExcelExportService implements ExportService {
         if (matchingTeam.getPlayerOne().equals(currAvaPlayer)) {
             anotherPlayer = matchingTeam.getPlayerTwo();
         }
-        return partnerMap.getOrDefault(anotherPlayer.getAvaId(), "N/A");
+        return partnerMap.getOrDefault(anotherPlayer.getAvaId(), GameConstant.NO_PARTNER);
     }
 
     private AvailablePlayer getAnotherPlayer(AvailablePlayer currAvaPlayer, Team matchingTeam) {
         AvailablePlayer anotherPlayer = matchingTeam.getPlayerOne();
-        if (matchingTeam.getPlayerOne().equals(currAvaPlayer)) {
-            anotherPlayer = matchingTeam.getPlayerTwo();
+        if (anotherPlayer != null && anotherPlayer.equals(currAvaPlayer)) {
+            return matchingTeam.getPlayerTwo();
+        }
+        anotherPlayer = matchingTeam.getPlayerTwo();
+        if (anotherPlayer != null && anotherPlayer.equals(currAvaPlayer)) {
+            return matchingTeam.getPlayerOne();
         }
         return anotherPlayer;
     }
@@ -651,7 +653,6 @@ public class ExcelExportService implements ExportService {
         List<Long> avaIds = availablePlayers.stream().map(AvailablePlayer::getAvaId).toList();
         List<Game> games = gameRepo.findGamesByPlayerIds(avaIds);
         return buildReportModel(session, availablePlayers, games);
-
     }
 
     private ReportDTO buildReportModel(Session session, List<AvailablePlayer> availablePlayers, List<Game> games) {

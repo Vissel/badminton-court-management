@@ -8,6 +8,5 @@ public class GameConstant {
     public static final String PARTNER_VN = "Đồng đội";
     public static final String COST_IN_PERSON_VN = "Tiền sân";
     public static final float BISECT = 2f;
-
-
+    public static final String NO_PARTNER = "N/A";
 }

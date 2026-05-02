@@ -38,43 +38,39 @@ export default function PlayerArea({
   return (
     <div
       ref={drop}
+      className="player-area-panel"
       style={{
-        width: "100%",
-        padding: "2px",
         backgroundColor: isOver ? "#eef" : "#f8f9fa",
         transition: "background-color 2s ease",
       }}
     >
-      <div class="player-area-header">
+      <div className="player-area-header">
         <h5> Tổng người chơi: {availablePlayers.length} </h5>
       </div>
       <input
         type="text"
+        className="player-area-input"
         placeholder="Tên người chơi"
         value={newPlayer}
         onChange={(e) => setNewPlayer(e.target.value)}
         onKeyDown={(e) => {
-          // Check if Enter is pressed AND we are not in the middle of a Vietnamese composition
-    if (e.key === "Enter" && !e.nativeEvent.isComposing) {
-      handleAdd();
-    }
-        }}
-        style={{
-          width: "100%",
-          padding: "5px",
-          marginBottom: "15px",
-          boxSizing: "border-box",
+          // Avoid submitting while an IME composition is still in progress.
+          if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+            handleAdd();
+          }
         }}
       />
-      {availablePlayers.map((p) => (
-        <DraggablePlayer
-          key={p}
-          name={p}
-          isLocked={false}
-          onDropService={onDropService}
-          onClick={onClickPlayer}
-        />
-      ))}
+      <div className="player-area-list">
+        {availablePlayers.map((p) => (
+          <DraggablePlayer
+            key={p}
+            name={p}
+            isLocked={false}
+            onDropService={onDropService}
+            onClick={onClickPlayer}
+          />
+        ))}
+      </div>
     </div>
   );
 }

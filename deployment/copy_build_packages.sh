@@ -28,7 +28,10 @@ if [ -d "$UI_SOURCE" ]; then
     mkdir -p "$UI_TEMP_DIR"
 
     cp -R "$UI_SOURCE/." "$UI_TEMP_DIR/"
-    zip -rq "$UI_ZIP_FILE" "$UI_TEMP_DIR"
+    (
+        cd "$OUTPUT_DIR" || exit 1
+        zip -rq "$UI_ZIP_FILE" "$DEPLOYED_ENV"
+    )
     rm -rf "$UI_TEMP_DIR"
     echo "Success: Frontend packages zipped to $UI_ZIP_FILE"
 else
