@@ -1,0 +1,68 @@
+/* reuse existing styles */
+.shuttle-dialog-box {
+  height: 400px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+    max-width: 95%;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  overflow: hidden;         /* IMPORTANT: prevents children from overflowing corners */
+  box-sizing: border-box;   /* include padding in height */
+}
+
+/* scrollable content area (excluding bottom buttons) */
+.dialog-scrollable {
+  overflow-y: auto;
+  flex: 1 1 auto;
+  padding-right: 8px;
+  margin-bottom: 8px;       /* small gap above buttons */
+  max-height: 380px;
+}
+
+/* header/title area — not scrollable */
+.dialog-content {
+  /* keep minimal height for title + top controls */
+  margin-bottom: 8px;
+}
+/* style for each added item row */
+.added-list .added-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  margin-bottom: 8px;       /* reduced margin so it fits */
+  border-radius: 8px;
+  border: 1px solid #e6e6e6;
+  background: #fafafa;
+  box-sizing: border-box;
+}
+
+/* smaller remove button so rows take less vertical space */
+.added-item .btn-sm {
+  padding: 6px 8px;
+  line-height: 1;
+}
+
+/* fixed bottom actions — placed outside scroll region */
+.fixed-bottom-actions {
+  flex: 0 0 auto;           /* don't grow or shrink */
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  gap: 12px;
+  padding-top: 10px;
+  padding-bottom: 8px;
+  background: white;        /* same as dialog background */
+  border-top: 1px solid #e9ecef;
+}
+
+/* keep mobile/responsive adjustments */
+@media (max-width: 480px) {
+  .dialog-box {
+    width: 95%;
+    padding: 12px;
+    height: 86vh;
+  }
+  .added-item { padding: 8px; margin-bottom: 6px; }
+}

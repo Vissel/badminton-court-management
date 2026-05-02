@@ -6,7 +6,7 @@ const Footer = () => {
   return (
     <footer className="bg-dark text-light mt-auto app-footer">
       <Container className="text-center">
-        <p>© Developed by Nguyen Ngoc Thach</p>
+        <p>© {new Date().getFullYear()} Nguyen Ngoc Thach. All rights reserved.</p>
       </Container>
     </footer>
   );

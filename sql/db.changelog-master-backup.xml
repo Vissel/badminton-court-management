@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+     https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <changeSet id="001" author="thach">
+        <sqlFile path="db/changelog/changeset-001-create-table.sql"/>
+    </changeSet>
+    <changeSet id="002" author="thach">
+        <sqlFile path="db/changelog/changeset-002-update-table.sql"/>
+    </changeSet>
+    <changeSet id="003" author="thach">
+        <sqlFile path="db/changelog/changeset-003-update-tableService.sql"/>
+    </changeSet>
+    <changeSet id="004" author="thach">
+        <sqlFile path="db/changelog/changeset-004-addUniqueContrains-tableShuttleball.sql"/>
+    </changeSet>
+    <changeSet id="005" author="thach">
+        <sqlFile path="db/changelog/changeset-005-addUniqueContrains-tableService.sql"/>
+    </changeSet>
+    <changeSet id="006" author="thach">
+        <sqlFile path="db/changelog/changeset-006-removeUniqueContrains.sql"/>
+    </changeSet>
+    <changeSet id="007" author="thach">
+        <sqlFile path="db/changelog/changeset-007-add-attrbutes-gameandteamtable.sql"/>
+    </changeSet>
+    <changeSet id="008" author="thach">
+        <sqlFile path="db/changelog/changeset-008-add-tables-session-availableplayers.sql"/>
+    </changeSet>
+    <changeSet id="009" author="thach">
+        <sqlFile path="db/changelog/changeset-009-update-tables-availableplayers.sql"/>
+    </changeSet>
+    <changeSet id="010" author="thach">
+        <sqlFile path="db/changelog/changeset-010-add-column-availableplayers.sql"/>
+    </changeSet>
+    <!-- <changeSet id="012" author="thach" >
+        <sqlFile path="db/changelog/changeset-012-update-team-table.sql"/>
+    </changeSet> -->
+    <changeSet id="012.1" author="thach">
+        <sqlFile path="db/changelog/changeset-012.1-update-team-table.sql"/>
+    </changeSet>
+
+    <!--    <changeSet id="013.1" author="thach">-->
+    <!--        <sqlFile path="db/changelog/changeset-013.1-game-shuttle-map-table.sql"/>-->
+    <!--    </changeSet>-->
+    <!--    <changeSet id="013.2" author="thach">-->
+    <!--        <sqlFile path="db/changelog/changeset-013.2-game-shuttle-map-table.sql"/>-->
+    <!--    </changeSet>-->
+    <!--    <changeSet id="013.3" author="thach">-->
+    <!--        <sqlFile path="db/changelog/changeset-013.3-game-shuttle-map-table.sql"/>-->
+    <!--    </changeSet>-->
+    <!--    <changeSet id="014" author="thach">-->
+    <!--        <sqlFile path="db/changelog/changeset-014-shuttle-ball-table.sql"/>-->
+    <!--    </changeSet>-->
+    <changeSet id="015.2" author="thach">
+        <sqlFile path="db/changelog/changeset-015.2-avaplayer-table.sql"/>
+    </changeSet>
+</databaseChangeLog>

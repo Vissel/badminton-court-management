@@ -1,16 +1,20 @@
 package com.badminton.service;
 
-import com.badminton.requestmodel.ServiceDTO;
+import com.badminton.model.dto.ServiceDTO;
+import com.badminton.model.dto.ShuttleBallDTO;
 import com.badminton.requestmodel.SetUpServiceDTO;
-import com.badminton.requestmodel.ShuttleBallDTO;
+import com.badminton.requestmodel.SetUpServiceRequest;
+import com.badminton.response.SetUpServiceResponse;
 
 public interface AdminService {
 
-	public SetUpServiceDTO getSetUpService();
+    public SetUpServiceResponse getSetUpService();
 
-	public boolean setUpService(SetUpServiceDTO setupServiceDTO);
+    boolean setUpService(SetUpServiceDTO setupServiceDTO);
 
-	public boolean deleteService(ServiceDTO serviceDTO);
+    boolean updateSetUpService(SetUpServiceRequest setupServiceDTO);
 
-	public boolean deleteShuttleBall(ShuttleBallDTO shuttleBallDTO);
+    public boolean deleteService(ServiceDTO serviceDTO);
+
+    public boolean deleteShuttleBall(ShuttleBallDTO shuttleBallDTO);
 }

@@ -5,10 +5,16 @@ import LoginPage from "./page/LoginPage";
 
 import HomePage from "./page/HomePage";
 import SetupPage from "./page/SetupPage";
+import ReportPage from "./page/ReportPage";
 import Footer from "./Footer";
 import Header from "./Header";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./context/ProtectedRoute";
+import HomePage2 from "./page/HomePage_mess";
+import HomePageError from "./page/HomePage_error";
+
+import DateTimeBar from "./DateTimeBar";
+import SuperAdminPage from "./page/SuperAdminPage";
 
 function App() {
   return (
@@ -16,7 +22,8 @@ function App() {
       <Router>
         <div>
           <Header />
-          <main className="flex-grow-1 py-4 row-space">
+          <main className="flex-grow-1 py-2 row-space">
+            <DateTimeBar />
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               {/* Protected routes */}
@@ -30,10 +37,42 @@ function App() {
                 }
               />
               <Route
+                path="/home-2"
+                element={
+                  <ProtectedRoute>
+                    <HomePage2 />
+                  </ProtectedRoute>
+                }
+              />
+               <Route
+                path="/home-3"
+                element={
+                  <ProtectedRoute>
+                    <HomePageError />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
                 path="/setup"
                 element={
                   <ProtectedRoute>
                     <SetupPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/report"
+                element={
+                  <ProtectedRoute>
+                    <ReportPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/super-admin"
+                element={
+                  <ProtectedRoute>
+                    <SuperAdminPage />
                   </ProtectedRoute>
                 }
               />

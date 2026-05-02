@@ -1,47 +1,45 @@
 // src/LoginPage.js
 import { useState, useContext } from "react";
 import { Form, Row, Col, Button, Container } from "react-bootstrap";
-import axios from "axios";
+
 import { useNavigate } from "react-router";
 import { AuthContext } from "../context/AuthContext";
+import api from "../api";
 
 function LoginPage() {
-  const { setAuthenticated} = useContext(AuthContext);
+  const { setAuthenticated, setLoading } = useContext(AuthContext);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const localHost = "http://localhost:9080";
-  const context = "bad-court-management-dev";
+
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
     // e.preventDefault();
 
     try {
-        const res = await axios.post(
-          `${localHost}/${context}/login`,
-  
-          new URLSearchParams({
-            username,
-            password,
-          }),
-          {
-            headers: {
-              "Content-Type": "application/x-www-form-urlencoded",
-              // "X-XSRF-TOKEN": loginToken,
-            },
-            withCredentials: true,
-          }
-        );
-        if (res.status === 200) {
-          // const token = res.data.csrfToken;
-          // setCsrfToken(token);
-          // Cookies.set("XSRF-TOKEN",token);
-          sessionStorage.setItem('csrfToken',res.data.csrfToken);
-          sessionStorage.setItem('username',res.data.username);
-          setAuthenticated(true);
-          navigate("/home");
+      const res = await api.post(
+        `/login?${new URLSearchParams({
+          username,
+          password,
+        })}`,
+        {
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
         }
+      );
+
+      if (res.status === 200) {
+        // const token = res.data.csrfToken;
+        // setCsrfToken(token);
+        // Cookies.set("XSRF-TOKEN",token);
+        sessionStorage.setItem("csrfToken", res.data.csrfToken);
+        sessionStorage.setItem("username", res.data.username);
+        setAuthenticated(true);
+
+        navigate("/home");
+      }
       // } else {
       //   alert("Cannot login");
       //   return;
@@ -49,6 +47,8 @@ function LoginPage() {
     } catch (err) {
       setError("Invalid credentials");
       alert("Đăng nhập thất bại");
+    } finally {
+      setLoading(false);
     }
   };
 

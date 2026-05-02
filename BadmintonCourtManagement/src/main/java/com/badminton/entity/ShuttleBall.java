@@ -1,45 +1,61 @@
 package com.badminton.entity;
 
-import java.sql.Timestamp;
-
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
+import com.badminton.model.dto.ShuttleBallDTO;
+import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.sql.Timestamp;
+
 @Entity
-@Table(name = "shuttle_ball", uniqueConstraints = {
-		@UniqueConstraint(name = "unique_shuttle_name", columnNames = { "shuttle_name", "is_active" }) })
+@Table(name = "shuttle_ball")
 @Getter
 @Setter
 @NoArgsConstructor
 public class ShuttleBall {
-	@Id
-	@GeneratedValue(strategy = GenerationType.IDENTITY)
-	private int shuttleId;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private int shuttleId;
 
-	@Column(name = "shuttle_name")
-	private String shuttleName;
+    @Column(name = "shuttle_name")
+    private String shuttleName;
 
-	private float cost;
+    private float cost;
 
-	@Column(updatable = false, insertable = false)
-	private Timestamp createdDate;
+    @Column(updatable = false, insertable = false)
+    private Timestamp createdDate;
 
-	@Column(name = "is_active")
-	private boolean isActive;
+    @Column(name = "is_active")
+    private boolean isActive;
 
-	public ShuttleBall(String name, float cost) {
-		super();
-		this.shuttleName = name;
-		this.cost = cost;
-		this.isActive = true;
-	}
+    @Column(name = "is_selected")
+    private boolean isSelected;
 
+    public ShuttleBall(String name, float cost) {
+        super();
+        this.shuttleName = name;
+        this.cost = cost;
+        this.isActive = true;
+    }
+
+    /**
+     * check this ShuttleBall has the same to ball DTO but name, and cost.
+     *
+     * @param ballDTO
+     * @return
+     */
+    public boolean theSameDTO(ShuttleBallDTO ballDTO) {
+        return this.shuttleName.equals(ballDTO.getShuttleName()) && this.cost == ballDTO.getShuttleCost();
+    }
+
+    public ShuttleBall setActiveBall() {
+        this.setActive(true);
+        return this;
+    }
+
+    public ShuttleBall setDeActiveBall() {
+        this.setActive(false);
+        return this;
+    }
 }

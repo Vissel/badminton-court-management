@@ -1,44 +1,95 @@
 import axios from "axios";
-import Cookies from "js-cookie";
-import { useNavigate } from 'react-router';
+import config from './config'
+import { authRef } from '../context/authRef';
 
-const currentHost = `${window.location.protocol}//${window.location.hostname}`;
-const localHost = "http://localhost:9080";
+// import { useNavigate } from 'react-router';
+
+export const currentHost = `${window.location.protocol}//${window.location.hostname}:${window.location.port}/#/`;
+
+const localHost = "http://localhost:8080";
 const context = "bad-court-management-dev";
+export const backendHost = `${config.baseURL}`;
 
-let getCsrfToken = () => null; // placeholder
-
-export const setCsrfTokenGetter = (getterFn) => {
-  getCsrfToken = getterFn;
-};
 const api = axios.create({
-  baseURL: `${localHost}/${context}`, // Update with your backend base URL
+  baseURL: config.baseURL, // Update with your backend base URL
   withCredentials: true,
+  timeout: config.timeout,
 });
 api.interceptors.request.use((config) => {
-  const csrfToken = sessionStorage.getItem('csrfToken');
+  const csrfToken = sessionStorage.getItem("csrfToken");
   if (csrfToken) {
     config.headers["X-XSRF-TOKEN"] = csrfToken;
   }
-
   config.headers["Content-Type"] = "application/json";
   return config;
 });
-// 🔁 Response interceptor to handle expired CSRF/session
+
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (
-      error.response && (error.response.status === 401) &&
-      window.location.pathname !== "/login"
-    ) {
-      // Optional: clear tokens or local state
-      console.warn(
-        "CSRF token expired or session timeout, redirecting to login"
-      );
-      const navigate = useNavigate();
-      navigate("/login"); // 🔁 force full reload
+
+  async (error) => {
+    // Network error (server down, CORS, timeout)
+    if (!error.response) {
+      console.error("Network error:", error);
+      alert("Không thể kết nối tới máy chủ. Vui lòng thử lại.");
+      return Promise.reject(error);
     }
+
+    const { status, config, data, headers } = error.response;
+    const currentPath = window.location.pathname;
+
+    /* ===============================
+       401 / 403 – Unauthorized
+    ================================ */
+    if (status === 401 || status === 403) {
+      const excludePaths = ["/login", "*", "/"];
+      const isExcluded = excludePaths.some((p) => currentPath.includes(p));
+
+      if (!isExcluded) {
+        console.warn("Unauthorized / Forbidden – forcing logout");
+        authRef.logout?.();
+        return new Promise(() => {});
+      }
+    }
+    /* ===============================
+       Handle BLOB error (export)
+    ================================ */
+    if (
+      config?.responseType === "blob" &&
+      data instanceof Blob &&
+      data.type?.includes("application/json")
+    ) {
+      try {
+        const text = await data.text();
+        const json = JSON.parse(text);
+
+        console.error("Export error:", json);
+        alert(json.message || "Xuất báo cáo thất bại");
+      } catch (e) {
+        console.error("Failed to parse blob error", e);
+        alert("Xuất báo cáo thất bại");
+      }
+
+      return Promise.reject(error);
+    }
+
+    /* ===============================
+       500 – Internal Server Error
+    ================================ */
+    if (status >= 500) {
+      console.error("Server error:", error.response);
+      alert("Lỗi hệ thống. Vui lòng thử lại sau.");
+      return Promise.resolve(null);
+    }
+
+    /* ===============================
+       Other client errors (400, 404…)
+    ================================ */
+    if (status === 400 || status > 403 ) {
+      console.warn("Client error:", error.response);
+      alert("Yêu cầu không hợp lệ.");
+    }
+
     return Promise.reject(error);
   }
 );

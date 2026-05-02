@@ -1,0 +1,112 @@
+1. Production Build Packages
+
+   Deployment naming examples
+   - Frontend static folder / context path: `caulong-tc`
+   - Backend WAR / API context path: `bad-court-management`
+
+   Frontend
+   - Use `.env.production`
+   - Verify `REACT_APP_API_BASE_URL` points to the production backend, for example:
+   ```env
+   REACT_APP_API_BASE_URL=https://<your-host>/bad-court-management
+   ```
+   - Before building, update `package.json` `homepage` to match the deployed frontend folder, for example:
+   ```json
+   "homepage": "/caulong-tc/"
+   ```
+   or
+   ```json
+   "homepage": "/bad-court-management/"
+   ```
+   - Build UI:
+   ```bash
+   npm install
+   npm run build
+   ```
+
+   Package collection
+   - Go to the deployment folder:
+   ```bash
+   cd /Users/user/eclipse-workspace/badminton-court-management/deployment
+   ```
+   - Collect production packages for frontend context `caulong-tc`:
+   ```bash
+   ./copy_build_packages.sh caulong-tc
+   ```
+   - The script will generate:
+   - `caulong-tc.zip`
+   - `bad-court-management.war`
+
+2. MySQL
+
+   Installer
+   - installer file
+
+   Enable `mysql_native_password`
+   ```sql
+   INSTALL PLUGIN mysql_native_password SONAME 'auth_socket';
+   ```
+
+   Check plugin status
+   ```sql
+   SELECT plugin_name, plugin_status
+   FROM information_schema.plugins
+   WHERE plugin_name = 'mysql_native_password';
+   ```
+
+   Scripts
+   ```sql
+   -- 1. Create the production schema (database)
+   CREATE DATABASE IF NOT EXISTS bad-court-management-db;
+
+   -- 2. Create the production user
+   CREATE USER IF NOT EXISTS 'root'@'localhost'
+   IDENTIFIED WITH mysql_native_password BY 'Formysql';
+
+   -- 3. Grant privileges
+   GRANT ALL PRIVILEGES ON bad-court-management-db.* TO 'root'@'localhost';
+
+   -- 4. Apply changes
+   FLUSH PRIVILEGES;
+
+   -- 5. Verification output
+   SELECT 'Summary of User Creation:' AS 'Status';
+   SELECT user, host, plugin FROM mysql.user WHERE user = 'root';
+   SHOW GRANTS FOR 'root'@'localhost';
+   ```
+
+   Alternative
+   ```sql
+   ALTER USER 'your_user'@'localhost' IDENTIFIED WITH mysql_native_password BY 'your_password';
+   ```
+
+   Environment mapping examples
+   - Frontend site path: `https://<your-host>/caulong-tc/`
+   - Backend API path: `https://<your-host>/bad-court-management`
+   - Database example: `bad-court-management-db`
+
+3. Tomcat
+
+   Package: `apache-tomcat-11.0.18.zip`
+   - setup Java 21
+   - deploy 2 production packages:
+   - `caulong-tc.zip`
+   - `bad-court-management.war`
+
+   Deployment guide
+   - Extract `caulong-tc.zip`
+   - Copy the extracted `caulong-tc` folder to the static hosting location or Tomcat web root
+   - Copy `bad-court-management.war` to Tomcat `webapps/`
+   - Make sure the deployed folder names stay consistent with the configured paths:
+   - frontend: `caulong-tc`
+   - backend: `bad-court-management`
+
+   Start
+   - `bin/startup.bat`
+
+   Alternative: create a new `catalina.bat`
+   ```bash
+   export JAVA_HOME="/Users/yourname/path/to/tomcat/java_home"
+   export JRE_HOME=$JAVA_HOME
+   export CATALINA_OPTS="$CATALINA_OPTS -Dliquibase.secureParsing=false"
+   ```

@@ -1,57 +1,163 @@
 package com.badminton.controller;
 
+import com.badminton.model.dto.ServiceDTO;
+import com.badminton.model.dto.ShuttleBallDTO;
+import com.badminton.requestmodel.*;
+import com.badminton.response.ServiceResponse;
+import com.badminton.response.result.Result;
+import com.badminton.response.result.ShuttleBallResponse;
+import com.badminton.service.CourtServicesServiceImpl;
+import com.badminton.service.ShuttleBallServiceImpl;
+import com.badminton.util.CommonUtil;
+import com.badminton.util.ResponseConvertor;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
-import com.badminton.requestmodel.ServiceDTO;
-import com.badminton.requestmodel.SetUpServiceDTO;
-import com.badminton.requestmodel.ShuttleBallDTO;
-import com.badminton.service.AdminService;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.List;
 
+@Slf4j
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/court-mana")
 public class CourtManagementController {
 
-	@Autowired
-	AdminService adminService;
+    @Autowired
+    private ShuttleBallServiceImpl ballService;
+    @Autowired
+    private CourtServicesServiceImpl courtService;
 
-	@GetMapping(value = "/getSetupServices")
-	public ResponseEntity<SetUpServiceDTO> getSetupService() {
-		SetUpServiceDTO setupServiceDTO = adminService.getSetUpService();
-		return ResponseEntity.ok().body(setupServiceDTO);
+    @GetMapping(value = "/getShuttleBalls")
+    public ResponseEntity<List<ShuttleBallResponse>> getShuttleBalls() {
+        List<ShuttleBallResponse> res = ballService.getListActiveShuttleBallDTOs();
+        log.info("Size active shuttle balls is:{}", res.size());
+        // Error cases are not handled
+        return ResponseEntity.ok().body(res);
+    }
 
-	}
+    @PostMapping(value = "/addListBallIntoCourt")
+    public ResponseEntity<Boolean> addListBallIntoCourt(@RequestParam String courtId, @RequestBody List<ShuttleBallRequest> listBall) {
+        Boolean res = ballService.addListOfShuttleBallIntoCourt(Integer.valueOf(courtId), listBall);
+        return ResponseEntity.ok().body(res);
+    }
 
-	@PostMapping(value = "/addSetupService")
-	public ResponseEntity<?> addSetupService(@RequestBody SetUpServiceDTO setUpServiceDTO) {
-		if (adminService.setUpService(setUpServiceDTO)) {
-			return ResponseEntity.ok().body("");
+    @PostMapping(value = "/changeBallQuantity")
+    public ResponseEntity<Result<Boolean>> changeBallQuantity(@RequestParam String courtId, @RequestBody ShuttleBallDTO ballDTO) {
+        return ResponseConvertor.convert(ballService.changeShuttleBallQuantity(courtId, ballDTO));
+    }
 
-		}
-		return ResponseEntity.badRequest().body("");
-	}
+    @GetMapping(value = "/getServices")
+    public ResponseEntity<List<ServiceResponse>> getServices() {
+        List<ServiceResponse> res = courtService.getActiveServices();
+        log.info("Size active services is:{}", res.size());
+        // Error cases are not handled
+        return ResponseEntity.ok().body(res);
+    }
 
-	@PutMapping(value = "/deleteService")
-	public ResponseEntity<String> deleteService(@RequestBody ServiceDTO serviceDTO) {
-		if (adminService.deleteService(serviceDTO)) {
-			return ResponseEntity.ok().body("");
+    @GetMapping(value = "/getAllActiveCourt")
+    public ResponseEntity<List<CourtDTO>> getAllActiveCourt() {
+        log.info("Received GET /getAllActiveCourt request");
+        List<CourtDTO> res = courtService.getAllActiveCourts();
+        log.info("Size of active courts is:{}", res.size());
+        // Error cases are not handled
+        return ResponseEntity.ok().body(res);
+    }
 
-		}
-		return ResponseEntity.badRequest().body("");
-	}
+    @GetMapping(value = "/getAvailablePlayers")
+    public ResponseEntity<List<AvaPlayerDTO>> getAvailablePlayers() {
+        long currentMilis = System.currentTimeMillis();
+        log.info("Current time:{}", new SimpleDateFormat("yyyy-MMM-dd HH:mm:ss").format(new Date(currentMilis)));
+        List<AvaPlayerDTO> res = courtService.getCurrentAvailablePlayers();
+        log.info("Available player list size:{}", res.size());
+        // Error cases are not handled
+        return ResponseEntity.ok().body(res);
+    }
 
-	@PutMapping(value = "/deleteShuttleBall")
-	public ResponseEntity<String> deleteShuttleBall(@RequestBody ShuttleBallDTO shuttleBallDTO) {
-		if (adminService.deleteShuttleBall(shuttleBallDTO)) {
-			return ResponseEntity.ok().body("");
+    @GetMapping(value = "/getCourtManagement")
+    public ResponseEntity<CourtManagementDTO> getCourtManagement() {
+        log.info("Received GET /getCourtManagement request");
 
-		}
-		return ResponseEntity.badRequest().body("");
-	}
+        CourtManagementDTO courtManaDTO = courtService.getCourtManagement();
+
+        // Error cases are not handled
+        return ResponseEntity.ok().body(courtManaDTO);
+    }
+
+    @PostMapping(value = "/addPlayer")
+    public ResponseEntity<Result<Boolean>> addPlayerToAvailableSession(@RequestBody String name) {
+        log.info("Adding player:{}", name);
+        Result<Boolean> res = courtService
+                .addPlayerToCurrentSession(name);
+        log.info("Result is:{}", res);
+        // Error cases are not handled
+        return ResponseConvertor.convert(res);
+    }
+
+
+    @PostMapping(value = "/removeServiceOutPlayer")
+    public ResponseEntity<Boolean> removeServiceOutAvaPlayer(@RequestParam String playerName,
+                                                             @RequestBody ServiceDTO serviceDTO) {
+        Boolean res = courtService.removeServiceOutAvailablePlayer(serviceDTO, playerName);
+        // Error cases are not handled
+        return ResponseEntity.ok(res);
+    }
+
+    @PostMapping(value = "/updateServiceToPlayer")
+    public ResponseEntity<Boolean> updateServiceToAvaPlayer(@RequestParam String playerName,
+                                                            @RequestBody List<ServiceRequest> listServiceDTO) {
+        Boolean res = courtService.updateServicesToAvailablePlayer(listServiceDTO, playerName);
+        // Error cases are not handled
+        return ResponseEntity.ok(res);
+    }
+
+    @PostMapping(value = "/addServiceToPlayer")
+    public ResponseEntity<Boolean> addServiceToAvaPlayer(@RequestParam String playerName,
+                                                         @RequestBody ServiceRequest serviceRequest) {
+        Boolean res = courtService.addServiceToAvailablePlayer(serviceRequest, playerName);
+        // Error cases are not handled
+        return ResponseEntity.ok(res);
+    }
+
+    @PostMapping(value = "/addPlayerToCourt")
+    public ResponseEntity<Boolean> addAvaPlayerToCourt(@RequestBody GameDTO gameDTO) throws Exception {
+        Boolean res = courtService.addAvailablePlayerToCourtArea(gameDTO.getPlayerName(), gameDTO.getCourt(),
+                gameDTO.getShuttleBalls().getFirst());
+        // Error cases are not handled
+        return ResponseEntity.ok(res);
+    }
+
+    @PostMapping(value = "/removePlayerFromCourt")
+    public ResponseEntity<Boolean> removePlayerFromCourtArea(@RequestBody CourtDTO courtDTO) {
+        if (CommonUtil.checkValidCourt(courtDTO)) {
+            Boolean res = courtService.removeAvailablePlayerFromCourtArea(courtDTO);
+            // Error cases are not handled
+            return ResponseEntity.ok(res);
+        }
+        return ResponseEntity.badRequest().body(Boolean.FALSE);
+    }
+
+    /**
+     * Req5 - Change game state: Started, Finish, Cancel
+     */
+    @PostMapping(value = "/changeGameState")
+    public ResponseEntity<Boolean> changeGameState(@RequestBody GameDTO gameDTO) {
+        if (gameDTO != null && StringUtils.isNoneBlank(gameDTO.getGameState(), gameDTO.getCourt().getCourtId())) {
+            Boolean res = courtService.changeGameState(gameDTO);
+            // Error cases are not handled
+            return ResponseEntity.ok(res);
+        }
+        return ResponseEntity.badRequest().body(Boolean.FALSE);
+    }
+
+    @PostMapping(value = "/changeSelectedBall")
+    public ResponseEntity<Void> changeSelectedBall(@RequestBody ShuttleBallDTO shuttleBallDTO) {
+        ballService.changeSelectedShuttleBall(shuttleBallDTO);
+        // Error cases are not handled
+        return ResponseEntity.ok().body(null);
+    }
+
+
 }

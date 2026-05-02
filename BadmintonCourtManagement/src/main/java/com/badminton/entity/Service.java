@@ -1,45 +1,53 @@
 package com.badminton.entity;
 
-import java.sql.Timestamp;
-
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
+import com.badminton.model.dto.ServiceDTO;
+import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.sql.Timestamp;
+
 @Entity
-@Table(name = "service", uniqueConstraints = {
-		@UniqueConstraint(name = "unique_service_name", columnNames = { "ser_name", "is_active" }) })
+@Table(name = "service")
 @Getter
 @Setter
 @NoArgsConstructor
 public class Service {
-	@Id
-	@GeneratedValue(strategy = GenerationType.IDENTITY)
-	private int serId;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private int serId;
 
-	@Column(name = "ser_name")
-	private String serName;
+    @Column(name = "ser_name")
+    private String serName;
 
-	private float cost;
+    private float cost;
 
-	@Column(updatable = false, insertable = false)
-	private Timestamp createdDate;
+    @Column(updatable = false, insertable = false)
+    private Timestamp createdDate;
 
-	@Column(name = "is_active")
-	private boolean isActive;
+    @Column(name = "is_active")
+    private boolean isActive;
 
-	public Service(String name, float cost) {
-		super();
-		this.serName = name;
-		this.cost = cost;
-		isActive = true;
-	}
+    public Service(String name, float cost) {
+        super();
+        this.serName = name;
+        this.cost = cost;
+        isActive = true;
+    }
+
+    public boolean isTheSame(ServiceDTO serviceDTO) {
+        return serviceDTO.getServiceName().equals(serName) && serviceDTO.getCost() == cost;
+    }
+
+    public Service setActiveService() {
+        this.setActive(true);
+        return this;
+    }
+
+    public Service setDeActiveService() {
+        this.setActive(false);
+        return this;
+    }
 
 }
