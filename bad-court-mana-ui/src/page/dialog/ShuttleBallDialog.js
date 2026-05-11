@@ -1,6 +1,14 @@
-// src/components/ShuttleBallDialog.js
 import { useEffect, useState, useCallback } from "react";
-import "./Dialog.css"; // reuse same CSS as GameDialog
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
+import DialogActions from "@mui/material/DialogActions";
+import Button from "@mui/material/Button";
+import MenuItem from "@mui/material/MenuItem";
+import TextField from "@mui/material/TextField";
+import Typography from "@mui/material/Typography";
+import Stack from "@mui/material/Stack";
+import Box from "@mui/material/Box";
 import api from "../../api/index";
 
 const ShuttleBallDialog = ({
@@ -10,48 +18,44 @@ const ShuttleBallDialog = ({
   onCancel,
 }) => {
   const [options, setOptions] = useState([]);
-  const [selectedIndex, setSelectedIndex] = useState();
+  const [selectedIndex, setSelectedIndex] = useState(0);
   const [quantity, setQuantity] = useState(0);
   const [addedItems, setAddedItems] = useState([]);
 
-  const handleEscPress = useCallback((event) => {
-    if (event.key === "Escape") {
-      console.log("[ShuttleBallDialog] Escape key pressed!");
-      onCancel();
-    }
-  }, []);
+  const handleEscPress = useCallback(
+    (event) => {
+      if (event.key === "Escape") {
+        onCancel();
+      }
+    },
+    [onCancel]
+  );
 
   useEffect(() => {
-    if (show) {
-      setAddedItems([]);
-      api
-        .get("/court-mana/getShuttleBalls")
-        .then((res) => res.data)
-        .then((data) => {
-          // setOptions(data.map((b) => `${b.shuttleName} - ${b.shuttleCost}`));
-          setOptions(
-            data.map((b) => {
-              return {
-                shuttleName: b.shuttleName,
-                cost: b.cost,
-                costFormat: b.costFormat,
-                currency: b.currency,
-              };
-            })
-          );
-          setSelectedIndex(0);
-          setQuantity(1);
-        })
-        .catch((err) => console.error("Error fetching shuttle balls:", err));
+    if (!show) return undefined;
 
-      // Add event listener when the component mounts
-      document.addEventListener("keydown", handleEscPress);
+    setAddedItems([]);
+    api
+      .get("/court-mana/getShuttleBalls")
+      .then((res) => res.data)
+      .then((data) => {
+        setOptions(
+          data.map((b) => ({
+            shuttleName: b.shuttleName,
+            cost: b.cost,
+            costFormat: b.costFormat,
+            currency: b.currency,
+          }))
+        );
+        setSelectedIndex(0);
+        setQuantity(1);
+      })
+      .catch((err) => console.error("Error fetching shuttle balls:", err));
 
-      // Clean up: remove event listener when the component unmounts
-      return () => {
-        document.removeEventListener("keydown", handleEscPress);
-      };
-    }
+    document.addEventListener("keydown", handleEscPress);
+    return () => {
+      document.removeEventListener("keydown", handleEscPress);
+    };
   }, [show, handleEscPress]);
 
   const handleDelete = (index) => {
@@ -62,18 +66,15 @@ const ShuttleBallDialog = ({
     if (Number.isNaN(quantity) || quantity < 1) {
       return;
     }
-    const intQuantity = parseInt(quantity);
-    // Check if item already exists → update quantity
-    const selectedValue = options[selectedIndex]; // This is the full object: {shuttleName, cost, ...}
+    const intQuantity = parseInt(quantity, 10);
+    const selectedValue = options[selectedIndex];
 
     setAddedItems((prev) => {
-      // 1. Search using 'shuttleName' since that is the key in your objects
       const existing = prev.find(
         (it) => it.shuttleName === selectedValue.shuttleName
       );
 
       if (existing) {
-        // 2. Update quantity of the existing object
         return prev.map((it) =>
           it.shuttleName === selectedValue.shuttleName
             ? { ...it, quantity: it.quantity + intQuantity }
@@ -81,7 +82,6 @@ const ShuttleBallDialog = ({
         );
       }
 
-      // 3. Add new item with all required fields + initial quantity
       return [
         ...prev,
         {
@@ -96,106 +96,107 @@ const ShuttleBallDialog = ({
     setQuantity(1);
   };
 
-  const handleSave = (courtProcessing) => {
-    // convert to {key:value} map format
-    // const resultMap = [];
-    // addedItems.forEach((item) => {
-    //   resultMap[item] = item.quantity;
-    // });
-    console.log("✅ Saved shuttle balls map:", addedItems);
+  const handleSave = () => {
     onSaveBallOntoCourt(courtProcessing, addedItems);
   };
 
   const checkAndSetQuantity = (newQuantity) => {
-    if (!Number.isNaN(newQuantity)) {
-      setQuantity(newQuantity);
+    const n = typeof newQuantity === "string" ? parseFloat(newQuantity) : newQuantity;
+    if (!Number.isNaN(n)) {
+      setQuantity(n);
     }
   };
 
   if (!show) return null;
 
   return (
-    <div className="dialog-overlay">
-      <div
-        className="dialog-box shuttle-dialog-box"
-        style={{
-          width: "500px",
-        }}
-      >
-        <div className="dialog-content">
-          <h5>Thêm cầu</h5>
-          <div className="d-flex align-items-center mb-2">
-            <select
-              className="form-select me-2"
-              value={selectedIndex}
-              onChange={(e) => setSelectedIndex(e.target.value)}
-            >
-              {/* <option value="">-- Chọn cầu --</option> */}
-              {options.map((ball, index) => (
-                <option key={ball.shuttleName} value={index}>
-                  {ball.shuttleName} - {ball.costFormat} {ball.currency}
-                </option>
-              ))}
-            </select>
-            <input
-              type="number"
-              className="form-control"
-              value={quantity}
-              onChange={(e) => checkAndSetQuantity(e.target.value)}
-              style={{ width: "25%", margin: "0 7px 0 0" }}
-            />
-            <button className="btn btn-success" onClick={handleAdd}>
-              +
-            </button>
-          </div>
-        </div>
-        {/* Scrollable rows */}
-        <div className="dialog-scrollable">
-          <div className="added-list">
-            {addedItems.length === 0 && (
-              <div className="text-muted text-center">
-                Chưa có cầu nào được thêm
-              </div>
-            )}
-
-            {addedItems.map((item, index) => (
-              <div
-                key={index}
-                className="added-item d-flex justify-content-between align-items-center"
-              >
-                <div>
-                  <strong>{item.shuttleName}</strong>
-                  &nbsp;–&nbsp;
-                  <span>{item.costFormat}</span> &nbsp;–&nbsp;
-                  <span className="text-secondary">
-                    Số lượng: {item.quantity}
-                  </span>
-                </div>
-                <button
-                  className="btn btn-sm btn-outline-danger"
-                  onClick={() => handleDelete(index)}
-                >
-                  X
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Buttons (non-scrollable) */}
-        <div className="fixed-bottom-actions">
-          <button
-            className="btn btn-success"
-            onClick={() => handleSave(courtProcessing)}
+    <Dialog open={show} onClose={onCancel} maxWidth="sm" fullWidth scroll="paper">
+      <DialogTitle>Thêm cầu</DialogTitle>
+      <DialogContent dividers>
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mb: 2 }}>
+          <TextField
+            select
+            label="Loại cầu"
+            size="small"
+            value={selectedIndex}
+            onChange={(e) => setSelectedIndex(Number(e.target.value))}
+            sx={{ flex: 1 }}
           >
-            Lưu
-          </button>
-          <button className="btn btn-secondary" onClick={onCancel}>
-            Hủy
-          </button>
-        </div>
-      </div>
-    </div>
+            {options.map((ball, index) => (
+              <MenuItem key={ball.shuttleName} value={index}>
+                {ball.shuttleName} - {ball.costFormat} {ball.currency}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            type="number"
+            label="Số lượng"
+            size="small"
+            value={quantity}
+            onChange={(e) => checkAndSetQuantity(e.target.value)}
+            sx={{ width: { xs: "100%", sm: 120 } }}
+          />
+          <Button variant="contained" color="success" onClick={handleAdd} sx={{ alignSelf: { sm: "center" } }}>
+            +
+          </Button>
+        </Stack>
+
+        <Box
+          sx={{
+            maxHeight: 320,
+            overflowY: "auto",
+            pr: 1,
+          }}
+        >
+          {addedItems.length === 0 && (
+            <Typography variant="body2" color="text.secondary" align="center">
+              Chưa có cầu nào được thêm
+            </Typography>
+          )}
+
+          {addedItems.map((item, index) => (
+            <Stack
+              key={index}
+              direction="row"
+              alignItems="center"
+              justifyContent="space-between"
+              sx={{
+                py: 1.25,
+                px: 1.5,
+                mb: 1,
+                borderRadius: 1,
+                border: 1,
+                borderColor: "divider",
+                bgcolor: "grey.50",
+              }}
+            >
+              <Box>
+                <Typography component="span" fontWeight={600}>
+                  {item.shuttleName}
+                </Typography>
+                {" – "}
+                <Typography component="span">{item.costFormat}</Typography>
+                {" – "}
+                <Typography component="span" color="text.secondary">
+                  Số lượng: {item.quantity}
+                </Typography>
+              </Box>
+              <Button size="small" color="error" variant="outlined" onClick={() => handleDelete(index)}>
+                X
+              </Button>
+            </Stack>
+          ))}
+        </Box>
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+        <Button variant="contained" color="success" onClick={handleSave}>
+          Lưu
+        </Button>
+        <Button variant="outlined" onClick={onCancel}>
+          Hủy
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 };
 

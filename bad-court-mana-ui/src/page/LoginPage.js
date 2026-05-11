@@ -1,7 +1,9 @@
-// src/LoginPage.js
 import { useState, useContext } from "react";
-import { Form, Row, Col, Button, Container } from "react-bootstrap";
-
+import Box from "@mui/material/Box";
+import TextField from "@mui/material/TextField";
+import Button from "@mui/material/Button";
+import Typography from "@mui/material/Typography";
+import Stack from "@mui/material/Stack";
 import { useNavigate } from "react-router";
 import { AuthContext } from "../context/AuthContext";
 import api from "../api";
@@ -14,9 +16,7 @@ function LoginPage() {
 
   const navigate = useNavigate();
 
-  const handleLogin = async (e) => {
-    // e.preventDefault();
-
+  const handleLogin = async () => {
     try {
       const res = await api.post(
         `/login?${new URLSearchParams({
@@ -31,19 +31,11 @@ function LoginPage() {
       );
 
       if (res.status === 200) {
-        // const token = res.data.csrfToken;
-        // setCsrfToken(token);
-        // Cookies.set("XSRF-TOKEN",token);
         sessionStorage.setItem("csrfToken", res.data.csrfToken);
         sessionStorage.setItem("username", res.data.username);
         setAuthenticated(true);
-
         navigate("/home");
       }
-      // } else {
-      //   alert("Cannot login");
-      //   return;
-      // }
     } catch (err) {
       setError("Invalid credentials");
       alert("Đăng nhập thất bại");
@@ -53,49 +45,48 @@ function LoginPage() {
   };
 
   const handleKeyPress = (event) => {
-    // look for the `Enter` keyCode
-    if (event.keyCode === 13 || event.which === 13) {
+    if (event.key === "Enter") {
       handleLogin();
     }
   };
-  return (
-    <Container fluid>
-      <Form>
-        <Form.Group as={Row} className="mb-3" controlId="formPlaintextEmail">
-          <Form.Label column sm="2">
-            Tên đăng nhập
-          </Form.Label>
-          <Col sm="5">
-            <Form.Control
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              onKeyDown={handleKeyPress}
-              placeholder="Username"
-              required
-            />
-          </Col>
-        </Form.Group>
 
-        <Form.Group as={Row} className="mb-3" controlId="formPlaintextPassword">
-          <Form.Label column sm="2">
-            Mật khẩu
-          </Form.Label>
-          <Col sm="5">
-            <Form.Control
-              type="password"
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onKeyDown={handleKeyPress}
-              required
-            />
-          </Col>
-        </Form.Group>
-        <Button variant="primary" onClick={handleLogin}>
+  return (
+    <Box sx={{ maxWidth: 480, mx: "auto", mt: 4, px: 2 }}>
+      <Typography variant="h5" gutterBottom>
+        Đăng nhập
+      </Typography>
+      <Stack spacing={2} component="form" noValidate autoComplete="off">
+        <TextField
+          label="Tên đăng nhập"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          onKeyDown={handleKeyPress}
+          placeholder="Username"
+          required
+          fullWidth
+          autoComplete="username"
+        />
+        <TextField
+          label="Mật khẩu"
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          onKeyDown={handleKeyPress}
+          required
+          fullWidth
+          autoComplete="current-password"
+        />
+        {error ? (
+          <Typography variant="body2" color="error">
+            {error}
+          </Typography>
+        ) : null}
+        <Button variant="contained" size="large" onClick={handleLogin}>
           Đăng nhập
         </Button>
-      </Form>
-    </Container>
+      </Stack>
+    </Box>
   );
 }
 

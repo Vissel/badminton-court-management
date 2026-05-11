@@ -1,6 +1,13 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
+import Box from "@mui/material/Box";
+import Paper from "@mui/material/Paper";
+import Typography from "@mui/material/Typography";
+import FormControl from "@mui/material/FormControl";
+import InputLabel from "@mui/material/InputLabel";
+import Select from "@mui/material/Select";
+import MenuItem from "@mui/material/MenuItem";
 
 import "../App.css";
 import api from "../api/index";
@@ -706,60 +713,73 @@ const saveServiceToPlayer = async(playerName, serviceName, cost) => {
 
   return (
     <DndProvider backend={HTML5Backend}>
-      <div style={{ display: "flex", flexDirection: "row", height: "100vh" }}>
-        <div
-          style={{
+      <Box sx={{ display: "flex", flexDirection: "row", height: "100vh" }}>
+        <Paper
+          elevation={0}
+          square
+          sx={{
+            width: "20%",
+            minWidth: { xs: 180, sm: 220 },
+            p: 1,
+            borderRight: 1,
+            borderColor: "divider",
             display: "flex",
             flexDirection: "column",
-            width: "20%",
-            padding: "3px",
-            borderRight: "1px solid #ccc",
-            transition: "background-color 2s ease",
+            gap: 1,
+            bgcolor: "grey.50",
           }}
         >
-          <div
-            className="service-area"
-            style={{
-              // backgroundColor: "rgb(239 242 244)",
-              color: "white",
-              border: "1px solid #cde",
-              margin: "5px 5px 5px 5px",
-              padding: "5px 10px 5px",
+          <Paper
+            variant="outlined"
+            sx={{
+              color: "common.white",
+              borderColor: "#cde",
+              p: 1.25,
               backgroundImage: 'url("whatsapp-wallpaper-3.jpg")',
               backgroundSize: "cover",
-              fontSize: "16px",
             }}
           >
-            <h5> Tiền sân và Cầu: </h5>
-            <b>
+            <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+              Tiền sân và Cầu:
+            </Typography>
+            <Typography variant="body2" fontWeight={600} display="block">
               Tiền sân: {formatVND(costInPerson)} {VN_CURRENCY}
-            </b>
-            <br></br>
-            {selectedBall !== "" && (
-              <b>
+            </Typography>
+            {selectedBall !== "" && selectedBallVO && (
+              <Typography variant="body2" fontWeight={600} sx={{ mt: 0.5 }}>
                 Cầu: {selectedBallVO.shuttleName} - {selectedBallVO.costFormat}{" "}
                 {selectedBallVO.currency}
-              </b>
+              </Typography>
             )}
-          </div>
-          <div className="service-area">
-            <h5 style={{ margin: "15px 0 0 5px" }}> Thay đổi cầu: </h5>
-            <select
-              id="ballOptionId"
-              name="ballOptions"
-              value={selectedBall}
-              onChange={(e) => handleSelectedBall(e.target.value)}
-              className="court-select selection-box"
-            >
-              {ballOptions.map((ball, index) => (
-                <option key={ball.shuttleName} value={index}>
-                  {ball.shuttleName} - {ball.costFormat} {ball.currency}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="service-area">
-            <h5 style={{ margin: "15px 0 0 5px" }}>Chọn dịch vụ: </h5>
+          </Paper>
+
+          <Box sx={{ px: 0.5 }}>
+            <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+              Thay đổi cầu:
+            </Typography>
+            <FormControl fullWidth size="small">
+              <InputLabel id="ballOptionLabel">Loại cầu</InputLabel>
+              <Select
+                labelId="ballOptionLabel"
+                label="Loại cầu"
+                id="ballOptionId"
+                name="ballOptions"
+                value={selectedBall}
+                onChange={(e) => handleSelectedBall(Number(e.target.value))}
+              >
+                {ballOptions.map((ball, index) => (
+                  <MenuItem key={ball.shuttleName} value={index}>
+                    {ball.shuttleName} - {ball.costFormat} {ball.currency}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
+
+          <Box sx={{ px: 0.5, flex: 1, overflow: "auto" }}>
+            <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+              Chọn dịch vụ:
+            </Typography>
             {services.map((s) => (
               <DraggableService
                 key={s.serviceName}
@@ -769,9 +789,10 @@ const saveServiceToPlayer = async(playerName, serviceName, cost) => {
                 currency={s.currency}
               />
             ))}
-          </div>
-        </div>
-        <div className="court-container" ref={scrollRef}>
+          </Box>
+        </Paper>
+
+        <Box className="court-container" ref={scrollRef}>
           <div className="column court-bar">
             <PlayerArea
               availablePlayers={availablePlayers}
@@ -870,8 +891,8 @@ const saveServiceToPlayer = async(playerName, serviceName, cost) => {
             onConfirm={handlePayment}
             onExit={() => setShowPayConfirmDialog(false)}
           />
-        </div>
-      </div>
+        </Box>
+      </Box>
     </DndProvider>
   );
 }

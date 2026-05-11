@@ -1,19 +1,22 @@
-// src/LoginPage.js
 import { useEffect, useState, useRef } from "react";
-
-import {
-  Form,
-  Row,
-  Col,
-  Button,
-  Container,
-  InputGroup,
-  FormLabel,
-  Table,
-} from "react-bootstrap";
+import Box from "@mui/material/Box";
+import Grid from "@mui/material/Grid";
+import Button from "@mui/material/Button";
+import TextField from "@mui/material/TextField";
+import Typography from "@mui/material/Typography";
+import Table from "@mui/material/Table";
+import TableBody from "@mui/material/TableBody";
+import TableCell from "@mui/material/TableCell";
+import TableContainer from "@mui/material/TableContainer";
+import TableHead from "@mui/material/TableHead";
+import TableRow from "@mui/material/TableRow";
+import Paper from "@mui/material/Paper";
+import IconButton from "@mui/material/IconButton";
+import InputAdornment from "@mui/material/InputAdornment";
+import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
+import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
 import api from "../api/index";
-
-import {VN_CURRENCY, formatVND, rawNumber } from "./MoneyUtils";
+import { VN_CURRENCY, formatVND } from "./MoneyUtils";
 
 function SetupPage() {
   const [errorMess, setErrorMess] = useState(null);
@@ -28,7 +31,6 @@ function SetupPage() {
   const tableRef = useRef(null);
   const tableBallRef = useRef(null);
 
-
   const handleAdd = () => {
     setServices([...services, { id: Date.now(), serviceName: "", cost: "" }]);
   };
@@ -36,7 +38,6 @@ function SetupPage() {
     setServices(services.filter((service) => service.id !== id));
   };
 
-  // for shuttle ball
   const [oneBall, setOneBall] = useState(true);
   const addShuttleBall = () => {
     if (oneBall === false) {
@@ -94,29 +95,22 @@ function SetupPage() {
     const raw = e.target.value.replace(/\D/g, "");
     handleServiceChange(id, "cost", raw);
   };
-  // service row clicking
+
   const [selectedRow, setSelectedRow] = useState(null);
   const [deletingRow, setDeletingRow] = useState(false);
   const handleRowClick = (index) => {
     setSelectedRow(index === selectedRow ? null : index);
   };
-  // service delete handling
+
   const handleDeleteService = (serviceToDelete, idx) => {
     try {
       setDeletingRow(true);
-      // const res = await api.put("/api/deleteService", {
-      //   serviceName: serviceToDelete.serviceName,
-      //   cost: serviceToDelete.cost,
-      // });
-
-      // if (res.status === 200) {
       setTableServices((prev) =>
         prev.map((item, i) =>
           i === idx ? { ...item, isDeleted: !item.isDeleted } : item
         )
       );
       setSelectedRow(null);
-      // }
     } catch (err) {
       console.error("Error deleting service:", err);
       setErrorMess(`Có lỗi khi xoá dich vụ:${serviceToDelete.serviceName}`);
@@ -124,23 +118,16 @@ function SetupPage() {
       setDeletingRow(false);
     }
   };
-  // shuttle ball row clicking
+
   const [selectedBall, setSelectedBall] = useState(null);
   const [deletingBall, setDeletingBall] = useState(false);
   const handleBallClick = (index) => {
     setSelectedBall(index === selectedBall ? null : index);
   };
-  // shuttle ball delete handling
+
   const handleDeleteBall = (ball, idx) => {
     try {
       setDeletingBall(true);
-      // const res = await api.put("/api/deleteShuttleBall", {
-      //   shuttleName: ball.shuttleName,
-      //   shuttleCost: ball.shuttleCost,
-      // });
-
-      // if (res.status === 200) {+++++++++++++++
-      // setTableShuttleBalls((prev) => prev.filter((_, i) => i !== idx));
       setTableShuttleBalls((prev) =>
         prev.map((item, i) =>
           i === idx ? { ...item, isDeleted: !item.isDeleted } : item
@@ -156,27 +143,23 @@ function SetupPage() {
   };
 
   const existedInTableService = (newService) => {
-    const found = tableServices.some((s) => {
+    return tableServices.some((s) => {
       return (
         s.serviceName === newService.serviceName &&
-        s.cost == parseFloat(newService.cost)
+        Number(s.cost) === Number(newService.cost)
       );
     });
-    return found;
   };
   const existedInTableShuttleBall = (newBall) => {
-    const found = tableShuttleBalls.some((b) => {
+    return tableShuttleBalls.some((b) => {
       return (
         b.shuttleName === newBall.shuttleName &&
-        b.shuttleCost == parseFloat(newBall.shuttleCost)
+        Number(b.shuttleCost) === Number(newBall.shuttleCost)
       );
     });
-    return found;
   };
 
-  // const [isDuplicated, setIsDuplicated] = useState(false);
   const handleSave = async () => {
-    // setIsDuplicated(false);
     setErrorMess(null);
 
     const duplicates = [];
@@ -199,7 +182,8 @@ function SetupPage() {
     }
     if (duplicatesBall.length > 0) {
       mess +=
-        "\n." + `Tên quả cầu lông đang trùng lặp: ${duplicatesBall.join(", ")}`;
+        "\n." +
+        `Tên quả cầu lông đang trùng lặp: ${duplicatesBall.join(", ")}`;
       isDuplicated = true;
     }
     if (isDuplicated) {
@@ -207,16 +191,14 @@ function SetupPage() {
       alert("Không thể lưu thiết lập. Kiểm tra lỗi trùng lặp.");
       return;
     }
-    const rawNumber =  Number(costInPerson.toString().replace(/\D/g, ""));
+    const rawNumber = Number(costInPerson.toString().replace(/\D/g, ""));
     const payload = {
       totalCourt: totalCourt,
       costInPerson: rawNumber,
-      addedShuttleBalls: shuttleBall.map((b) => {
-        return {
-          shuttleName: b.shuttleName,
-          shuttleCost: b.cost,
-        };
-      }),
+      addedShuttleBalls: shuttleBall.map((b) => ({
+        shuttleName: b.shuttleName,
+        shuttleCost: b.cost,
+      })),
       deletedShuttleBalls: tableShuttleBalls
         .filter((b) => b.isDeleted)
         .map(({ shuttleName, cost }) => ({
@@ -246,7 +228,6 @@ function SetupPage() {
           ...services,
         ]);
 
-        // remove input fields of shuttle_ball and service
         setShuttleBall([]);
         setOneBall(true);
         setServices([]);
@@ -265,14 +246,13 @@ function SetupPage() {
     setcostInPersonFormatted(formatVND(raw));
   };
   const handleCostInput = (e, id) => {
-    const raw = e.target.value.replace(/\D/g, ""); // remove non digits
+    const raw = e.target.value.replace(/\D/g, "");
     handleBallChange(id, "cost", raw);
   };
+
   const fetchEntries = async () => {
     try {
       const res = await api.get(`/api/getSetupServices`);
-      console.log(`return code:${res.status}`);
-      console.log(`table:${tableServices.length}`);
       if (res.status === 200 && res.data !== "") {
         setTotalCourt(res.data.totalCourt);
         setCostInPerson(res.data.costInPerson);
@@ -290,7 +270,7 @@ function SetupPage() {
 
     const handleClickOutside = (event) => {
       if (tableRef.current && !tableRef.current.contains(event.target)) {
-        setSelectedRow(null); // clear selection
+        setSelectedRow(null);
       }
 
       if (
@@ -308,338 +288,287 @@ function SetupPage() {
     };
   }, []);
 
+  const rowSx = (deleted, selected) => ({
+    cursor: deleted ? "not-allowed" : "pointer",
+    textDecoration: deleted ? "line-through" : "none",
+    opacity: deleted ? 0.5 : 1,
+    transition: "all 0.2s ease",
+    ...(selected ? { bgcolor: "action.selected" } : {}),
+  });
+
   return (
-    <Container>
-      <Row>
-        <Col sm={6}>
-          <h1>Trang thiết lâp sân cầu</h1>
-        </Col>
-        <Col sm={4}>
-          <Button variant="primary" onClick={handleSave}>
+    <Box sx={{ maxWidth: 1100, mx: "auto", p: { xs: 1, sm: 2 } }}>
+      <Grid container spacing={2} alignItems="center" sx={{ mb: 2 }}>
+        <Grid size={{ xs: 12, md: 8 }}>
+          <Typography variant="h4" component="h1">
+            Trang thiết lâp sân cầu
+          </Typography>
+        </Grid>
+        <Grid size={{ xs: 12, md: 4 }}>
+          <Button variant="contained" onClick={handleSave}>
             Lưu thiết lập
           </Button>
-        </Col>
-      </Row>
-      <Form>
-        <Form.Group as={Row} className="md-3">
-          <Form.Label column sm="1">
-            {" "}
-            Tổng sân:
-          </Form.Label>
-          <Col sm="4">
-            <InputGroup className="mb-3">
-              <Form.Control
-                type="number"
-                defaultValue="8"
-                // value={totalCourt}
-                onChange={(e) => setTotalCourt(e.target.value)}
-                disabled={true}
-              />
-              <InputGroup.Text>sân</InputGroup.Text>
-            </InputGroup>
-          </Col>
-        </Form.Group>
-        <Form.Group as={Row} className="mb-3">
-          <Form.Label column sm="1">
-            Tiền sân:
-          </Form.Label>
-          <Col sm="4">
-            <InputGroup className="mb-3">
-              {costInPersonEditing ? (
-                <Form.Control
-                  type="text"
-                  value={costInPerson}
-                  onChange={(e) => handleCostInPerson(e)}
-                  autoFocus
-                />
-              ) : (
-                <Form.Control
-                  type="text"
-                  value={costInPersonFormatted}
-                  readOnly
-                  onClick={() => setCostInPersonEditing(true)}
-                  style={{ cursor: "pointer" }}
-                />
-              )}
-              <InputGroup.Text>{VN_CURRENCY}/người</InputGroup.Text>
-            </InputGroup>
-          </Col>
-        </Form.Group>
-        {/* Error message */}
-        <Row>
-          <Col>{errorMess && <p id="danger">{errorMess}</p>}</Col>
-        </Row>
-        {/* Add shuttleBall */}
-        <Row className="row-space">
-          <Col>
-            <Button variant="success" onClick={addShuttleBall} className="me-2">
-              + Thêm loại cầu
-            </Button>
-          </Col>
-        </Row>
+        </Grid>
+      </Grid>
 
-        {shuttleBall.map((ball, index) => (
-          <Form.Group
-            as={Row}
-            key={ball.id}
-            className="align-items-center mb-2 row-space"
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12 }}>
+          <TextField
+            label="Tổng sân"
+            type="number"
+            defaultValue="8"
+            onChange={(e) => setTotalCourt(e.target.value)}
+            disabled
+            slotProps={{
+              input: {
+                endAdornment: (
+                  <InputAdornment position="end">sân</InputAdornment>
+                ),
+              },
+            }}
+            sx={{ maxWidth: 280 }}
+          />
+        </Grid>
+
+        <Grid size={{ xs: 12 }}>
+          <TextField
+            label="Tiền sân"
+            type="text"
+            value={costInPersonEditing ? costInPerson : costInPersonFormatted}
+            onChange={costInPersonEditing ? handleCostInPerson : undefined}
+            onClick={
+              costInPersonEditing ? undefined : () => setCostInPersonEditing(true)
+            }
+            slotProps={{
+              input: {
+                readOnly: !costInPersonEditing,
+                sx: !costInPersonEditing ? { cursor: "pointer" } : undefined,
+                endAdornment: (
+                  <InputAdornment position="end">
+                    {VN_CURRENCY}/người
+                  </InputAdornment>
+                ),
+              },
+            }}
+            sx={{ maxWidth: 360 }}
+          />
+        </Grid>
+
+        {errorMess && (
+          <Grid size={{ xs: 12 }}>
+            <Typography color="error">{errorMess}</Typography>
+          </Grid>
+        )}
+
+        <Grid size={{ xs: 12 }}>
+          <Button
+            variant="contained"
+            color="success"
+            onClick={addShuttleBall}
+            sx={{ mr: 1 }}
           >
-            <Form.Label column sm="1">
-              Loại cầu:
-            </Form.Label>
-            <Col sm={3}>
-              <Form.Control
-                type="text"
+            + Thêm loại cầu
+          </Button>
+        </Grid>
+
+        {shuttleBall.map((ball) => (
+          <Grid container spacing={2} alignItems="center" key={ball.id} sx={{ pl: 2 }}>
+            <Grid size={{ xs: 12, sm: 2 }}>
+              <Typography variant="body2">Loại cầu:</Typography>
+            </Grid>
+            <Grid size={{ xs: 12, sm: 4 }}>
+              <TextField
+                fullWidth
+                size="small"
                 placeholder="VinaStar"
                 value={ball.shuttleName}
                 onChange={(e) =>
                   handleBallChange(ball.id, "shuttleName", e.target.value)
                 }
               />
-            </Col>
-            <Col sm={3}>
-              <InputGroup className="mb-2">
-                <Form.Control
-                  type="text"
-                  value={formatVND(ball.cost)}
-                  onChange={(e) => handleCostInput(e, ball.id)}
-                />
-                <InputGroup.Text>{VN_CURRENCY}/trái</InputGroup.Text>
-              </InputGroup>
-            </Col>
-            <Col md={1}>
+            </Grid>
+            <Grid size={{ xs: 12, sm: 4 }}>
+              <TextField
+                fullWidth
+                size="small"
+                value={formatVND(ball.cost)}
+                onChange={(e) => handleCostInput(e, ball.id)}
+                slotProps={{
+                  input: {
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        {VN_CURRENCY}/trái
+                      </InputAdornment>
+                    ),
+                  },
+                }}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 2 }}>
               <Button
-                variant="danger"
+                variant="contained"
+                color="error"
                 onClick={() => removeShuttleBall(ball.id)}
               >
                 -
               </Button>
-            </Col>
-          </Form.Group>
+            </Grid>
+          </Grid>
         ))}
-        {/* Table existed shuttle balss */}
+
         {tableShuttleBalls.length !== 0 && (
-          <>
-            <Row className="justify-content-start" id="cus-table">
-              <Col xs={6}>
-                <h3>Danh sách Loại cầu</h3>
-                <Table striped bordered hover size="sm" ref={tableBallRef}>
-                  <thead>
-                    <tr>
-                      <th>Loại cầu</th>
-                      <th>Giá ({VN_CURRENCY}/trái)</th>
-                      <th style={{ width: "50px" }}>Xoá</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tableShuttleBalls.map((ball, idx) => (
-                      <tr
-                        key={idx}
-                        onClick={() => !ball.isDeleted && handleBallClick(idx)}
-                        className={selectedBall === idx ? "table-active" : ""}
-                        style={{
-                          cursor: ball.isDeleted ? "not-allowed" : "pointer",
-                          textDecoration: ball.isDeleted
-                            ? "line-through"
-                            : "none",
-                          opacity: ball.isDeleted ? 0.5 : 1,
-                          transition: "all 0.2s ease", // Smooth transition for the strike-through
-                        }}
-                      >
-                        <td>{ball.shuttleName}</td>
-                        <td>{ball.costFormat}</td>
-                        <td>
-                          {/* display the delete/undo button */}
-                          {(selectedBall === idx || ball.isDeleted) && (
-                            <button
-                              title={`${ball.isDeleted ? "Quay lại" : "Xoá"}`}
-                              className={`btn btn-sm ${
-                                ball.isDeleted
-                                  ? "btn-outline-primary"
-                                  : "btn-outline-danger"
-                              }`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteBall(ball, idx);
-                              }}
-                              disabled={deletingBall}
-                            >
-                              {ball.isDeleted ? (
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  width="16"
-                                  height="16"
-                                  fill="currentColor"
-                                  class="bi bi-arrow-counterclockwise"
-                                  viewBox="0 0 16 16"
-                                >
-                                  <path
-                                    fill-rule="evenodd"
-                                    d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.417A6 6 0 1 0 8 2z"
-                                  />
-                                  <path d="M8 4.466V.534a.25.25 0 0 0-.41-.192L5.23 2.308a.25.25 0 0 0 0 .384l2.36 1.966A.25.25 0 0 0 8 4.466" />
-                                </svg>
-                              ) : (
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  width="16"
-                                  height="16"
-                                  fill="currentColor"
-                                  className="bi bi-trash"
-                                  viewBox="0 0 16 16"
-                                >
-                                  <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z" />
-                                  <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z" />
-                                </svg>
-                              )}
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </Table>
-              </Col>
-            </Row>
-          </>
+          <Grid size={{ xs: 12 }} md={8}>
+            <Typography variant="h6" gutterBottom>
+              Danh sách Loại cầu
+            </Typography>
+            <TableContainer component={Paper} variant="outlined" ref={tableBallRef}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Loại cầu</TableCell>
+                    <TableCell>Giá ({VN_CURRENCY}/trái)</TableCell>
+                    <TableCell sx={{ width: 72 }}>Xoá</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {tableShuttleBalls.map((ball, idx) => (
+                    <TableRow
+                      key={idx}
+                      hover={!ball.isDeleted}
+                      selected={selectedBall === idx}
+                      onClick={() => !ball.isDeleted && handleBallClick(idx)}
+                      sx={rowSx(ball.isDeleted, selectedBall === idx)}
+                    >
+                      <TableCell>{ball.shuttleName}</TableCell>
+                      <TableCell>{ball.costFormat}</TableCell>
+                      <TableCell>
+                        {(selectedBall === idx || ball.isDeleted) && (
+                          <IconButton
+                            size="small"
+                            title={ball.isDeleted ? "Quay lại" : "Xoá"}
+                            color={ball.isDeleted ? "primary" : "error"}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteBall(ball, idx);
+                            }}
+                            disabled={deletingBall}
+                          >
+                            {ball.isDeleted ? <RefreshOutlinedIcon /> : <DeleteOutlinedIcon />}
+                          </IconButton>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Grid>
         )}
 
-        {/* Add service area */}
-        <Row className="row-space">
-          <Col>
-            <Button variant="success" onClick={handleAdd} className="me-2">
-              + Thêm dich vụ
-            </Button>
-          </Col>
-        </Row>
+        <Grid size={{ xs: 12 }}>
+          <Button variant="contained" color="success" onClick={handleAdd} sx={{ mr: 1 }}>
+            + Thêm dich vụ
+          </Button>
+        </Grid>
+
         {services.map((service) => (
-          <Row key={service.id} className="align-items-center mb-2 row-space">
-            <Form.Label column sm="1">
-              Dịch vụ:
-            </Form.Label>
-            <Col sm={3}>
-              <Form.Control
-                type="text"
+          <Grid container spacing={2} alignItems="center" key={service.id} sx={{ pl: 2 }}>
+            <Grid size={{ xs: 12, sm: 2 }}>
+              <Typography variant="body2">Dịch vụ:</Typography>
+            </Grid>
+            <Grid size={{ xs: 12, sm: 4 }}>
+              <TextField
+                fullWidth
+                size="small"
                 value={service.serviceName}
                 onChange={(e) =>
                   handleServiceChange(service.id, "serviceName", e.target.value)
                 }
               />
-            </Col>
-
-            <Col sm={3}>
-              <InputGroup className="mb-2">
-                <Form.Control
-                  type="text"
-                  value={formatVND(service.cost)}
-                  onChange={(e) => handleServiceCostChange(e, service.id)}
-                />
-                <InputGroup.Text>{VN_CURRENCY}</InputGroup.Text>
-              </InputGroup>
-            </Col>
-
-            <Col sm={1}>
-              <Button variant="danger" onClick={() => handleRemove(service.id)}>
+            </Grid>
+            <Grid size={{ xs: 12, sm: 4 }}>
+              <TextField
+                fullWidth
+                size="small"
+                value={formatVND(service.cost)}
+                onChange={(e) => handleServiceCostChange(e, service.id)}
+                slotProps={{
+                  input: {
+                    endAdornment: (
+                      <InputAdornment position="end">{VN_CURRENCY}</InputAdornment>
+                    ),
+                  },
+                }}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 2 }}>
+              <Button
+                variant="contained"
+                color="error"
+                onClick={() => handleRemove(service.id)}
+              >
                 -
               </Button>
-            </Col>
-          </Row>
+            </Grid>
+          </Grid>
         ))}
 
-        {/* Table existed services */}
         {tableServices.length !== 0 && (
-          <>
-            <Row className="justify-content-start" id="cus-table">
-              <Col xs={6}>
-                <h3>Danh sách Dịch vụ</h3>
-                <Table striped bordered hover size="sm" ref={tableRef}>
-                  <thead>
-                    <tr>
-                      <th>Dịch vụ</th>
-                      <th>Giá ({VN_CURRENCY})</th>
-                      <th style={{ width: "50px" }}>Xoá </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tableServices.map((ser, index) => (
-                      <tr
-                        key={index}
-                        onClick={() => !ser.isDeleted && handleRowClick(index)}
-                        className={selectedRow === index ? "table-active" : ""}
-                        style={{
-                          cursor: ser.isDeleted ? "not-allowed" : "pointer",
-                          textDecoration: ser.isDeleted
-                            ? "line-through"
-                            : "none",
-                          opacity: ser.isDeleted ? 0.5 : 1,
-                          transition: "all 0.2s ease", // Smooth transition for the strike-through
-                        }}
-                      >
-                        <td>{ser.serviceName}</td>
-                        <td>{ser.costFormat}</td>
-                        <td>
-                          {(selectedRow === index || ser.isDeleted) && (
-                            <button
-                              title={`${ser.isDeleted ? "Quay lại" : "Xoá"}`}
-                              className={`btn btn-sm ${
-                                ser.isDeleted
-                                  ? "btn-outline-primary"
-                                  : "btn-outline-danger"
-                              }`}
-                              onClick={(e) => {
-                                e.stopPropagation(); // Prevent row re-select
-                                handleDeleteService(ser, index);
-                              }}
-                              disabled={deletingRow}
-                            >
-                              {ser.isDeleted ? (
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  width="16"
-                                  height="16"
-                                  fill="currentColor"
-                                  class="bi bi-arrow-counterclockwise"
-                                  viewBox="0 0 16 16"
-                                >
-                                  <path
-                                    fill-rule="evenodd"
-                                    d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.417A6 6 0 1 0 8 2z"
-                                  />
-                                  <path d="M8 4.466V.534a.25.25 0 0 0-.41-.192L5.23 2.308a.25.25 0 0 0 0 .384l2.36 1.966A.25.25 0 0 0 8 4.466" />
-                                </svg>
-                              ) : (
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  width="16"
-                                  height="16"
-                                  fill="currentColor"
-                                  class="bi bi-trash"
-                                  viewBox="0 0 16 16"
-                                >
-                                  <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z" />
-                                  <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z" />
-                                </svg>
-                              )}
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </Table>
-              </Col>
-            </Row>
-          </>
+          <Grid size={{ xs: 12 }} md={8}>
+            <Typography variant="h6" gutterBottom>
+              Danh sách Dịch vụ
+            </Typography>
+            <TableContainer component={Paper} variant="outlined" ref={tableRef}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Dịch vụ</TableCell>
+                    <TableCell>Giá ({VN_CURRENCY})</TableCell>
+                    <TableCell sx={{ width: 72 }}>Xoá </TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {tableServices.map((ser, index) => (
+                    <TableRow
+                      key={index}
+                      hover={!ser.isDeleted}
+                      selected={selectedRow === index}
+                      onClick={() => !ser.isDeleted && handleRowClick(index)}
+                      sx={rowSx(ser.isDeleted, selectedRow === index)}
+                    >
+                      <TableCell>{ser.serviceName}</TableCell>
+                      <TableCell>{ser.costFormat}</TableCell>
+                      <TableCell>
+                        {(selectedRow === index || ser.isDeleted) && (
+                          <IconButton
+                            size="small"
+                            title={ser.isDeleted ? "Quay lại" : "Xoá"}
+                            color={ser.isDeleted ? "primary" : "error"}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteService(ser, index);
+                            }}
+                            disabled={deletingRow}
+                          >
+                            {ser.isDeleted ? <RefreshOutlinedIcon /> : <DeleteOutlinedIcon />}
+                          </IconButton>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Grid>
         )}
-        <Row className="row-space">
-          <Col sm={4}>
-            <Button variant="primary" onClick={handleSave}>
-              Lưu thiết lập
-            </Button>
-          </Col>
-        </Row>
-      </Form>
-    </Container>
+
+        <Grid size={{ xs: 12 }}>
+          <Button variant="contained" onClick={handleSave}>
+            Lưu thiết lập
+          </Button>
+        </Grid>
+      </Grid>
+    </Box>
   );
 }
 

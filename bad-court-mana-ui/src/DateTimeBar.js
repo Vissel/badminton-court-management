@@ -1,16 +1,19 @@
 import React, { useState, useEffect, useContext } from "react";
 import { useLocation } from "react-router-dom";
-import "./DateTimeBar.css";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Typography from "@mui/material/Typography";
 import api from "./api/index";
 import PayConfirm from "./page/dialog/PayConfirm";
-import {AuthContext} from "./context/AuthContext";
+import { AuthContext } from "./context/AuthContext";
 
 function DateTimeBar() {
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
-  const [ending, setEnding] = useState(false); // prevent double click
+  const [ending, setEnding] = useState(false);
   const [show, setShow] = useState(false);
   const [data, setData] = useState();
   const { logout } = useContext(AuthContext);
+
   useEffect(() => {
     const endedSessionTitle = `Sau kết thúc phiên làm việc:\n 
     1) Tất cả trận cầu đang diễn ra trên sân sẽ kết thúc.\n
@@ -23,6 +26,7 @@ function DateTimeBar() {
 
     return () => clearInterval(timerId);
   }, []);
+
   const location = useLocation();
   const isHomePage = location.pathname === "/home";
 
@@ -41,21 +45,17 @@ function DateTimeBar() {
     return `${weekday}, ngày ${day}, tháng ${month}, năm ${year} - ${time}`;
   };
 
-  // =========================
-  // END SESSION HANDLER
-  // =========================
   const onEndSession = () => {
     setShow(true);
   };
+
   const handleEndSession = async () => {
-    console.log("Clicking on End session.");
+    setEnding(true);
     try {
       const closedSessionResp = await api.post(`/session/deleteSession`);
       if (closedSessionResp.status !== 200) {
         const errorMessage = `Có lỗi khi kết thúc phiên làm việc. ${closedSessionResp.data.message}.\n Thử lại.`;
-
         alert(errorMessage);
-        console.log(errorMessage);
         return;
       }
       alert("Kết thúc phiên làm việc thành công.");
@@ -63,40 +63,54 @@ function DateTimeBar() {
     } catch (error) {
       console.log(`Unexpected error: ${error}`);
     } finally {
+      setEnding(false);
       setShow(false);
     }
   };
+
   const handleExit = () => {
-    console.log("Clicking on Exit.");
     setShow(false);
   };
 
   return (
-    <div className="d-flex justify-content-between align-items-center px-3 date-time-bar">
-      {/* End Session Button */}
-      <div class="d-grid gap-2 d-md-flex d-flex bd-highlight align-items-center">
+    <Box
+      sx={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        flexWrap: "wrap",
+        gap: 1,
+        px: 2,
+        py: 1,
+        mb: 1,
+        borderBottom: 1,
+        borderColor: "divider",
+      }}
+    >
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
         {isHomePage && (
-          <button
-            className="btn btn-outline-danger btn-sm w-auto"
-            style={{ width: "fit-content" }}
+          <Button
+            variant="outlined"
+            color="error"
+            size="small"
             onClick={onEndSession}
             disabled={ending}
+            sx={{ width: "fit-content", flexShrink: 0 }}
           >
             {ending ? "Ending..." : "Đóng cửa"}
-          </button>
+          </Button>
         )}
-      </div>
-      {/* Date Time */}
-      <div>
-        <span>{formatVietnameseDateTime(currentDateTime)}</span>
-      </div>
+      </Box>
+      <Typography variant="body2" color="text.secondary" sx={{ textAlign: { xs: "left", sm: "right" }, flex: 1 }}>
+        {formatVietnameseDateTime(currentDateTime)}
+      </Typography>
       <PayConfirm
         show={show}
         data={data}
         onConfirm={handleEndSession}
         onExit={handleExit}
       />
-    </div>
+    </Box>
   );
 }
 

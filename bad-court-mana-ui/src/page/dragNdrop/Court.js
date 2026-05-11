@@ -1,7 +1,13 @@
 import { useState } from "react";
+import Stack from "@mui/material/Stack";
+import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
+import Button from "@mui/material/Button";
+import AddIcon from "@mui/icons-material/Add";
 import DropZone from "./DropZone";
 
 const areaKeys = ["A", "C", "B", "D"];
+
 export default function Court({
   id,
   name,
@@ -16,60 +22,37 @@ export default function Court({
   onDropService,
 }) {
   const [hovering, setHovering] = useState(false);
-  const [readyToStart, setReadyToStart] = useState(false);
-  const filledPlayers = Object.values(players).filter(Boolean);
-
-  const initReadyMap = () => {
-    return Object.fromEntries(areaKeys.map((item) => [item, false]));
-  };
-  // A, C, B, D
 
   return (
-    <div
-      style={{ width: "100%", position: "relative" }}
+    <Box
+      sx={{ width: "100%", position: "relative" }}
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
     >
-      <div class="d-flex">
-        <div
-          style={{
-            left: "0%",
-            height: "45px",
-          }}
-        >
+      <Stack
+        direction="row"
+        alignItems="flex-start"
+        justifyContent="space-between"
+        sx={{ pr: isLocked ? 18 : 0 }}
+      >
+        <Typography variant="body2" sx={{ py: 0.5 }}>
           {name} {isLocked && "(Đang diễn ra ...)"}{" "}
-        </div>
+        </Typography>
 
-        {/* Finish and Cancel buttons */}
         {isLocked && (
-          <div
-            style={{
-              position: "absolute",
-              // top: "50%",
-              // left: "50%",
-              right: "0%",
-              // transform: "translate(-50%, -50%)",
-              display: "flex",
-              gap: "10px",
-              zIndex: 2,
-              transition: "opacity 2s ease",
-            }}
-          >
-            <button className="btn btn-success" onClick={() => onFinish(id)}>
+          <Stack direction="row" spacing={1} sx={{ position: "absolute", right: 0, top: 0, zIndex: 2 }}>
+            <Button variant="contained" color="success" size="small" onClick={() => onFinish(id)}>
               Kết thúc
-            </button>
-            <button
-              className="btn btn-outline-danger"
-              onClick={() => onCancel(id)}
-            >
+            </Button>
+            <Button variant="outlined" color="error" size="small" onClick={() => onCancel(id)}>
               Huỷ
-            </button>
-          </div>
+            </Button>
+          </Stack>
         )}
-      </div>
-      <div>
-        <div
-          style={{
+      </Stack>
+      <Box>
+        <Box
+          sx={{
             backgroundColor: "white",
             backgroundImage: 'url("bad-court2.jpg")',
             backgroundSize: "cover",
@@ -80,7 +63,7 @@ export default function Court({
             gridTemplateColumns: "repeat(2, 1fr)",
             gridTemplateRows: "repeat(2, 1fr)",
             gap: "5px",
-            padding: "10px",
+            p: "10px",
             position: "relative",
             transition: "all 2s ease",
           }}
@@ -97,66 +80,50 @@ export default function Court({
               onDropService={onDropService}
             />
           ))}
-          {/* Start button */}
           {!isLocked && hovering && (
-            <button
+            <Button
+              variant="contained"
               onClick={() => onStart(id)}
-              style={{
+              sx={{
                 position: "absolute",
                 top: "50%",
                 left: "50%",
                 transform: "translate(-50%, -50%)",
-                padding: "10px 20px",
-                backgroundColor: "#4198f7",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
                 zIndex: 1,
-                transition: "opacity 2s ease",
               }}
             >
               Bắt đầu
-            </button>
+            </Button>
           )}
           {isLocked && hovering && (
-            <button
+            <Button
               onClick={() => showAddedBallDialog(id)}
-              style={{
+              title="Thêm cầu"
+              sx={{
                 position: "absolute",
                 top: "50%",
                 left: "50%",
                 transform: "translate(-50%, -50%)",
-                padding: "7px 7px",
-                backgroundColor: "white",
-                color: "#4198f7",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
                 zIndex: 1,
-                transition: "opacity 4s ease",
+                bgcolor: "white",
+                color: "primary.main",
+                minWidth: 0,
+                px: 1,
               }}
-              title="Thêm cầu"
             >
-              <svg
-                width="25px"
-                fill="currentColor"
-                class="bi bi-plus"
-                viewBox="0 0 16 16"
-              >
-                <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4" />
-              </svg>
-              <img
-                src="icon.png"
-                style={{
-                  width: "25px",
-                  height: "auto",
-                }}
-              ></img>
-            </button>
+              <Stack direction="row" alignItems="center" spacing={0.5}>
+                <AddIcon fontSize="small" />
+                <Box
+                  component="img"
+                  src="icon.png"
+                  alt=""
+                  sx={{ width: 25, height: "auto" }}
+                />
+              </Stack>
+            </Button>
           )}
-        </div>
-      </div>
-    </div>
+        </Box>
+      </Box>
+    </Box>
   );
 }

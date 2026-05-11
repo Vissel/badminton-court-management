@@ -1,7 +1,19 @@
 import React, { useCallback, useEffect, useState } from "react";
-import "./ServiceDialog.css";
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
+import DialogActions from "@mui/material/DialogActions";
+import IconButton from "@mui/material/IconButton";
+import CloseIcon from "@mui/icons-material/Close";
+import TextField from "@mui/material/TextField";
+import Button from "@mui/material/Button";
+import Typography from "@mui/material/Typography";
+import Stack from "@mui/material/Stack";
+import List from "@mui/material/List";
+import ListItem from "@mui/material/ListItem";
+import ListItemText from "@mui/material/ListItemText";
 import { TYPE } from "../HomePage";
-import { VN_CURRENCY, formatVND, rawNumber } from "./../MoneyUtils";
+import { VN_CURRENCY, formatVND } from "./../MoneyUtils";
 
 const ServiceDialog = ({
   playerName,
@@ -14,7 +26,7 @@ const ServiceDialog = ({
   const [totalCost, setTotalCost] = useState(0);
   const [serviceName, setServiceName] = useState("");
   const [serviceCost, setServiceCost] = useState("");
-  const [servicesVO, setServicesVO] = useState([]);
+
   const recalcTotal = useCallback((serviceList) => {
     return serviceList.reduce((sum, item) => {
       const amount = item.cost || 0;
@@ -22,16 +34,7 @@ const ServiceDialog = ({
     }, 0);
   }, []);
 
-  const onPreDelete = () => {
-    onClose(false);
-    onDelete(playerName, TYPE.CANCEL, services, Number(totalCost));
-  };
-
-  const onPrePay = () => {
-    onPay(playerName, TYPE.PAY, services, Number(totalCost));
-  };
-
-  const handleAddService = () => {
+  const handleAddService = useCallback(() => {
     if (!serviceName || !serviceCost) return;
 
     const newService = {
@@ -44,6 +47,15 @@ const ServiceDialog = ({
     onUpdateServices(playerName, updated);
     setServiceName("");
     setServiceCost("");
+  }, [serviceName, serviceCost, services, playerName, onUpdateServices]);
+
+  const onPreDelete = () => {
+    onClose(false);
+    onDelete(playerName, TYPE.CANCEL, services, Number(totalCost));
+  };
+
+  const onPrePay = () => {
+    onPay(playerName, TYPE.PAY, services, Number(totalCost));
   };
 
   const handleRemoveService = (index) => {
@@ -51,14 +63,6 @@ const ServiceDialog = ({
     onUpdateServices(playerName, updated);
   };
 
-  // const handleEscPress = useCallback(
-  //   (event) => {
-  //     if (event.key === "Escape") {
-  //       onClose();
-  //     }
-  //   },
-  //   [onClose]
-  // );
   const handleKeyDown = useCallback(
     (event) => {
       if (event.key === "Enter") {
@@ -67,16 +71,13 @@ const ServiceDialog = ({
       }
 
       if (event.key === "Escape") {
-        onClose(false); // close dialog
+        onClose(false);
       }
     },
     [handleAddService, onClose]
   );
 
   useEffect(() => {
-    // setServicesVO(
-    //   services.map(s=> {return `${s.slice(0, s.lastIndexOf("-")).trim()} - ${formatVND(s.slice(s.lastIndexOf("-") + 1).trim())}`;}
-    // ));
     setTotalCost(recalcTotal(services));
     document.addEventListener("keydown", handleKeyDown);
     return () => {
@@ -85,81 +86,91 @@ const ServiceDialog = ({
   }, [services, handleKeyDown, recalcTotal]);
 
   return (
-    <div className="dialog-overlay">
-      <div className="service-dialog-box">
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "row",
-            justifyContent: "flex-end",
-          }}
+    <Dialog
+      open
+      fullWidth
+      maxWidth="sm"
+      onClose={(event, reason) => {
+        if (reason === "backdropClick") return;
+        onClose(false);
+      }}
+    >
+      <DialogTitle sx={{ pr: 6 }}>
+        <IconButton
+          aria-label="close"
+          onClick={() => onClose(false)}
+          sx={{ position: "absolute", right: 8, top: 8 }}
         >
-          <div className="btn btn-secondary close-button" onClick={onClose}>
-            X
-          </div>
-        </div>
+          <CloseIcon />
+        </IconButton>
+        <Typography variant="h6" align="center" component="span" display="block">
+          Bảng chi phí của:
+        </Typography>
+        <Typography variant="subtitle1" align="center" fontWeight={600}>
+          {playerName}
+        </Typography>
+      </DialogTitle>
+      <DialogContent dividers>
+        <Typography variant="subtitle2" color="primary" gutterBottom>
+          Tổng cộng: {formatVND(totalCost)} {VN_CURRENCY}
+        </Typography>
 
-        <h3 style={{ textAlign: "center" }}>Bảng chi phí của: </h3>
-        <h4 style={{ textAlign: "center" }}>{playerName} </h4>
-        <div className="d-flex bd-highlight align-items-start">
-          <h6 style={{ color: "blue" }}>
-            Tổng cộng: {formatVND(totalCost)} {VN_CURRENCY}
-          </h6>
-        </div>
-        {/* ➕ ADD SERVICE */}
-        <div className="service-row">
-          <input
-            className="service-col-name"
-            type="text"
+        <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+          <TextField
+            size="small"
+            label="Tên dịch vụ"
             placeholder="Tên dịch vụ"
             value={serviceName}
             onChange={(e) => setServiceName(e.target.value)}
+            sx={{ flex: 2 }}
           />
-          <input
-            className="service-col-cost"
-            type="text"
+          <TextField
+            size="small"
+            label="Giá"
             placeholder="Giá"
             value={serviceCost}
             onChange={(e) => setServiceCost(e.target.value)}
+            sx={{ flex: 1 }}
           />
-          <button className="btn btn-success service-col-action" onClick={handleAddService}>
+          <Button variant="contained" color="success" onClick={handleAddService} sx={{ flexShrink: 0 }}>
             +
-          </button>
-        </div>
+          </Button>
+        </Stack>
 
-        {/* SERVICE LIST */}
         {services.length > 0 ? (
-          <ul className="service-list">
+          <List dense disablePadding>
             {services.map((service, idx) => (
-              <li key={idx} className="service-row">
-                <span className="service-col-name">
-                  {service.serviceName}
-                </span>
-                <span className="service-col-cost">
-                  {service.costFormat} {VN_CURRENCY}
-                </span>
-                <button
-                  className="btn btn-sm btn-outline-danger service-col-action"
-                  onClick={() => handleRemoveService(idx)}
-                >
-                  ✕
-                </button>
-              </li>
+              <ListItem
+                key={idx}
+                secondaryAction={
+                  <Button size="small" color="error" variant="outlined" onClick={() => handleRemoveService(idx)}>
+                    ✕
+                  </Button>
+                }
+                sx={{ borderBottom: 1, borderColor: "divider", py: 1 }}
+              >
+                <ListItemText
+                  primary={service.serviceName}
+                  secondary={`${service.costFormat} ${VN_CURRENCY}`}
+                />
+              </ListItem>
             ))}
-          </ul>
+          </List>
         ) : (
-          <p className="text-muted">Không có dịch vụ nào.</p>
+          <Typography variant="body2" color="text.secondary">
+            Không có dịch vụ nào.
+          </Typography>
         )}
-        <div className="dialog-actions">
-          <button className="btn btn-primary" onClick={onPrePay}>
-            Thanh toán
-          </button>
-          <button className="btn btn-outline-danger" onClick={onPreDelete}>
-            Xoá + không thanh toán
-          </button>
-        </div>
-      </div>
-    </div>
+      </DialogContent>
+      <DialogActions sx={{ px: 3, py: 2, gap: 1, flexWrap: "wrap" }}>
+        <Button variant="contained" onClick={onPrePay}>
+          Thanh toán
+        </Button>
+        <Button variant="outlined" color="error" onClick={onPreDelete}>
+          Xoá + không thanh toán
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 };
 

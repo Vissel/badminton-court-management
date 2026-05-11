@@ -1,4 +1,7 @@
 import { useDrop } from "react-dnd";
+import Typography from "@mui/material/Typography";
+import TextField from "@mui/material/TextField";
+import Box from "@mui/material/Box";
 import { ItemTypes } from "../ItemTypes";
 import DraggablePlayer from "./DraggablePlayer";
 
@@ -12,16 +15,13 @@ export default function PlayerArea({
   onClickPlayer,
 }) {
   const [{ isOver }, drop] = useDrop(
-    () =>
-      ({
-        accept: ItemTypes.PLAYER,
-        // if the player is already in availablePlayers, don't process the drop
-        canDrop: (item) => !availablePlayers.includes(item.name),
-        drop: (item) => onDropPlayerBack(item.name, item.courtId, item.areaKey),
-        collect: (monitor) => ({ isOver: !!monitor.isOver() }),
-      }),
-      
-      [availablePlayers, onDropPlayerBack] // ensure fresh closures
+    () => ({
+      accept: ItemTypes.PLAYER,
+      canDrop: (item) => !availablePlayers.includes(item.name),
+      drop: (item) => onDropPlayerBack(item.name, item.courtId, item.areaKey),
+      collect: (monitor) => ({ isOver: !!monitor.isOver() }),
+    }),
+    [availablePlayers, onDropPlayerBack]
   );
 
   const handleAdd = () => {
@@ -34,33 +34,35 @@ export default function PlayerArea({
     }
   };
 
-
   return (
-    <div
+    <Box
       ref={drop}
       className="player-area-panel"
-      style={{
-        backgroundColor: isOver ? "#eef" : "#f8f9fa",
-        transition: "background-color 2s ease",
+      sx={{
+        bgcolor: isOver ? "action.hover" : "grey.100",
+        transition: "background-color 0.3s ease",
       }}
     >
-      <div className="player-area-header">
-        <h5> Tổng người chơi: {availablePlayers.length} </h5>
-      </div>
-      <input
-        type="text"
+      <Box className="player-area-header">
+        <Typography variant="subtitle1" fontWeight={600}>
+          Tổng người chơi: {availablePlayers.length}
+        </Typography>
+      </Box>
+      <TextField
         className="player-area-input"
+        size="small"
+        fullWidth
         placeholder="Tên người chơi"
         value={newPlayer}
         onChange={(e) => setNewPlayer(e.target.value)}
         onKeyDown={(e) => {
-          // Avoid submitting while an IME composition is still in progress.
           if (e.key === "Enter" && !e.nativeEvent.isComposing) {
             handleAdd();
           }
         }}
+        sx={{ mb: 2, mt: 0.5 }}
       />
-      <div className="player-area-list">
+      <Box className="player-area-list">
         {availablePlayers.map((p) => (
           <DraggablePlayer
             key={p}
@@ -70,7 +72,7 @@ export default function PlayerArea({
             onClick={onClickPlayer}
           />
         ))}
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 }

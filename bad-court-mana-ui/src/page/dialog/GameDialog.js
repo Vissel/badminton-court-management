@@ -1,7 +1,17 @@
 import React, { useEffect, useState, useCallback } from "react";
 import api from "../../api";
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
+import DialogActions from "@mui/material/DialogActions";
+import Button from "@mui/material/Button";
+import TextField from "@mui/material/TextField";
+import Typography from "@mui/material/Typography";
+import Stack from "@mui/material/Stack";
+import Box from "@mui/material/Box";
 
 import "./GameDialog.css";
+
 const WIN = "Win";
 const TEAM_ONE = "teamOne";
 const TEAM_TWO = "teamTwo";
@@ -14,16 +24,11 @@ const GameDialog = ({ show, data, onConfirm, onExit }) => {
   const [winnerTeam, setWinnerTeam] = useState(null);
   const [winnerEdited, setWinnerEdited] = useState(false);
 
-  const [team1ClassName, setTeam1ClassName] = useState("team"); // ADD THIS
-  const [team2ClassName, setTeam2ClassName] = useState("team"); // ADD THIS
-
-  const DEFAULT_BTN_CLASS = "btn btn-outline-secondary me-2";
-  const SUCCESS_BTN_CLASS = "btn btn-success me-2";
-  const [team1BtnClassName, setBtnTeam1ClassName] = useState(DEFAULT_BTN_CLASS);
-  const [team2BtnClassName, setBtnTeam2ClassName] = useState(DEFAULT_BTN_CLASS);
+  const [team1ClassName, setTeam1ClassName] = useState("team");
+  const [team2ClassName, setTeam2ClassName] = useState("team");
 
   const formatCurrency = (n) =>
-    n.toLocaleString("it-IT", { style: "currency", currency: "VND" });
+    Number(n).toLocaleString("it-IT", { style: "currency", currency: "VND" });
 
   const actualMatch = actualCost === totalCost;
 
@@ -46,7 +51,6 @@ const GameDialog = ({ show, data, onConfirm, onExit }) => {
 
   const handleTeamExpenses = useCallback(
     (total) => {
-      let perPlayer;
       const teamOneResult = data.teamOneResult;
       const teamTwoResult = data.teamTwoResult;
 
@@ -58,7 +62,6 @@ const GameDialog = ({ show, data, onConfirm, onExit }) => {
         loseTeam = teamOneResult;
       }
 
-      // calculate the expenses in only case finding lose team
       if (loseTeam != null) {
         let dividedNumer = 0;
         if (checkPlayerNotNull(loseTeam.playerOneName)) {
@@ -67,7 +70,7 @@ const GameDialog = ({ show, data, onConfirm, onExit }) => {
         if (checkPlayerNotNull(loseTeam.playerTwoName)) {
           dividedNumer += 1;
         }
-        perPlayer = total / dividedNumer;
+        const perPlayer = dividedNumer > 0 ? total / dividedNumer : 0;
         if (checkPlayerNotNull(loseTeam.playerOneName)) {
           loseTeam.expenseOne = perPlayer;
         }
@@ -83,26 +86,15 @@ const GameDialog = ({ show, data, onConfirm, onExit }) => {
     [data]
   );
 
-  const handleEscPress = useCallback(
-    (event) => {
-      if (event.key === "Escape") {
-        console.log("[GameDialog] Escape key pressed!");
-        onExit();
-      }
-    },
-    [onExit]
-  );
-
   useEffect(() => {
     if (show && data) {
       const parsed = parseBallMap(data.ballResultMap);
 
       let total = 0.0;
+      parsed.forEach((b) => {
+        total += b.cost * b.quantity;
+      });
 
-      // calculate total
-      parsed.forEach((b) => (total += b.cost * b.quantity));
-
-      // autofill team expenses
       const expenseUpdate = handleTeamExpenses(total);
       setFormData((prev) => ({
         ...prev,
@@ -112,16 +104,9 @@ const GameDialog = ({ show, data, onConfirm, onExit }) => {
         ballList: parsed,
       }));
       setTotalCost(total);
-      // Add event listener when the component mounts
-      document.addEventListener("keydown", handleEscPress);
-
-      // Clean up: remove event listener when the component unmounts
-      return () => {
-        document.removeEventListener("keydown", handleEscPress);
-      };
     }
     setWinnerEdited(false);
-  }, [show, data, handleEscPress, parseBallMap, handleTeamExpenses]);
+  }, [show, data, parseBallMap, handleTeamExpenses]);
 
   useEffect(() => {
     if (!formData) return;
@@ -135,18 +120,13 @@ const GameDialog = ({ show, data, onConfirm, onExit }) => {
     setActualCost(sum);
   }, [formData]);
 
-  if (!show || !formData) return null;
-
   const calculateActualCost = (team) => {
     let updatedFormData = { ...formData };
-    // Team 1 wins, Team 2 pays
     if (team === TEAM_ONE) {
       updatedFormData.teamOneResult.win = true;
-      // 1. Reset Team 1 (Winner) expenses to 0
       updatedFormData.teamOneResult.expenseOne = 0;
       updatedFormData.teamOneResult.expenseTwo = 0;
 
-      // 2. Calculate and set Team 2 (Loser) expenses
       const teamResult = updatedFormData.teamTwoResult;
       let dividedNumer = 0;
       if (checkPlayerNotNull(teamResult.playerOneName)) {
@@ -165,18 +145,14 @@ const GameDialog = ({ show, data, onConfirm, onExit }) => {
           teamResult.expenseTwo = perPlayer;
         }
       } else {
-        // Handle case where team has no players (shouldn't happen, but safe)
         teamResult.expenseOne = 0;
         teamResult.expenseTwo = 0;
       }
     } else if (team === TEAM_TWO) {
-      // Team 2 wins, Team 1 pays
       updatedFormData.teamTwoResult.win = true;
-      // 1. Reset Team 2 (Winner) expenses to 0
       updatedFormData.teamTwoResult.expenseOne = 0;
       updatedFormData.teamTwoResult.expenseTwo = 0;
 
-      // 2. Calculate and set Team 1 (Loser) expenses
       const teamResult = updatedFormData.teamOneResult;
       let dividedNumer = 0;
       if (checkPlayerNotNull(teamResult.playerOneName)) {
@@ -195,29 +171,12 @@ const GameDialog = ({ show, data, onConfirm, onExit }) => {
           teamResult.expenseTwo = perPlayer;
         }
       } else {
-        // Handle case where team has no players
         teamResult.expenseOne = 0;
         teamResult.expenseTwo = 0;
       }
     }
 
-    // Update formData state with the new expenses
     setFormData(updatedFormData);
-    const actualCost = getActualCost(updatedFormData);
-    setActualCost(actualCost);
-  };
-
-  const getActualCost = (formData) => {
-    const total =
-      formData.teamOneResult.expenseOne +
-      formData.teamOneResult.expenseTwo +
-      formData.teamTwoResult.expenseOne +
-      formData.teamTwoResult.expenseTwo;
-
-    return total.toLocaleString("it-IT", {
-      style: "currency",
-      currency: "VND",
-    });
   };
 
   const handleExpenseChange = (teamKey, memberKey, value) => {
@@ -236,7 +195,6 @@ const GameDialog = ({ show, data, onConfirm, onExit }) => {
   };
 
   const handleBallChange = (index, field, value) => {
-    // update ballList immutably
     const updatedBalls = formData.ballList.map((b, i) =>
       i === index
         ? {
@@ -256,7 +214,6 @@ const GameDialog = ({ show, data, onConfirm, onExit }) => {
     let change = false;
     let ballDTO = {};
 
-    // rebuild ballResultMap for saving
     const newMap = {};
     updatedBalls.forEach((b, i) => {
       const key = `shuttleName=${b.shuttleName}, cost=${b.cost}`;
@@ -275,7 +232,6 @@ const GameDialog = ({ show, data, onConfirm, onExit }) => {
       }
     });
 
-    // send ball quantity change api
     try {
       if (change) {
         api.post(
@@ -289,7 +245,6 @@ const GameDialog = ({ show, data, onConfirm, onExit }) => {
         ballList: updatedBalls,
       });
 
-      // re-calculate total cost by ball number
       let total = 0;
       updatedBalls.forEach((b) => {
         total += b.cost * b.quantity;
@@ -302,22 +257,17 @@ const GameDialog = ({ show, data, onConfirm, onExit }) => {
       );
     }
   };
+
   const setWinnerClassName = (winTeam) => {
     if (winTeam === TEAM_ONE) {
-      // Team 1 wins, Team 2 pays
       setTeam1ClassName("team team-win");
-      setBtnTeam1ClassName(SUCCESS_BTN_CLASS);
       setTeam2ClassName("team");
-      setBtnTeam2ClassName(DEFAULT_BTN_CLASS);
     } else if (winTeam === TEAM_TWO) {
-      // Team 2 wins, Team 1 pays
       setTeam1ClassName("team");
-      setBtnTeam1ClassName(DEFAULT_BTN_CLASS);
       setTeam2ClassName("team team-win");
-      setBtnTeam2ClassName(SUCCESS_BTN_CLASS);
     }
   };
-  // Handle winer clicking
+
   const handleWinClick = (team) => {
     setWinnerTeam(team);
     setWinnerClassName(team);
@@ -326,199 +276,178 @@ const GameDialog = ({ show, data, onConfirm, onExit }) => {
     }
   };
 
+  if (!show || !formData) return null;
+
   return (
-    <div className="dialog-overlay">
-      <div className="dialog-box">
-        <h5 className="mb-3 text-center">Thông tin trận cầu</h5>
-        {/* Court Name */}
-        <div className="d-flex flex-row">
-          <div className="align-self-center p-2">
-            <label className="form-label fw-bold">
-              Tổng tiền : {formatCurrency(totalCost)}
-            </label>
-          </div>
-          <div className="p-2">
-            <p></p>
-          </div>
-          <div className="align-self-center p-2">
-            <label
-              className="form-label fw-bold"
-              style={{ color: actualMatch ? "#0b5ed7" : "#dc3545" }}
-            >
-              Tổng thực tế: {formatCurrency(actualCost)}
-            </label>
-          </div>
-        </div>
-        <div className="d-flex align-self-start">
-          <div className="p-2" style={{ width: "31.2%" }}>
-            <label className="form-label fw-bold">Sân :</label>
-          </div>
-          <div className="p-2">
-            <input
-              type="text"
-              className="form-control"
-              value={formData.courtResult?.courtName || ""}
-              disabled
-            />
-          </div>
-        </div>
-        {/* Shuttle Balls */}
-        <div className="d-flex align-self-start">
-          <div className="p-2" style={{ width: "35%" }}>
-            <label className="form-label fw-bold">
-              Số lượng cầu đã sử dụng:
-            </label>
-          </div>
-          <div className="ball-list p-2">
+    <Dialog
+      open={show}
+      onClose={(event, reason) => {
+        if (reason === "backdropClick") return;
+        onExit();
+      }}
+      maxWidth="lg"
+      fullWidth
+      scroll="paper"
+    >
+      <DialogTitle align="center">Thông tin trận cầu</DialogTitle>
+      <DialogContent dividers>
+        <Stack direction="row" spacing={2} flexWrap="wrap" sx={{ mb: 2 }}>
+          <Typography fontWeight={700}>Tổng tiền : {formatCurrency(totalCost)}</Typography>
+          <Typography fontWeight={700} color={actualMatch ? "primary" : "error"}>
+            Tổng thực tế: {formatCurrency(actualCost)}
+          </Typography>
+        </Stack>
+
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mb: 2 }} alignItems={{ sm: "center" }}>
+          <Typography fontWeight={700} sx={{ minWidth: 72 }}>
+            Sân :
+          </Typography>
+          <TextField
+            size="small"
+            fullWidth
+            value={formData.courtResult?.courtName || ""}
+            disabled
+          />
+        </Stack>
+
+        <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ mb: 2 }}>
+          <Typography fontWeight={700} sx={{ minWidth: { md: 200 } }}>
+            Số lượng cầu đã sử dụng:
+          </Typography>
+          <Box className="ball-list" sx={{ flex: 1 }}>
             {formData.ballList.map((b, index) => (
-              <div key={index} className="d-flex align-items-center mb-2">
-                <input
-                  type="text"
-                  className="form-control me-2"
-                  value={b.shuttleName}
-                  disabled
-                  style={{ maxWidth: "40%" }}
-                />
-                <input
-                  type="text"
-                  className="form-control me-2"
-                  value={b.cost}
-                  disabled
-                  style={{ width: "20%" }}
-                />
-                <input
+              <Stack key={index} direction="row" spacing={1} sx={{ mb: 1 }}>
+                <TextField size="small" value={b.shuttleName} disabled sx={{ flex: 2 }} />
+                <TextField size="small" value={b.cost} disabled sx={{ flex: 1 }} />
+                <TextField
+                  size="small"
                   type="number"
-                  className="form-control"
                   value={b.quantity}
                   onChange={(e) =>
-                    handleBallChange(
-                      index,
-                      "quantity",
-                      parseInt(e.target.value)
-                    )
+                    handleBallChange(index, "quantity", parseInt(e.target.value, 10))
                   }
-                  style={{ width: "20%" }}
+                  sx={{ flex: 1 }}
                 />
-              </div>
+              </Stack>
             ))}
-          </div>
-        </div>
+          </Box>
+        </Stack>
 
-        {/* Teams */}
         <div className="team-container">
-          {/* Team One */}
           <div className={team1ClassName}>
-            <button
-              className={team1BtnClassName}
+            <Button
+              fullWidth
+              variant={winnerTeam === TEAM_ONE ? "contained" : "outlined"}
+              color="success"
               onClick={() => handleWinClick(TEAM_ONE)}
+              sx={{ mb: 1 }}
             >
-              <h6 className="text-center">Đội 1:</h6>
-            </button>
-            {/* Row 1 */}
+              <Typography variant="subtitle2" component="span">
+                Đội 1:
+              </Typography>
+            </Button>
             <div className="player-row">
-              <input
-                type="text"
-                className="form-control me-2"
+              <TextField
+                size="small"
                 title={formData.teamOneResult?.playerOneName || ""}
                 disabled
                 value={formData.teamOneResult?.playerOneName || ""}
+                sx={{ mr: 1, flex: 1 }}
               />
-              <input
-                type="text"
-                className="form-control"
-                value={formData.teamOneResult?.expenseOne || 0}
+              <TextField
+                size="small"
+                type="number"
+                value={formData.teamOneResult?.expenseOne ?? 0}
                 onChange={(e) =>
                   handleExpenseChange(TEAM_ONE, "expenseOne", e.target.value)
                 }
+                sx={{ width: 120 }}
               />
             </div>
 
-            {/* Row 2 */}
             <div className="player-row">
-              <input
-                type="text"
-                className="form-control me-2"
+              <TextField
+                size="small"
                 title={formData.teamOneResult?.playerTwoName || ""}
                 disabled
                 value={formData.teamOneResult?.playerTwoName || ""}
+                sx={{ mr: 1, flex: 1 }}
               />
-              <input
-                type="text"
-                className="form-control"
-                value={formData.teamOneResult?.expenseTwo || 0}
+              <TextField
+                size="small"
+                type="number"
+                value={formData.teamOneResult?.expenseTwo ?? 0}
                 onChange={(e) =>
                   handleExpenseChange(TEAM_ONE, "expenseTwo", e.target.value)
                 }
+                sx={{ width: 120 }}
               />
             </div>
           </div>
 
-          {/* Divider */}
-          <div className="divider"></div>
+          <div className="divider" />
 
-          {/* Team Two */}
           <div className={team2ClassName}>
-            <button
-              className={team2BtnClassName}
+            <Button
+              fullWidth
+              variant={winnerTeam === TEAM_TWO ? "contained" : "outlined"}
+              color="success"
               onClick={() => handleWinClick(TEAM_TWO)}
+              sx={{ mb: 1 }}
             >
-              <h6 className="text-center">Đội 2:</h6>
-            </button>
-            {/* Row 1 */}
+              <Typography variant="subtitle2" component="span">
+                Đội 2:
+              </Typography>
+            </Button>
             <div className="player-row">
-              <input
-                type="text"
-                className="form-control me-2"
+              <TextField
+                size="small"
                 title={formData.teamTwoResult?.playerOneName || ""}
                 disabled
                 value={formData.teamTwoResult?.playerOneName || ""}
+                sx={{ mr: 1, flex: 1 }}
               />
-              <input
-                type="text"
-                className="form-control"
-                value={formData.teamTwoResult?.expenseOne || 0}
+              <TextField
+                size="small"
+                type="number"
+                value={formData.teamTwoResult?.expenseOne ?? 0}
                 onChange={(e) =>
                   handleExpenseChange(TEAM_TWO, "expenseOne", e.target.value)
                 }
+                sx={{ width: 120 }}
               />
             </div>
 
-            {/* Row 2 */}
             <div className="player-row">
-              <input
-                type="text"
-                className="form-control me-2"
+              <TextField
+                size="small"
                 title={formData.teamTwoResult?.playerTwoName || ""}
                 disabled
                 value={formData.teamTwoResult?.playerTwoName || ""}
+                sx={{ mr: 1, flex: 1 }}
               />
-              <input
-                type="text"
-                className="form-control"
-                value={formData.teamTwoResult?.expenseTwo || 0}
+              <TextField
+                size="small"
+                type="number"
+                value={formData.teamTwoResult?.expenseTwo ?? 0}
                 onChange={(e) =>
                   handleExpenseChange(TEAM_TWO, "expenseTwo", e.target.value)
                 }
+                sx={{ width: 120 }}
               />
             </div>
           </div>
         </div>
-
-        {/* Buttons */}
-        <div className="dialog-actions mt-4">
-          <button
-            className="btn btn-success me-2"
-            disabled={winnerTeam === null}
-            onClick={() => onConfirm(formData, winnerTeam)}
-          >
-            Xác nhận
-          </button>
-          <button className="btn btn-secondary" onClick={onExit}>
-            Tắt
-          </button>
-        </div>
-      </div>
-    </div>
+      </DialogContent>
+      <DialogActions sx={{ px: 3, py: 2, gap: 1 }}>
+        <Button variant="contained" color="success" disabled={winnerTeam === null} onClick={() => onConfirm(formData, winnerTeam)}>
+          Xác nhận
+        </Button>
+        <Button variant="outlined" color="inherit" onClick={onExit}>
+          Tắt
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 };
 

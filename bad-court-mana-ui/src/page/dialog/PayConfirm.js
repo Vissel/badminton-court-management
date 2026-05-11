@@ -1,52 +1,39 @@
-import React, { useEffect, useCallback, useState } from "react";
-import "./ServiceDialog.css";
+import React from "react";
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogActions from "@mui/material/DialogActions";
+import Button from "@mui/material/Button";
 import { TYPE } from "../HomePage";
 
 const PayConfirm = ({ show, data, onConfirm, onExit }) => {
-  const [btnClass, setBtnClass] = useState('');
+  if (!show || !data) return null;
 
-  const handleEscPress = useCallback((event) => {
-    if (event.key === "Escape") {
-      onExit();
-    }
-  }, [onExit]);
+  const confirmColor = data?.type === TYPE.PAY ? "primary" : "error";
 
-  useEffect(() => {
-    if (show) {
-      if(TYPE.PAY ===data.type){
-        setBtnClass('btn-primary')
-      }else{
-        setBtnClass('btn-danger');
-      }
-      // Add event listener when the component mounts
-      document.addEventListener("keydown", handleEscPress);
-
-      // Clean up: remove event listener when the component unmounts
-      return () => {
-        document.removeEventListener("keydown", handleEscPress);
-      };
-    }
-  }, [show, handleEscPress]);
-  if (!show) return null;
   return (
-    <div className="dialog-overlay">
-      <div className="service-dialog-box">
-        <h5 className="mb-3 text-center">{data.title}</h5>
-
-        {/* Buttons */}
-        <div className="dialog-actions mt-4">
-          <button
-            className={`btn ${btnClass} me-2`}
-            onClick={() => onConfirm(data)}
-          >
-            Xác nhận
-          </button>
-          <button className="btn btn-secondary" onClick={onExit}>
-            Tắt
-          </button>
-        </div>
-      </div>
-    </div>
+    <Dialog
+      open={show}
+      onClose={(event, reason) => {
+        if (reason === "backdropClick") return;
+        onExit();
+      }}
+      maxWidth="sm"
+      fullWidth
+    >
+      <DialogTitle sx={{ whiteSpace: "pre-line" }}>{data.title}</DialogTitle>
+      <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+        <Button variant="outlined" color="inherit" onClick={onExit}>
+          Tắt
+        </Button>
+        <Button
+          variant="contained"
+          color={confirmColor}
+          onClick={() => onConfirm(data)}
+        >
+          Xác nhận
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 };
 

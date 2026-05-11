@@ -1,23 +1,29 @@
 import React, { useState, useEffect } from "react";
-
+import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
+import TextField from "@mui/material/TextField";
+import Button from "@mui/material/Button";
+import MenuItem from "@mui/material/MenuItem";
+import FormControl from "@mui/material/FormControl";
+import InputLabel from "@mui/material/InputLabel";
+import Select from "@mui/material/Select";
+import Table from "@mui/material/Table";
+import TableBody from "@mui/material/TableBody";
+import TableCell from "@mui/material/TableCell";
+import TableContainer from "@mui/material/TableContainer";
+import TableHead from "@mui/material/TableHead";
+import TableRow from "@mui/material/TableRow";
+import Paper from "@mui/material/Paper";
+import Pagination from "@mui/material/Pagination";
+import Stack from "@mui/material/Stack";
 import api, { backendHost } from "../api/index";
-
-// -------- dummy data for UI testing --------
-const DUMMY_REPORTS = Array.from({ length: 23 }).map((_, i) => ({
-  id: i + 1,
-  date: `2025-01-${String((i % 28) + 1).padStart(2, "0")}`,
-  fromTo: i % 2 === 0 ? "08:00 - 10:00" : "18:00 - 20:00",
-  total: 100000 + i * 5000,
-}));
-// ------------------------------------------
 
 export default function ReportPage() {
   const [reports, setReports] = useState([]);
   const [originalReports, setOriginalReports] = useState([]);
   const [searchText, setSearchText] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10); // default 10 rows
+  const [pageSize, setPageSize] = useState(10);
   const [totalPages, setTotalPages] = useState(0);
   const [numberRows, setNumberRows] = useState(0);
   const [totalRows, setTotalRows] = useState(0);
@@ -28,16 +34,13 @@ export default function ReportPage() {
   const [month, setMonth] = useState("");
   const [monthOptions, setMonthOptions] = useState([]);
 
-  // -------- debounce search --------
   useEffect(() => {
     const timer = setTimeout(() => {
       setCurrentPage(1);
-      setDebouncedSearch(searchText);
     }, 500);
     return () => clearTimeout(timer);
   }, [searchText]);
 
-  // -------- call API / dummy pagination --------
   useEffect(() => {
     fetchReports({
       pagination: {
@@ -65,7 +68,6 @@ export default function ReportPage() {
       const pagination = pageResponse.pagination;
       const list = pageResponse.list;
 
-      // setCurrentPage(pagination.current);
       setPageSize(pagination.pageSize);
       setTotalPages(pagination.totalPage);
 
@@ -87,6 +89,7 @@ export default function ReportPage() {
       setSortDir("ASC");
     }
   };
+
   const handlePageSizeChange = (size) => {
     fetchReports({
       pagination: {
@@ -95,26 +98,26 @@ export default function ReportPage() {
       },
     });
     setPageSize(size);
+    setCurrentPage(1);
   };
-  const handlePageChange = (current) => {
+
+  const handlePageChange = (_, page) => {
     fetchReports({
       pagination: {
-        current: current - 1,
+        current: page - 1,
         pageSize: pageSize,
       },
     });
-    setCurrentPage(current);
+    setCurrentPage(page);
   };
 
   const handleExport = async (sessionId) => {
-    // need handle loading
     try {
       const response = await api.get(
         `/api/v1/manager/reportExport/${sessionId}`,
         { responseType: "blob" }
       );
 
-      // Create file download
       const blob = new Blob([response.data]);
       const url = window.URL.createObjectURL(blob);
       const disposition = response.headers["content-disposition"] || "";
@@ -150,15 +153,15 @@ export default function ReportPage() {
     }
   };
 
-  const handleMonthChange = (month) => {
+  const handleMonthChange = (newMonth) => {
     fetchReports({
-      yearMonth: month,
+      yearMonth: newMonth,
       pagination: {
         current: currentPage - 1,
         pageSize: pageSize,
       },
     });
-    setMonth(month);
+    setMonth(newMonth);
   };
 
   const handleFilter = (text) => {
@@ -185,172 +188,159 @@ export default function ReportPage() {
     setReports(filtered);
     setNumberRows(filtered.length);
   };
-  return (
-    <div className="container mt-4">
-      <h3 className="mb-3">Trang quản lý</h3>
 
-      {/* Search + Month filter + Total rows */}
-      <div className="row mb-4 align-items-center">
-        <div className="col-md-3">
-          <input
-            type="text"
-            className="form-control"
-            placeholder="Tìm kiếm bằng ngày, thời gian, số tổng,..."
-            value={searchText}
-            onChange={(e) => handleFilter(e.target.value)}
-          />
-        </div>
-        <div className="col-md-3">
-          <select
-            className="form-select"
+  const sortIndicator = (field) =>
+    sortField === field ? (sortDir === "ASC" ? " ▲" : " ▼") : "";
+
+  return (
+    <Box sx={{ mt: 2, px: { xs: 1, sm: 2 }, maxWidth: 1400, mx: "auto" }}>
+      <Typography variant="h5" gutterBottom>
+        Trang quản lý
+      </Typography>
+
+      <Stack
+        direction={{ xs: "column", md: "row" }}
+        spacing={2}
+        sx={{ mb: 3, alignItems: { md: "center" }, flexWrap: "wrap" }}
+      >
+        <TextField
+          size="small"
+          placeholder="Tìm kiếm bằng ngày, thời gian, số tổng,..."
+          value={searchText}
+          onChange={(e) => handleFilter(e.target.value)}
+          sx={{ minWidth: { md: 260 }, flex: { md: "1 1 260px" } }}
+        />
+        <FormControl size="small" sx={{ minWidth: 200 }}>
+          <InputLabel id="month-filter-label">Tháng</InputLabel>
+          <Select
+            labelId="month-filter-label"
+            label="Tháng"
             value={month}
             onChange={(e) => handleMonthChange(e.target.value)}
           >
             {monthOptions.map((m) => (
-              <option key={m.value} value={m.value}>
+              <MenuItem key={m.value} value={m.value}>
                 {m.label}
-              </option>
+              </MenuItem>
             ))}
-          </select>
-        </div>
-        <div className="col-md-3 text-muted">
+          </Select>
+        </FormControl>
+        <Typography variant="body2" color="text.secondary">
           Tổng hiển thị: <strong>{numberRows}</strong>
-        </div>
-        <div className="col-md-3 text-end">
-          <button
-            className="btn btn-success btn-sm"
-            onClick={() => handleExportReport()}
-          >
-            Xuất Excel tất cả hàng hiển thị
-          </button>
-        </div>
-      </div>
+        </Typography>
+        <Box sx={{ flexGrow: 1 }} />
+        <Button
+          variant="contained"
+          color="success"
+          size="small"
+          onClick={() => handleExportReport()}
+        >
+          Xuất Excel tất cả hàng hiển thị
+        </Button>
+      </Stack>
 
-      {/* Table */}
-      <div className="table-responsive">
-        <table className="table table-bordered table-hover align-middle">
-          <thead className="table-light">
-            <tr>
-              <th style={{ width: "60px" }}>STT</th>
-              <th
+      <TableContainer component={Paper} variant="outlined">
+        <Table size="small">
+          <TableHead>
+            <TableRow sx={{ bgcolor: "grey.100" }}>
+              <TableCell sx={{ width: 60 }}>STT</TableCell>
+              <TableCell
                 onClick={() => toggleSort("date")}
-                style={{ cursor: "pointer" }}
+                sx={{ cursor: "pointer" }}
               >
-                Ngày{" "}
-                {sortField === "date" ? (sortDir === "ASC" ? "▲" : "▼") : ""}
-              </th>
-              <th
+                Ngày{sortIndicator("date")}
+              </TableCell>
+              <TableCell
                 onClick={() => toggleSort("fromTo")}
-                style={{ cursor: "pointer" }}
+                sx={{ cursor: "pointer" }}
               >
-                Khoảng thời gian{" "}
-                {sortField === "fromTo" ? (sortDir === "ASC" ? "▲" : "▼") : ""}
-              </th>
-              <th
+                Khoảng thời gian{sortIndicator("fromTo")}
+              </TableCell>
+              <TableCell
                 onClick={() => toggleSort("total")}
-                style={{ cursor: "pointer" }}
+                sx={{ cursor: "pointer" }}
               >
-                Tồng tiền đã thanh toán{" "}
-                {sortField === "total" ? (sortDir === "ASC" ? "▲" : "▼") : ""}
-              </th>
-              <th style={{ width: "120px" }}>Xuất</th>
-            </tr>
-          </thead>
-          <tbody>
+                Tồng tiền đã thanh toán{sortIndicator("total")}
+              </TableCell>
+              <TableCell sx={{ width: 120 }} align="center">
+                Xuất
+              </TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
             {loading && (
-              <tr>
-                <td colSpan={5} className="text-center">
+              <TableRow>
+                <TableCell colSpan={5} align="center">
                   Loading...
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             )}
             {!loading && reports.length === 0 && (
-              <tr>
-                <td colSpan={5} className="text-center text-muted">
+              <TableRow>
+                <TableCell colSpan={5} align="center" sx={{ color: "text.secondary" }}>
                   No data found
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             )}
             {!loading &&
               reports.map((row, index) => (
-                <tr key={row.id}>
-                  <td title={`index:${index}`}>
+                <TableRow key={row.id} hover>
+                  <TableCell title={`index:${index}`}>
                     {(currentPage - 1) * pageSize + index + 1}
-                  </td>
-                  <td>{row.date.viDateString}</td>
-                  <td>{row.during}</td>
-                  <td>{row.grossRevenueFormat}</td>
-                  <td className="text-center">
-                    <button
-                      className="btn btn-success btn-sm"
+                  </TableCell>
+                  <TableCell>{row.date.viDateString}</TableCell>
+                  <TableCell>{row.during}</TableCell>
+                  <TableCell>{row.grossRevenueFormat}</TableCell>
+                  <TableCell align="center">
+                    <Button
+                      variant="contained"
+                      color="success"
+                      size="small"
                       onClick={() => handleExport(row.sessionId)}
                     >
                       Excel
-                    </button>
-                  </td>
-                </tr>
+                    </Button>
+                  </TableCell>
+                </TableRow>
               ))}
-          </tbody>
-        </table>
-      </div>
+          </TableBody>
+        </Table>
+      </TableContainer>
 
-      {/* Pagination + page size */}
-      <div className="d-flex justify-content-between align-items-center">
-        <div className="p-2">
-          <select
-            className="form-select w-auto"
+      <Stack
+        direction={{ xs: "column", sm: "row" }}
+        spacing={2}
+        sx={{ mt: 2, justifyContent: "space-between", alignItems: "center" }}
+      >
+        <FormControl size="small" sx={{ minWidth: 100 }}>
+          <InputLabel id="page-size-label">Số dòng</InputLabel>
+          <Select
+            labelId="page-size-label"
+            label="Số dòng"
             value={pageSize}
             onChange={(e) => handlePageSizeChange(Number(e.target.value))}
           >
-            <option value={10}>10</option>
-            <option value={20}>20</option>
-            <option value={30}>30</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-          </select>
-        </div>
-        <div className="p-2 text-muted">
-          Tổng số phiên làm việc: <strong>{totalRows}</strong>
-        </div>
-
-        <div className="p-2">
-          <ul className="pagination mb-0">
-            <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
-              <button
-                className="page-link"
-                onClick={() => handlePageChange(currentPage - 1)}
-              >
-                <i className="bi bi-chevron-left"></i>
-              </button>
-            </li>
-            {[...Array(totalPages)].map((_, i) => (
-              <li
-                key={i}
-                className={`page-item ${currentPage === i + 1 ? "active" : ""}`}
-              >
-                <button
-                  className="page-link"
-                  onClick={() => handlePageChange(i + 1)}
-                >
-                  {i + 1}
-                </button>
-              </li>
+            {[10, 20, 30, 50, 100].map((n) => (
+              <MenuItem key={n} value={n}>
+                {n}
+              </MenuItem>
             ))}
-            <li
-              className={`page-item ${
-                currentPage === totalPages ? "disabled" : ""
-              }`}
-            >
-              <button
-                className="page-link"
-                onClick={() => handlePageChange(currentPage + 1)}
-              >
-                <i className="bi bi-chevron-right"></i>
-              </button>
-            </li>
-          </ul>
-        </div>
-      </div>
-    </div>
+          </Select>
+        </FormControl>
+        <Typography variant="body2" color="text.secondary">
+          Tổng số phiên làm việc: <strong>{totalRows}</strong>
+        </Typography>
+        {totalPages > 0 && (
+          <Pagination
+            count={totalPages}
+            page={currentPage}
+            onChange={handlePageChange}
+            color="primary"
+            showFirstButton
+            showLastButton
+          />
+        )}
+      </Stack>
+    </Box>
   );
 }
