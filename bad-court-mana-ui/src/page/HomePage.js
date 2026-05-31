@@ -71,6 +71,7 @@ function HomePage() {
   const [cancelCourtId, setCancelCourtId] = useState("");
   const [showPayConfirmDialog, setShowPayConfirmDialog] = useState(false);
   const [payConfirmData, setPayConfirmData] = useState(null);
+  const [dialogHideActions, setDialogHideActions] = useState(false);
 
   const responseSuccess = (response) => {
     return response != null && response.status === 200 && response.data != null;
@@ -498,6 +499,15 @@ function HomePage() {
   const handleClickPlayer = (p) => {
     console.log(`Click on player:${p}`);
     setSelectedPlayer(p);
+    setDialogHideActions(false);
+    setShowDialog(true);
+  };
+
+  // Handle clicking on player inside a Court area (view-only, no pay/delete)
+  const handleCourtPlayerClick = (p) => {
+    console.log(`Court player click: ${p}`);
+    setSelectedPlayer(p);
+    setDialogHideActions(true);
     setShowDialog(true);
   };
   const saveServiceToPlayer = async (playerName, serviceName, cost) => {
@@ -591,9 +601,21 @@ function HomePage() {
               resGames.forEach((g) => {
                 const id = parseInt(g.court.courtId);
                 g.court.courtAreas.forEach((courtArea) => {
-                  // set player onto area of court
-                  currCourts[id][courtArea.area] =
+                  const courtPlayerName =
                     courtArea.playerInArea.playerName;
+                  // set player onto area of court
+                  currCourts[id][courtArea.area] = courtPlayerName;
+
+                  // also load services for court players
+                  // (backend includes serviceResponses in playerInArea)
+                  const courtPlayerServices =
+                    courtArea.playerInArea.serviceResponses;
+                  if (courtPlayerName && courtPlayerServices) {
+                    setPlayerServiceMap((prev) => ({
+                      ...prev,
+                      [courtPlayerName]: courtPlayerServices,
+                    }));
+                  }
                 });
                 // set lock court if gameState is Start
                 if (g.gameState === "Start") {
@@ -815,6 +837,8 @@ function HomePage() {
               onPay={onPayConfirm}
               onDelete={onPayConfirm}
               onUpdateServices={handleUpdateServices}
+              hideActions={dialogHideActions}
+              serviceOptions={services}
             />
           )}
 
@@ -837,6 +861,8 @@ function HomePage() {
                     onFinish={onFinish}
                     onCancel={() => onCancelGame(courtId)}
                     onDropService={handleDropService}
+                    availablePlayers={availablePlayers}
+                    onClickPlayer={handleCourtPlayerClick}
                   />
                 </div>
               ))}
@@ -860,6 +886,8 @@ function HomePage() {
                     onFinish={onFinish}
                     onCancel={() => onCancelGame(courtId)}
                     onDropService={handleDropService}
+                    availablePlayers={availablePlayers}
+                    onClickPlayer={handleCourtPlayerClick}
                   />
                 </div>
               ))}

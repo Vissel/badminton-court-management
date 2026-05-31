@@ -20,6 +20,8 @@ export default function Court({
   onFinish,
   onCancel,
   onDropService,
+  availablePlayers,
+  onClickPlayer,
 }) {
   const [hovering, setHovering] = useState(false);
 
@@ -78,6 +80,8 @@ export default function Court({
               occupied={occupied}
               isLocked={isLocked}
               onDropService={onDropService}
+              availablePlayers={availablePlayers}
+              onClickPlayer={onClickPlayer}
             />
           ))}
           {!isLocked && hovering && (
