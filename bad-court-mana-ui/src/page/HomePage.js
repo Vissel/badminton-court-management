@@ -195,13 +195,13 @@ function HomePage() {
     }
   };
 
-  const occupied = () => {};
+  const occupied = () => { };
   const onDropPlayerBack = (playerName, courtId, areaKey) => {
     console.log(availablePlayers);
     removePlayerFromCourtApi(playerName, courtId, areaKey);
   };
 
-  const onAddPlayer = async(name) => {
+  const onAddPlayer = async (name) => {
     try {
       await api.post("/court-mana/addPlayer", name);
       console.log("Adding new player successfully.");
@@ -500,7 +500,7 @@ function HomePage() {
     setSelectedPlayer(p);
     setShowDialog(true);
   };
-const saveServiceToPlayer = async(playerName, serviceName, cost) => {
+  const saveServiceToPlayer = async (playerName, serviceName, cost) => {
     return await api.post(`/court-mana/addServiceToPlayer?playerName=${playerName}`, {
       serviceName: serviceName,
       cost: cost,
@@ -525,7 +525,7 @@ const saveServiceToPlayer = async(playerName, serviceName, cost) => {
 
         // check available session
         const response = await api.post("/session/checkCreateNewSession");
-        if(response.success === false){
+        if (response.success === false) {
           console.error("checkCreateNewSession got error.")
           return;
         }
@@ -646,13 +646,16 @@ const saveServiceToPlayer = async(playerName, serviceName, cost) => {
           `Error while checking available session. Error: ${error}`
         );
       }
+
+      // scroll to bottom after all content is fully rendered
+      requestAnimationFrame(() => {
+        if (scrollRef.current) {
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+      });
     };
 
     fetchCourtInfor();
-    // scrolling to the end
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
   }, []);
 
   const handleUpdateServices = async (playerName, updatedServices) => {

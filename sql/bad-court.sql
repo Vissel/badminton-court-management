@@ -70,12 +70,6 @@ select * from team;
 select * from service;
 select * from available_player;
 
-insert into court(court_name)
-value ('Sân 8');
-
-update court
-set court_name = 'Sân 7'
-where court_id = 7;
 
 SELECT constraint_name, constraint_type FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
 where table_name ='team';
@@ -105,14 +99,45 @@ where a.ava_id in (7, 5);
 select * from available_player 
 where ava_id in (22,12,14,21,16,5,18,8);
 
--- update game
--- set state = 'Cancel',
--- ended_date = CURRENT_TIME()
--- where game_id = 10;
+-- See available player expense by name
+select t.team_id, t. player_id1 , t.is_status, t.expense_1
+from team t inner join available_player ava on t.player_id1 = ava.ava_id
+where ava.ava_id = (
+	select a.ava_id from available_player a inner join player p on a.player_id = p.player_id where p.player_name ='y');
 
-update team
-set player_id1 = null
-where team_id = 22;
+select t.team_id, t. player_id2 , t.is_status, t.expense_2
+from team t inner join available_player ava on t.player_id2 = ava.ava_id
+where ava.ava_id = (
+	select a.ava_id from available_player a inner join player p on a.player_id = p.player_id where p.player_name ='y');
+
+select * from player where player_name = 'w';
+
+select * from team ;
+
+SELECT
+    t.team_id,
+    t.player_id1       AS ava_player_id_1,
+    p1.player_name     AS player_name_1,
+    p1.player_id 		as id1,
+    t.player_id2       AS ava_player_id_2,
+    p2.player_id		as id2,
+    p2.player_name     AS player_name_2,
+    t.is_status,
+    t.expense_1,
+    t.expense_2
+FROM team t
+JOIN available_player ap1 ON ap1.ava_id = t.player_id1
+JOIN player p1            ON p1.player_id = ap1.player_id
+JOIN available_player ap2 ON ap2.ava_id = t.player_id2
+JOIN player p2            ON p2.player_id = ap2.player_id
+WHERE ap1.ava_id in (77,76,91,75,78,94)
+or ap2.ava_id in (77,76,91,75,78,94);
+-- p1.player_name = 'y'
+--   OR p2.player_name = 'y';
+
+select * from player where player_name = 'y';
+select * from available_player where player_id = 55;
+select * from team where player_id1 = 94 or player_id2 = 94;
 
 -- select for report
 select a.session_id, c.court_name, a.ava_id, p.player_name, a.leave_time, a.pay_amount, a.pay_type, a.services
@@ -133,5 +158,9 @@ from available_player a inner join player p on a.player_id = p.player_id
 	where a.session_id = 14
 ;
 
-select * from `user` 
+select * from `user` where user_name like 'micro%';
+
+select * from `user` where user_name = 'micro05'
 order by created_at desc;
+
+select * from `request` order by created_at desc;

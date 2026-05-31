@@ -1,0 +1,6 @@
+# SDKMAN! configuration
+# This file ensures JDK 21 is used for this project
+# SDKMAN! will automatically switch to this JDK when entering the project directory
+# Install SDKMAN! if not already installed: curl -s "https://get.sdkman.io" | bash
+# Install JDK 21: sdk install java 21.0.1-tem
+java=21.0.1-tem
