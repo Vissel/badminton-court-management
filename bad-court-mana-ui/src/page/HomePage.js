@@ -23,6 +23,7 @@ import ShuttleBallDialog from "./dialog/ShuttleBallDialog";
 import CancelConfirm from "./dialog/CancelConfirm";
 import PayConfirm from "./dialog/PayConfirm";
 import AdvancePaymentDialog from "./dialog/AdvancePaymentDialog";
+import RentByTimeDialog from "./dialog/RentByTimeDialog";
 import { VN_CURRENCY, formatVND, rawNumber } from "./MoneyUtils";
 
 const COST_IN_PERSON = "costInPerson";
@@ -89,6 +90,7 @@ function HomePage() {
   const [selectedBallVO, setSelectedBallVO] = useState("");
   const [services, setServices] = useState([]);
   const [costInPerson, setCostInPerson] = useState();
+  const [rentByTime, setRentByTime] = useState();
   const [availablePlayers, setAvailablePlayers] = useState([]);
   const [newPlayer, setNewPlayer] = useState("");
   const scrollRef = useRef(null);
@@ -103,6 +105,15 @@ function HomePage() {
   const [dialogHideActions, setDialogHideActions] = useState(false);
   const [showAdvanceDialog, setShowAdvanceDialog] = useState(false);
   const [pendingPlayerName, setPendingPlayerName] = useState(null);
+
+  // Rent by time state
+  const [showRentDialog, setShowRentDialog] = useState(false);
+  const [rentCourtId, setRentCourtId] = useState(null);
+  const [rentCourtName, setRentCourtName] = useState(null);
+  const [rentEditMode, setRentEditMode] = useState(false);
+  const [rentInitialData, setRentInitialData] = useState(null);
+  const [rentPlayerName, setRentPlayerName] = useState("");
+  const [rentalInfoMap, setRentalInfoMap] = useState({}); // courtId -> rental info
 
   const responseSuccess = (response) => {
     return response != null && response.status === 200 && response.data != null;
@@ -288,6 +299,90 @@ function HomePage() {
       console.error("Error while adding player to available session.");
       alert("Có lỗi khi thêm người chơi. Refresh lại trang này!");
     }
+  };
+
+  // ── Rent by time handlers ──────────────────────────────────────────────
+  const handleRentByTime = (courtId) => {
+    const court = activeCourts.find((c) => c.courtId === courtId);
+    const courtNum = court ? parseInt(court.courtName.replace("Sân ", ""), 10) : null;
+    const autoPlayer = courtNum ? `Người chơi ${courtNum}` : "";
+    setRentCourtId(courtId);
+    setRentCourtName(court?.courtName || courtId);
+    setRentEditMode(false);
+    setRentInitialData(null);
+    setRentPlayerName(autoPlayer);
+    setShowRentDialog(true);
+  };
+
+  const handleRentConfirm = async (rentData) => {
+    try {
+      const res = await api.post("/court-mana/applyRentByTime", {
+        courtId: rentCourtId,
+        playerName: rentData.playerName || "Thuê theo giờ",
+        numTime: rentData.numTime || 1,
+        shuttleBalls: rentData.shuttleBalls || [],
+        startTime: rentData.startTime,
+        endTime: rentData.endTime,
+      });
+      if (responseSuccess(res)) {
+        setShowRentDialog(false);
+        // Update rental info for this court
+        setRentalInfoMap((prev) => ({
+          ...prev,
+          [rentCourtId]: res.data,
+        }));
+      }
+    } catch (error) {
+      console.error("Error applying rent by time:", error);
+      alert("Có lỗi khi thuê sân theo giờ. Vui lòng thử lại!");
+    }
+  };
+
+  const handleFinishRent = async (courtId) => {
+    const rental = rentalInfoMap[courtId];
+    if (!rental) return;
+    try {
+      const res = await api.post(`/court-mana/payRentByTime?rentId=${rental.id}&customFee=0`);
+      if (responseSuccess(res)) {
+        setRentalInfoMap((prev) => {
+          const next = { ...prev };
+          delete next[courtId];
+          return next;
+        });
+      }
+    } catch (error) {
+      console.error("Error finishing rent:", error);
+      alert("Có lỗi khi kết thúc thuê sân. Vui lòng thử lại!");
+    }
+  };
+
+  const handleCancelRent = async (courtId) => {
+    const rental = rentalInfoMap[courtId];
+    if (!rental) return;
+    if (!window.confirm("Bạn có chắc muốn huỷ thuê sân?")) return;
+    try {
+      const res = await api.post(`/court-mana/cancelRentByTime?rentId=${rental.id}`);
+      if (responseSuccess(res)) {
+        setRentalInfoMap((prev) => {
+          const next = { ...prev };
+          delete next[courtId];
+          return next;
+        });
+      }
+    } catch (error) {
+      console.error("Error cancelling rent:", error);
+      alert("Có lỗi khi huỷ thuê sân. Vui lòng thử lại!");
+    }
+  };
+
+  const handleUpdateRent = (courtId) => {
+    const rental = rentalInfoMap[courtId];
+    if (!rental) return;
+    setRentCourtId(courtId);
+    setRentCourtName(rental.courtName || courtId);
+    setRentEditMode(true);
+    setRentInitialData(rental);
+    setShowRentDialog(true);
   };
 
   // Add shuttle ball area.
@@ -660,8 +755,14 @@ function HomePage() {
             (s) => s.serviceName === "costInPerson"
           ).cost;
           setCostInPerson(costPersonService);
+          const rentByTimeService = listService.find(
+            (s) => s.serviceName === "rentByTime"
+          );
+          if (rentByTimeService) {
+            setRentByTime(rentByTimeService.cost);
+          }
           setServices(
-            listService.filter((s) => s.serviceName !== "costInPerson")
+            listService.filter((s) => s.serviceName !== "costInPerson" && s.serviceName !== "rentByTime")
           );
         }
 
@@ -956,6 +1057,11 @@ function HomePage() {
                         onDropService={handleDropService}
                         availablePlayers={availablePlayers}
                         onClickPlayer={handleCourtPlayerClick}
+                        rentalInfo={rentalInfoMap[courtId]}
+                        onRentByTime={handleRentByTime}
+                        onFinishRent={handleFinishRent}
+                        onCancelRent={handleCancelRent}
+                        onUpdateRent={handleUpdateRent}
                       />
                     </div>
                   ))}
@@ -981,6 +1087,11 @@ function HomePage() {
                         onDropService={handleDropService}
                         availablePlayers={availablePlayers}
                         onClickPlayer={handleCourtPlayerClick}
+                        rentalInfo={rentalInfoMap[courtId]}
+                        onRentByTime={handleRentByTime}
+                        onFinishRent={handleFinishRent}
+                        onCancelRent={handleCancelRent}
+                        onUpdateRent={handleUpdateRent}
                       />
                     </div>
                   ))}
@@ -1023,6 +1134,18 @@ function HomePage() {
             onConfirm={handleAdvanceConfirm}
             onSkip={handleAdvanceSkip}
             onClose={() => setShowAdvanceDialog(false)}
+          />
+          <RentByTimeDialog
+            show={showRentDialog}
+            courtId={rentCourtId}
+            courtName={rentCourtName}
+            playerName={rentPlayerName}
+            ballOptions={ballOptions}
+            editMode={rentEditMode}
+            initialData={rentInitialData}
+            hourlyRate={rentByTime || 100000}
+            onConfirm={handleRentConfirm}
+            onExit={() => setShowRentDialog(false)}
           />
         </Box>
       </Box>
