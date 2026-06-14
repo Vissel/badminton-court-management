@@ -8,6 +8,8 @@ import FormControl from "@mui/material/FormControl";
 import InputLabel from "@mui/material/InputLabel";
 import Select from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
+import Tabs from "@mui/material/Tabs";
+import Tab from "@mui/material/Tab";
 
 import "../App.css";
 import api from "../api/index";
@@ -33,6 +35,9 @@ function HomePage() {
   const [courtIds, setCourtIds] = useState([]);
   const [activeCourts, setActiveCourts] = useState([]);
 
+  const [activeTab, setActiveTab] = useState(0);
+  const COURTS_PER_TAB = 8;
+
   const courtNumber = (court) => parseInt(court.courtName.replace("Sân ", ""), 10);
 
   const rightColumn = useMemo(() => {
@@ -42,6 +47,29 @@ function HomePage() {
       .sort((a, b) => courtNumber(a) - courtNumber(b))
       .map((c) => ({ courtId: c.courtId, courtName: c.courtName }));
   }, [activeCourts]);
+
+  const tabCourts = useMemo(() => {
+    const start = activeTab * COURTS_PER_TAB;
+    return [...activeCourts]
+      .sort((a, b) => courtNumber(a) - courtNumber(b))
+      .slice(start, start + COURTS_PER_TAB);
+  }, [activeCourts, activeTab]);
+
+  const tabRightColumn = useMemo(() => {
+    const half = Math.ceil(tabCourts.length / 2);
+    return tabCourts
+      .filter((_, i) => i < half)
+      .map((c) => ({ courtId: c.courtId, courtName: c.courtName }));
+  }, [tabCourts]);
+
+  const tabLeftColumn = useMemo(() => {
+    const half = Math.ceil(tabCourts.length / 2);
+    return tabCourts
+      .filter((_, i) => i >= half)
+      .map((c) => ({ courtId: c.courtId, courtName: c.courtName }));
+  }, [tabCourts]);
+
+  const totalTabs = Math.max(1, Math.ceil(activeCourts.length / COURTS_PER_TAB));
 
   const leftColumn = useMemo(() => {
     const half = Math.ceil(activeCourts.length / 2);
@@ -842,55 +870,75 @@ function HomePage() {
             />
           )}
 
-          <div className="column left-column">
-            {leftColumn
-              .slice()
-              .reverse()
-              .map(({ courtId, courtName }) => (
-                <div key={courtId} className="image-card">
-                  <Court
-                    key={courtId}
-                    id={courtId}
-                    name={courtName}
-                    players={courts[courtId]}
-                    onDropPlayer={onDropPlayerOntoCourt}
-                    occupied={occupied}
-                    isLocked={lockedCourts[courtId]}
-                    onStart={startGame}
-                    showAddedBallDialog={showAddedBallDialog}
-                    onFinish={onFinish}
-                    onCancel={() => onCancelGame(courtId)}
-                    onDropService={handleDropService}
-                    availablePlayers={availablePlayers}
-                    onClickPlayer={handleCourtPlayerClick}
-                  />
-                </div>
-              ))}
-          </div>
-          <div className="column right-column">
-            {rightColumn
-              .slice()
-              .reverse()
-              .map(({ courtId, courtName }) => (
-                <div key={courtId} className="image-card">
-                  <Court
-                    key={courtId}
-                    id={courtId}
-                    name={courtName}
-                    players={courts[courtId]}
-                    onDropPlayer={onDropPlayerOntoCourt}
-                    occupied={occupied}
-                    isLocked={lockedCourts[courtId]}
-                    onStart={startGame}
-                    showAddedBallDialog={showAddedBallDialog}
-                    onFinish={onFinish}
-                    onCancel={() => onCancelGame(courtId)}
-                    onDropService={handleDropService}
-                    availablePlayers={availablePlayers}
-                    onClickPlayer={handleCourtPlayerClick}
-                  />
-                </div>
-              ))}
+          <div className="courts-wrapper">
+            {totalTabs > 1 && (
+              <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 1, px: 1 }}>
+                <Tabs
+                  value={activeTab}
+                  onChange={(_, v) => setActiveTab(v)}
+                  variant="scrollable"
+                  scrollButtons="auto"
+                  sx={{ "& .MuiTab-root": { minWidth: 80, textTransform: "none", fontSize: "0.85rem" } }}
+                >
+                  {Array.from({ length: totalTabs }, (_, i) => (
+                    <Tab key={i} label={`Trang ${i + 1}`} />
+                  ))}
+                </Tabs>
+              </Box>
+            )}
+
+            <div className="courts-row">
+              <div className="column left-column">
+                {tabLeftColumn
+                  .slice()
+                  .reverse()
+                  .map(({ courtId, courtName }) => (
+                    <div key={courtId} className="image-card">
+                      <Court
+                        key={courtId}
+                        id={courtId}
+                        name={courtName}
+                        players={courts[courtId]}
+                        onDropPlayer={onDropPlayerOntoCourt}
+                        occupied={occupied}
+                        isLocked={lockedCourts[courtId]}
+                        onStart={startGame}
+                        showAddedBallDialog={showAddedBallDialog}
+                        onFinish={onFinish}
+                        onCancel={() => onCancelGame(courtId)}
+                        onDropService={handleDropService}
+                        availablePlayers={availablePlayers}
+                        onClickPlayer={handleCourtPlayerClick}
+                      />
+                    </div>
+                  ))}
+              </div>
+              <div className="column right-column">
+                {tabRightColumn
+                  .slice()
+                  .reverse()
+                  .map(({ courtId, courtName }) => (
+                    <div key={courtId} className="image-card">
+                      <Court
+                        key={courtId}
+                        id={courtId}
+                        name={courtName}
+                        players={courts[courtId]}
+                        onDropPlayer={onDropPlayerOntoCourt}
+                        occupied={occupied}
+                        isLocked={lockedCourts[courtId]}
+                        onStart={startGame}
+                        showAddedBallDialog={showAddedBallDialog}
+                        onFinish={onFinish}
+                        onCancel={() => onCancelGame(courtId)}
+                        onDropService={handleDropService}
+                        availablePlayers={availablePlayers}
+                        onClickPlayer={handleCourtPlayerClick}
+                      />
+                    </div>
+                  ))}
+              </div>
+            </div>
           </div>
 
           {/* Show add shuttle ball dialog */}

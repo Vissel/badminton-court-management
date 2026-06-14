@@ -40,7 +40,7 @@ public class AdminServiceImpl implements AdminService {
     @Autowired
     private ServiceRepositoty serviceRepo;
 
-    private static final String COURT_STR = "Court ";
+    private static final String COURT_STR = "Sân ";
 
     AdminServiceImpl(GlobalExceptionHandler globalExceptionHandler,
             UrlBasedCorsConfigurationSource corsConfigurationSource, SecurityConfig securityConfig) {
@@ -93,7 +93,7 @@ public class AdminServiceImpl implements AdminService {
     public boolean updateSetUpService(SetUpServiceRequest setupServiceRequest) {
         try {
 
-            // checkAndCreateCourt(setupServiceRequest.getTotalCourt());
+            checkAndCreateCourt(setupServiceRequest.getTotalCourt());
 
             // save shuttle infor
             updateShuttleBalls(setupServiceRequest);
@@ -231,33 +231,52 @@ public class AdminServiceImpl implements AdminService {
         return null;
     }
 
-    private void checkAndCreateCourt(int totalCourt) {
-        List<Court> listCourt = courtRepo.findAll();
-        int differentNumber = CommonConstant.INT_ZERO;
-        if (listCourt.size() > totalCourt) {
-            // remove
-            differentNumber = listCourt.size() - totalCourt;
-            int num = 0;
-            int i = listCourt.size() - 1;
-            while (num < differentNumber) {
-                listCourt.get(i).setActive(false);
-                num++;
-            }
-            courtRepo.saveAll(listCourt);
-        } else if (listCourt.size() < totalCourt) {
-            differentNumber = totalCourt - listCourt.size();
-            addOrRemoveCourts(differentNumber);
-        }
-        log.info("Saving {} court.", differentNumber);
+    private int getMaxCourtNumber(List<Court> courts) {
+        return courts.stream()
+                .mapToInt(c -> {
+                    try {
+                        return Integer.parseInt(c.getCourtName().replace(COURT_STR, "").trim());
+                    } catch (NumberFormatException e) {
+                        return 0;
+                    }
+                })
+                .max()
+                .orElse(0);
     }
 
-    private void addOrRemoveCourts(int differentNumber) {
-        // create courts
-        List<Court> courts = new ArrayList<>();
-        for (int i = 0; i < differentNumber; i++) {
-            courts.add(new Court(COURT_STR + String.valueOf(i + 1)));
+    private void checkAndCreateCourt(int totalCourt) {
+        List<Court> activeCourts = courtRepo.findAllByIsActive(true);
+        int currentActive = activeCourts.size();
+        if (currentActive > totalCourt) {
+            // Deactivate excess courts (highest numbered first)
+            activeCourts.sort((a, b) -> {
+                int numA = 0, numB = 0;
+                try {
+                    numA = Integer.parseInt(a.getCourtName().replace(COURT_STR, "").trim());
+                } catch (NumberFormatException e) {
+                }
+                try {
+                    numB = Integer.parseInt(b.getCourtName().replace(COURT_STR, "").trim());
+                } catch (NumberFormatException e) {
+                }
+                return numB - numA;
+            });
+            int toDeactivate = currentActive - totalCourt;
+            for (int i = 0; i < toDeactivate && i < activeCourts.size(); i++) {
+                activeCourts.get(i).setActive(false);
+            }
+            courtRepo.saveAll(activeCourts);
+            log.info("Deactivated {} courts.", toDeactivate);
+        } else if (currentActive < totalCourt) {
+            int toCreate = totalCourt - currentActive;
+            int maxNum = getMaxCourtNumber(courtRepo.findAll());
+            List<Court> newCourts = new ArrayList<>();
+            for (int i = 1; i <= toCreate; i++) {
+                newCourts.add(new Court(COURT_STR + (maxNum + i)));
+            }
+            courtRepo.saveAll(newCourts);
+            log.info("Created {} courts.", toCreate);
         }
-        courtRepo.saveAll(courts);
     }
 
     @Override

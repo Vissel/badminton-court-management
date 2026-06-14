@@ -17,6 +17,9 @@
 - [GameDTO.java](file://BadmintonCourtManagement/src/main/java/com/badminton/requestmodel/GameDTO.java)
 - [PayRequest.java](file://BadmintonCourtManagement/src/main/java/com/badminton/requestmodel/PayRequest.java)
 - [SetUpServiceDTO.java](file://BadmintonCourtManagement/src/main/java/com/badminton/requestmodel/SetUpServiceDTO.java)
+- [RentByTimeRequest.java](file://BadmintonCourtManagement/src/main/java/com/badminton/requestmodel/RentByTimeRequest.java)
+- [RentByTimeResponse.java](file://BadmintonCourtManagement/src/main/java/com/badminton/response/RentByTimeResponse.java)
+- [RentByTimeService.java](file://BadmintonCourtManagement/src/main/java/com/badminton/service/RentByTimeService.java)
 </cite>
 
 ## Table of Contents
@@ -32,12 +35,12 @@
 10. [Appendices](#appendices)
 
 ## Introduction
-This document provides comprehensive API documentation for the Badminton Court Management REST endpoints. It covers authentication, court management, game results, payments, manager reporting, and settings. For each endpoint, you will find HTTP methods, URL patterns, request/response schemas, authentication requirements, error handling, and practical integration guidance. Session-based authentication and CSRF token handling are documented along with CORS configuration and role-based access patterns.
+This document provides comprehensive API documentation for the Badminton Court Management REST endpoints. It covers authentication, court management, game results, payments, manager reporting, settings, and the newly added RentByTime functionality. For each endpoint, you will find HTTP methods, URL patterns, request/response schemas, authentication requirements, error handling, and practical integration guidance. Session-based authentication and CSRF token handling are documented along with CORS configuration and role-based access patterns.
 
 ## Project Structure
 The REST API is implemented via Spring MVC controllers grouped by functional domain:
 - Authentication: /login, /logout, /csrf
-- Court Management: /court-mana/*
+- Court Management: /court-mana/* (including new RentByTime endpoints)
 - Game Results: /gameResult/*
 - Payments: /api/v1/pay/*
 - Manager Reporting: /api/v1/manager/*
@@ -47,7 +50,7 @@ The REST API is implemented via Spring MVC controllers grouped by functional dom
 graph TB
 subgraph "Controllers"
 A["AuthenController<br/>/login, /logout, /csrf"]
-B["CourtManagementController<br/>/court-mana/*"]
+B["CourtManagementController<br/>/court-mana/* (with RentByTime)"]
 C["GameResultController<br/>/gameResult/*"]
 D["PaymentController<br/>/api/v1/pay/*"]
 E["ManagerController<br/>/api/v1/manager/*"]
@@ -68,7 +71,7 @@ G --> H
 
 **Diagram sources**
 - [AuthenController.java:78-110](file://BadmintonCourtManagement/src/main/java/com/badminton/controller/AuthenController.java#L78-L110)
-- [CourtManagementController.java:25-163](file://BadmintonCourtManagement/src/main/java/com/badminton/controller/CourtManagementController.java#L25-L163)
+- [CourtManagementController.java:25-214](file://BadmintonCourtManagement/src/main/java/com/badminton/controller/CourtManagementController.java#L25-L214)
 - [GameResultController.java:15-42](file://BadmintonCourtManagement/src/main/java/com/badminton/controller/GameResultController.java#L15-L42)
 - [PaymentController.java:18-28](file://BadmintonCourtManagement/src/main/java/com/badminton/controller/PaymentController.java#L18-L28)
 - [ManagerController.java:34-121](file://BadmintonCourtManagement/src/main/java/com/badminton/controller/ManagerController.java#L34-L121)
@@ -78,7 +81,7 @@ G --> H
 
 **Section sources**
 - [AuthenController.java:26-110](file://BadmintonCourtManagement/src/main/java/com/badminton/controller/AuthenController.java#L26-L110)
-- [CourtManagementController.java:24-163](file://BadmintonCourtManagement/src/main/java/com/badminton/controller/CourtManagementController.java#L24-L163)
+- [CourtManagementController.java:24-214](file://BadmintonCourtManagement/src/main/java/com/badminton/controller/CourtManagementController.java#L24-L214)
 - [GameResultController.java:14-42](file://BadmintonCourtManagement/src/main/java/com/badminton/controller/GameResultController.java#L14-L42)
 - [PaymentController.java:17-28](file://BadmintonCourtManagement/src/main/java/com/badminton/controller/PaymentController.java#L17-L28)
 - [ManagerController.java:33-121](file://BadmintonCourtManagement/src/main/java/com/badminton/controller/ManagerController.java#L33-L121)
@@ -87,7 +90,7 @@ G --> H
 
 ## Core Components
 - Authentication endpoints: /login, /logout, /csrf
-- Court management endpoints: /court-mana/*
+- Court management endpoints: /court-mana/* (including new RentByTime endpoints)
 - Game result endpoints: /gameResult/*
 - Payment endpoints: /api/v1/pay/*
 - Manager endpoints: /api/v1/manager/*
@@ -140,7 +143,7 @@ SvcA --> RepoA
 **Diagram sources**
 - [SecurityConfig.java:44-91](file://BadmintonCourtManagement/src/main/java/com/badminton/config/SecurityConfig.java#L44-L91)
 - [AuthenController.java:26-110](file://BadmintonCourtManagement/src/main/java/com/badminton/controller/AuthenController.java#L26-L110)
-- [CourtManagementController.java:24-163](file://BadmintonCourtManagement/src/main/java/com/badminton/controller/CourtManagementController.java#L24-L163)
+- [CourtManagementController.java:24-214](file://BadmintonCourtManagement/src/main/java/com/badminton/controller/CourtManagementController.java#L24-L214)
 - [GameResultController.java:14-42](file://BadmintonCourtManagement/src/main/java/com/badminton/controller/GameResultController.java#L14-L42)
 - [PaymentController.java:17-28](file://BadmintonCourtManagement/src/main/java/com/badminton/controller/PaymentController.java#L17-L28)
 - [ManagerController.java:33-121](file://BadmintonCourtManagement/src/main/java/com/badminton/controller/ManagerController.java#L33-L121)
@@ -266,12 +269,57 @@ Base path: /court-mana/*
   - Body: ShuttleBallDTO.
   - Response: Void.
 
+**Updated** Added new RentByTime endpoints for court rental management
+
+- POST /court-mana/applyRentByTime
+  - Purpose: Apply for court rental by time period.
+  - Auth: Requires session.
+  - Body: RentByTimeRequest with courtId, startTime, endTime, playerId.
+  - Response: RentByTimeResponse with rental details and status.
+  - Validation: Returns 400 Bad Request if invalid input detected.
+
+- POST /court-mana/payRentByTime
+  - Purpose: Process payment for court rental.
+  - Auth: Requires session.
+  - Query: rentId (integer), customFee (optional float).
+  - Response: RentByTimeResponse with updated payment status.
+  - Validation: Returns 400 Bad Request if invalid rentId.
+
+- POST /court-mana/cancelRentByTime
+  - Purpose: Cancel an active court rental.
+  - Auth: Requires session.
+  - Query: rentId (integer).
+  - Response: RentByTimeResponse with cancellation status.
+  - Validation: Returns 400 Bad Request if invalid rentId.
+
+- POST /court-mana/updateRentByTime
+  - Purpose: Update an existing court rental reservation.
+  - Auth: Requires session.
+  - Query: rentId (integer).
+  - Body: RentByTimeRequest with updated rental details.
+  - Response: RentByTimeResponse with updated rental information.
+  - Validation: Returns 400 Bad Request if invalid input detected.
+
+- GET /court-mana/getActiveRentByTime
+  - Purpose: Get current active rental for a court.
+  - Auth: Requires session.
+  - Query: courtId (integer).
+  - Response: RentByTimeResponse or null if no active rental.
+  - Validation: Returns 400 Bad Request if invalid courtId.
+
+- GET /court-mana/getCurrentTime
+  - Purpose: Get current database server time.
+  - Auth: Requires session.
+  - Response: Instant timestamp from database.
+  - Note: Used for synchronization with client-side time calculations.
+
 Notes:
 - Many endpoints return raw boolean or lists without explicit error envelopes; consumers should inspect HTTP status codes.
 - Validation helpers are used to guard against malformed inputs (e.g., invalid court DTO).
+- RentByTime endpoints follow the same session-based authentication pattern as other endpoints.
 
 **Section sources**
-- [CourtManagementController.java:33-160](file://BadmintonCourtManagement/src/main/java/com/badminton/controller/CourtManagementController.java#L33-L160)
+- [CourtManagementController.java:33-214](file://BadmintonCourtManagement/src/main/java/com/badminton/controller/CourtManagementController.java#L33-L214)
 
 ### Game Result Endpoints
 Base path: /gameResult/*
@@ -421,26 +469,25 @@ Sec --> K["ApiConstant"]
 - Streaming downloads for large report exports reduce memory overhead by streaming bytes directly to the client.
 - Session-based authentication avoids frequent token refreshes but requires careful session timeout configuration.
 - CSRF token validation adds minimal overhead and improves security against cross-site request forgery.
-
-[No sources needed since this section provides general guidance]
+- RentByTime endpoints leverage database time synchronization to ensure accurate rental timing across distributed clients.
 
 ## Troubleshooting Guide
 Common issues and resolutions:
 - 401 Unauthorized on protected endpoints: Ensure a valid session exists and CSRF token is included in headers when required.
 - 403 Forbidden on CSRF validation: Call /csrf to validate token freshness or re-login to obtain a fresh token.
 - 400 Bad Request on court management endpoints: Verify required fields (e.g., courtId, gameState) and DTO shapes.
+- 400 Bad Request on RentByTime endpoints: Verify required fields (rentId, courtId, time parameters) and proper date/time formatting.
 - CORS errors: Confirm that the frontend runs on localhost:3000 or Tomcat on localhost:8080 and credentials are allowed.
 - Streaming download failures: Ensure the token is still valid and the server supports streaming responses.
+- Database time synchronization issues: Use /court-mana/getCurrentTime endpoint to synchronize client-side time calculations.
 
 **Section sources**
 - [AuthenController.java:45-73](file://BadmintonCourtManagement/src/main/java/com/badminton/controller/AuthenController.java#L45-L73)
-- [CourtManagementController.java:133-153](file://BadmintonCourtManagement/src/main/java/com/badminton/controller/CourtManagementController.java#L133-L153)
+- [CourtManagementController.java:133-214](file://BadmintonCourtManagement/src/main/java/com/badminton/controller/CourtManagementController.java#L133-L214)
 - [SecurityConfig.java:112-136](file://BadmintonCourtManagement/src/main/java/com/badminton/config/SecurityConfig.java#L112-L136)
 
 ## Conclusion
-The API provides a cohesive set of endpoints for managing badminton courts, games, payments, reporting, and settings. Session-based authentication with CSRF protection and CORS configuration ensures secure and flexible integration. Use the provided schemas and examples to implement clients and handle errors gracefully.
-
-[No sources needed since this section summarizes without analyzing specific files]
+The API provides a cohesive set of endpoints for managing badminton courts, games, payments, reporting, settings, and now court rentals through the RentByTime functionality. Session-based authentication with CSRF protection and CORS configuration ensures secure and flexible integration. Use the provided schemas and examples to implement clients and handle errors gracefully. The new RentByTime endpoints enable comprehensive court rental management with proper time synchronization and payment processing capabilities.
 
 ## Appendices
 
@@ -483,6 +530,14 @@ The API provides a cohesive set of endpoints for managing badminton courts, game
   - Fields: totalCourt, costInPerson, shuttleBalls, services
   - Used by: settings endpoints
 
+- RentByTimeRequest
+  - Fields: courtId, startTime, endTime, playerId
+  - Used by: /court-mana/applyRentByTime, /court-mana/updateRentByTime
+
+- RentByTimeResponse
+  - Fields: id, courtId, playerId, startTime, endTime, status, totalAmount, paymentStatus
+  - Used by: all RentByTime endpoints
+
 **Section sources**
 - [AuthenDTO.java:14-25](file://BadmintonCourtManagement/src/main/java/com/badminton/requestmodel/AuthenDTO.java#L14-L25)
 - [Result.java:6-26](file://BadmintonCourtManagement/src/main/java/com/badminton/response/result/Result.java#L6-L26)
@@ -491,6 +546,8 @@ The API provides a cohesive set of endpoints for managing badminton courts, game
 - [GameDTO.java:20-43](file://BadmintonCourtManagement/src/main/java/com/badminton/requestmodel/GameDTO.java#L20-L43)
 - [PayRequest.java:9-15](file://BadmintonCourtManagement/src/main/java/com/badminton/requestmodel/PayRequest.java#L9-L15)
 - [SetUpServiceDTO.java:16-21](file://BadmintonCourtManagement/src/main/java/com/badminton/requestmodel/SetUpServiceDTO.java#L16-L21)
+- [RentByTimeRequest.java:10-15](file://BadmintonCourtManagement/src/main/java/com/badminton/requestmodel/RentByTimeRequest.java#L10-L15)
+- [RentByTimeResponse.java:11-20](file://BadmintonCourtManagement/src/main/java/com/badminton/response/RentByTimeResponse.java#L11-L20)
 
 ### Endpoint Security and Role-Based Access
 - Current configuration enforces session-based authentication for all endpoints except /login, /logout, /index, /error, /public/**, and /csrf.
@@ -514,5 +571,5 @@ The API provides a cohesive set of endpoints for managing badminton courts, game
 - After login, persist the session cookie and include the XSRF token header on subsequent requests.
 - For streaming downloads, handle StreamingResponseBody and set appropriate file names.
 - Validate required fields (e.g., payType) before sending requests.
-
-[No sources needed since this section provides general guidance]
+- For RentByTime operations, ensure proper time synchronization using /court-mana/getCurrentTime endpoint.
+- Handle optional customFee parameter in /court-mana/payRentByTime for flexible pricing scenarios.

@@ -329,9 +329,8 @@ function SetupPage() {
           <TextField
             label="Tổng sân"
             type="number"
-            defaultValue="8"
+            value={totalCourt}
             onChange={(e) => setTotalCourt(e.target.value)}
-            disabled
             slotProps={{
               input: {
                 endAdornment: (
