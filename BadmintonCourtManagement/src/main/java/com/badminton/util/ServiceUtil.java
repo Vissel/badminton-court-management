@@ -6,6 +6,7 @@ import com.badminton.constant.GameState;
 import com.badminton.entity.AvailablePlayer;
 import com.badminton.entity.GameShuttleMap;
 import com.badminton.entity.Team;
+import com.badminton.model.dto.RentShuttleDTO;
 import com.badminton.model.dto.ServiceDTO;
 import com.badminton.requestmodel.CourtAreaDTO;
 import com.badminton.response.result.ShuttleBallResponse;
@@ -65,12 +66,16 @@ public class ServiceUtil {
 
     public static String divideServiceFromJsonArray(String existedService, ServiceDTO deletedService) {
         List<ServiceDTO> dtos = convertStringToListService(existedService);
-        List<ServiceDTO> dividedList = dtos.stream().filter(s -> s.getServiceName().equals(deletedService.getServiceName()) && s.getCost() == deletedService.getCost()).collect(Collectors.toList());
+        List<ServiceDTO> dividedList = dtos.stream()
+                .filter(s -> s.getServiceName().equals(deletedService.getServiceName())
+                        && s.getCost() == deletedService.getCost())
+                .collect(Collectors.toList());
         return new Gson().toJson(dividedList);
     }
 
     /**
-     * concat array new services into current services string. Separated by semi-colon
+     * concat array new services into current services string. Separated by
+     * semi-colon
      *
      * @param currentServices
      * @param newServices
@@ -78,11 +83,13 @@ public class ServiceUtil {
      */
     @Deprecated
     public static String concatService(String currentServices, String... newServices) {
-        return currentServices.concat(CommonConstant.STR_SEMI_COLON).concat(Arrays.stream(newServices).collect(Collectors.joining(CommonConstant.STR_SEMI_COLON)));
+        return currentServices.concat(CommonConstant.STR_SEMI_COLON)
+                .concat(Arrays.stream(newServices).collect(Collectors.joining(CommonConstant.STR_SEMI_COLON)));
     }
 
     /**
-     * concat array new services into current services string. Separated by semi-colon
+     * concat array new services into current services string. Separated by
+     * semi-colon
      *
      * @param currentServices
      * @param removedServices
@@ -90,7 +97,8 @@ public class ServiceUtil {
      */
     @Deprecated
     public static String divideService(String currentServices, String... removedServices) {
-        Arrays.stream(removedServices).forEach(s -> currentServices.replace(CommonConstant.STR_SEMI_COLON + s, CommonConstant.EMPTY));
+        Arrays.stream(removedServices)
+                .forEach(s -> currentServices.replace(CommonConstant.STR_SEMI_COLON + s, CommonConstant.EMPTY));
         return currentServices;
     }
 
@@ -104,7 +112,8 @@ public class ServiceUtil {
      * @return
      */
     public static boolean validGameStateUpdate(GameState current, GameState change) {
-        return (current.equals(GameState.NOT_START) && change.equals(GameState.START)) || (current.equals(GameState.START) && isEndedState(change));
+        return (current.equals(GameState.NOT_START) && change.equals(GameState.START))
+                || (current.equals(GameState.START) && isEndedState(change));
     }
 
     public static boolean isEndedState(GameState change) {
@@ -147,8 +156,13 @@ public class ServiceUtil {
     }
 
     public static Map<ShuttleBallResponse, Integer> retrievedShuttleBallMap(List<GameShuttleMap> gameShuttleMapping) {
-        return gameShuttleMapping.stream().collect(Collectors.toMap(map -> new ShuttleBallResponse(map.getShuttleBall().getShuttleName(), map.getShuttleBall().getCost(), map.getShuttleBall().isSelected()), map -> Integer.valueOf(map.getShuttleNumber()), Integer::sum // merge function — sum counts if duplicates exist
-        ));
+        return gameShuttleMapping.stream()
+                .collect(Collectors.toMap(
+                        map -> new ShuttleBallResponse(map.getShuttleBall().getShuttleName(),
+                                map.getShuttleBall().getCost(), map.getShuttleBall().isSelected()),
+                        map -> Integer.valueOf(map.getShuttleNumber()), Integer::sum // merge function — sum counts if
+                                                                                     // duplicates exist
+                ));
     }
 
     public static String getGameStatus(boolean isWin) {
@@ -160,7 +174,8 @@ public class ServiceUtil {
     }
 
     public static boolean teamPlayersNotNull(Team team) {
-        return team != null && availablePlayerNotNull(team.getPlayerOne()) && availablePlayerNotNull(team.getPlayerTwo());
+        return team != null && availablePlayerNotNull(team.getPlayerOne())
+                && availablePlayerNotNull(team.getPlayerTwo());
     }
 
     public static boolean isTeamOne(String area) {
@@ -169,6 +184,23 @@ public class ServiceUtil {
 
     public static boolean isTeamTwo(String area) {
         return GameState.teamTwo().contains(area);
+    }
+
+    public static List<RentShuttleDTO> convertShuttlesJsonToList(String shuttlesJson) {
+        Type objectListType = new TypeToken<ArrayList<RentShuttleDTO>>() {
+        }.getType();
+        List<RentShuttleDTO> dtos;
+        try {
+            dtos = new Gson().fromJson(shuttlesJson, objectListType);
+            Assert.notNull(dtos, "shuttles list is null");
+        } catch (JsonSyntaxException | IllegalArgumentException e) {
+            dtos = new ArrayList<>();
+        }
+        return dtos;
+    }
+
+    public static String convertShuttlesListToJson(List<RentShuttleDTO> shuttles) {
+        return new Gson().toJson(shuttles);
     }
 
 }

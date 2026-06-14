@@ -6,5 +6,6 @@ public class ApiConstant {
 	public static final String CSRF_TOKEN_CREATED_AT = "_csrf_token_created_at";
 
 	public static final String COST_IN_PERNSON = "costInPerson";
+	public static final String RENT_BY_TIME = "rentByTime";
 
 }

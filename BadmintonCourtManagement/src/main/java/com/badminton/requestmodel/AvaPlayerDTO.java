@@ -24,6 +24,7 @@ import java.util.stream.Collectors;
 public class AvaPlayerDTO extends ResponseDTO {
     private int playerId;
     private String playerName;
+    private String oldPlayerName;
     @JsonIgnore
     private transient Instant from;
     @JsonIgnore

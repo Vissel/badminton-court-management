@@ -43,7 +43,7 @@ public class AdminServiceImpl implements AdminService {
     private static final String COURT_STR = "Court ";
 
     AdminServiceImpl(GlobalExceptionHandler globalExceptionHandler,
-                     UrlBasedCorsConfigurationSource corsConfigurationSource, SecurityConfig securityConfig) {
+            UrlBasedCorsConfigurationSource corsConfigurationSource, SecurityConfig securityConfig) {
         this.globalExceptionHandler = globalExceptionHandler;
         this.corsConfigurationSource = corsConfigurationSource;
         this.securityConfig = securityConfig;
@@ -72,8 +72,8 @@ public class AdminServiceImpl implements AdminService {
             }
             if (setupServiceDTO.getCostInPerson() != MoneyUtils.DEFAULT) {
                 Optional<Service> optSer = serviceRepo.findBySerName(ApiConstant.COST_IN_PERNSON);
-//				listServices.add(new (ApiConstant.COST_IN_PERNSON,
-//						setupServiceDTO.getCostInPerson()));
+                // listServices.add(new (ApiConstant.COST_IN_PERNSON,
+                // setupServiceDTO.getCostInPerson()));
                 Service savedService;
                 if (optSer.isPresent()) {
                     savedService = optSer.get();
@@ -93,7 +93,7 @@ public class AdminServiceImpl implements AdminService {
     public boolean updateSetUpService(SetUpServiceRequest setupServiceRequest) {
         try {
 
-//            checkAndCreateCourt(setupServiceRequest.getTotalCourt());
+            // checkAndCreateCourt(setupServiceRequest.getTotalCourt());
 
             // save shuttle infor
             updateShuttleBalls(setupServiceRequest);
@@ -107,6 +107,18 @@ public class AdminServiceImpl implements AdminService {
                     savedService.setCost(setupServiceRequest.getCostInPerson());
                 } else {
                     savedService = new Service(ApiConstant.COST_IN_PERNSON, setupServiceRequest.getCostInPerson());
+                }
+                serviceRepo.save(savedService);
+            }
+
+            if (setupServiceRequest.getRentByTime() != MoneyUtils.DEFAULT) {
+                Optional<Service> optSer = serviceRepo.findBySerName(ApiConstant.RENT_BY_TIME);
+                Service savedService;
+                if (optSer.isPresent()) {
+                    savedService = optSer.get();
+                    savedService.setCost(setupServiceRequest.getRentByTime());
+                } else {
+                    savedService = new Service(ApiConstant.RENT_BY_TIME, setupServiceRequest.getRentByTime());
                 }
                 serviceRepo.save(savedService);
             }
@@ -175,8 +187,7 @@ public class AdminServiceImpl implements AdminService {
     }
 
     private List<ShuttleBallDTO> findTheSameBallList(List<ShuttleBallDTO> originList, List<ShuttleBall> findList) {
-        return originList.stream().filter(dto ->
-                        findList.stream().anyMatch(b -> b.theSameDTO(dto)))
+        return originList.stream().filter(dto -> findList.stream().anyMatch(b -> b.theSameDTO(dto)))
                 .collect(Collectors.toList());
     }
 

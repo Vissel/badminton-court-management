@@ -24,6 +24,9 @@ function SetupPage() {
   const [costInPerson, setCostInPerson] = useState();
   const [costInPersonFormatted, setcostInPersonFormatted] = useState("");
   const [costInPersonEditing, setCostInPersonEditing] = useState(false);
+  const [rentByTime, setRentByTime] = useState();
+  const [rentByTimeFormatted, setRentByTimeFormatted] = useState("");
+  const [rentByTimeEditing, setRentByTimeEditing] = useState(false);
   const [shuttleBall, setShuttleBall] = useState([]);
   const [services, setServices] = useState([]);
   const [tableShuttleBalls, setTableShuttleBalls] = useState([]);
@@ -192,9 +195,11 @@ function SetupPage() {
       return;
     }
     const rawNumber = Number(costInPerson.toString().replace(/\D/g, ""));
+    const rawRentByTime = Number(rentByTime.toString().replace(/\D/g, ""));
     const payload = {
       totalCourt: totalCourt,
       costInPerson: rawNumber,
+      rentByTime: rawRentByTime,
       addedShuttleBalls: shuttleBall.map((b) => ({
         shuttleName: b.shuttleName,
         shuttleCost: b.cost,
@@ -232,6 +237,7 @@ function SetupPage() {
         setOneBall(true);
         setServices([]);
         setCostInPersonEditing(false);
+        setRentByTimeEditing(false);
       } else {
         setErrorMess(`${response.data.message}`);
       }
@@ -245,6 +251,11 @@ function SetupPage() {
     setCostInPerson(raw);
     setcostInPersonFormatted(formatVND(raw));
   };
+  const handleRentByTime = (e) => {
+    const raw = e.target.value.replace(/\D/g, "");
+    setRentByTime(raw);
+    setRentByTimeFormatted(formatVND(raw));
+  };
   const handleCostInput = (e, id) => {
     const raw = e.target.value.replace(/\D/g, "");
     handleBallChange(id, "cost", raw);
@@ -257,6 +268,8 @@ function SetupPage() {
         setTotalCourt(res.data.totalCourt);
         setCostInPerson(res.data.costInPerson);
         setcostInPersonFormatted(formatVND(res.data.costInPerson));
+        setRentByTime(res.data.rentByTime);
+        setRentByTimeFormatted(formatVND(res.data.rentByTime));
         setTableShuttleBalls(res.data.shuttleBalls);
         setTableServices(res.data.services);
       }
@@ -312,7 +325,7 @@ function SetupPage() {
       </Grid>
 
       <Grid container spacing={2}>
-        <Grid size={{ xs: 12 }}>
+        <Grid size={{ xs: 12, sm: 4 }}>
           <TextField
             label="Tổng sân"
             type="number"
@@ -330,7 +343,7 @@ function SetupPage() {
           />
         </Grid>
 
-        <Grid size={{ xs: 12 }}>
+        <Grid size={{ xs: 12, sm: 4 }}>
           <TextField
             label="Tiền sân"
             type="text"
@@ -346,6 +359,30 @@ function SetupPage() {
                 endAdornment: (
                   <InputAdornment position="end">
                     {VN_CURRENCY}/người
+                  </InputAdornment>
+                ),
+              },
+            }}
+            sx={{ maxWidth: 360 }}
+          />
+        </Grid>
+
+        <Grid size={{ xs: 12, sm: 4 }}>
+          <TextField
+            label="Thuê sân theo giờ"
+            type="text"
+            value={rentByTimeEditing ? rentByTime : rentByTimeFormatted}
+            onChange={rentByTimeEditing ? handleRentByTime : undefined}
+            onClick={
+              rentByTimeEditing ? undefined : () => setRentByTimeEditing(true)
+            }
+            slotProps={{
+              input: {
+                readOnly: !rentByTimeEditing,
+                sx: !rentByTimeEditing ? { cursor: "pointer" } : undefined,
+                endAdornment: (
+                  <InputAdornment position="end">
+                    {VN_CURRENCY}/giờ
                   </InputAdornment>
                 ),
               },

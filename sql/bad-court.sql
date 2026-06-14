@@ -164,3 +164,10 @@ select * from `user` where user_name = 'micro05'
 order by created_at desc;
 
 select * from `request` order by created_at desc;
+
+select * from picture order by pic_id desc;
+select * from product_picture_map ;
+
+select * from sale_environment order by created_at desc;
+select * from product order by product_id desc;
+update product set amount = 0;

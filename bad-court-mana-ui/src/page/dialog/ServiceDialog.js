@@ -24,12 +24,17 @@ const ServiceDialog = ({
   onPay,
   onDelete,
   onUpdateServices,
+  onUpdatePlayerName,
+  canEditPlayerName = false,
   hideActions = false,
   serviceOptions = [],
 }) => {
   const [totalCost, setTotalCost] = useState(0);
   const [serviceName, setServiceName] = useState("");
   const [serviceCost, setServiceCost] = useState("");
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editPlayerName, setEditPlayerName] = useState(playerName || "");
+  const [editError, setEditError] = useState("");
 
   // Filter available service options by current input
   const filteredServiceOptions = useMemo(() => {
@@ -81,18 +86,62 @@ const ServiceDialog = ({
     onUpdateServices(playerName, updated);
   };
 
+  const displayServiceName = (name) => {
+    if (name === "rentByTime") return "Thuê theo giờ";
+    return name;
+  };
+
+  const handleCancelEditName = useCallback(() => {
+    setIsEditingName(false);
+    setEditPlayerName(playerName || "");
+    setEditError("");
+  }, [playerName]);
+
+  const handleSaveEditName = useCallback(async () => {
+    const trimmedName = editPlayerName.trim();
+    if (!trimmedName) {
+      setEditError("Tên người chơi không được để trống");
+      return;
+    }
+
+    if (trimmedName === playerName) {
+      handleCancelEditName();
+      return;
+    }
+
+    try {
+      const updated = await onUpdatePlayerName?.(playerName, trimmedName);
+      if (updated) {
+        setIsEditingName(false);
+        setEditError("");
+      } else {
+        setEditError("Không thể đổi tên người chơi");
+      }
+    } catch {
+      setEditError("Không thể đổi tên người chơi");
+    }
+  }, [editPlayerName, handleCancelEditName, onUpdatePlayerName, playerName]);
+
   const handleKeyDown = useCallback(
     (event) => {
       if (event.key === "Enter") {
         event.preventDefault();
-        handleAddService();
+        if (isEditingName) {
+          handleSaveEditName();
+        } else {
+          handleAddService();
+        }
       }
 
       if (event.key === "Escape") {
-        onClose(false);
+        if (isEditingName) {
+          handleCancelEditName();
+        } else {
+          onClose(false);
+        }
       }
     },
-    [handleAddService, onClose]
+    [handleAddService, handleCancelEditName, handleSaveEditName, isEditingName, onClose]
   );
 
   useEffect(() => {
@@ -102,6 +151,12 @@ const ServiceDialog = ({
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [services, handleKeyDown, recalcTotal]);
+
+  useEffect(() => {
+    setEditPlayerName(playerName || "");
+    setEditError("");
+    setIsEditingName(false);
+  }, [playerName]);
 
   return (
     <Dialog
@@ -127,6 +182,54 @@ const ServiceDialog = ({
         <Typography variant="subtitle1" align="center" fontWeight={600}>
           {playerName}
         </Typography>
+        {canEditPlayerName && !hideActions && (
+          <Box sx={{ mt: 1, display: "flex", justifyContent: "center" }}>
+            {isEditingName ? (
+              <Box sx={{ width: "100%", maxWidth: 360 }}>
+                <Stack direction="row" spacing={1} alignItems="center" justifyContent="center">
+                  <TextField
+                    autoFocus
+                    size="small"
+                    label="Tên người chơi"
+                    value={editPlayerName}
+                    error={Boolean(editError)}
+                    onChange={(e) => {
+                      setEditPlayerName(e.target.value);
+                      setEditError("");
+                    }}
+                    onKeyDown={(e) => {
+                      e.stopPropagation();
+                      if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                        e.preventDefault();
+                        handleSaveEditName();
+                      }
+                      if (e.key === "Escape") {
+                        e.preventDefault();
+                        handleCancelEditName();
+                      }
+                    }}
+                    sx={{ flex: 1 }}
+                  />
+                  <Button size="small" variant="contained" onClick={handleSaveEditName}>
+                    Lưu
+                  </Button>
+                  <Button size="small" variant="outlined" onClick={handleCancelEditName}>
+                    Huỷ
+                  </Button>
+                </Stack>
+                {editError && (
+                  <Typography variant="caption" color="error" sx={{ display: "block", mt: 0.5, textAlign: "center" }}>
+                    {editError}
+                  </Typography>
+                )}
+              </Box>
+            ) : (
+              <Button size="small" variant="text" onClick={() => setIsEditingName(true)}>
+                Sửa tên
+              </Button>
+            )}
+          </Box>
+        )}
       </DialogTitle>
       <DialogContent dividers>
         <Typography variant="subtitle2" color="primary" gutterBottom>
@@ -207,7 +310,7 @@ const ServiceDialog = ({
                 sx={{ borderBottom: 1, borderColor: "divider", py: 1 }}
               >
                 <ListItemText
-                  primary={service.serviceName}
+                  primary={displayServiceName(service.serviceName)}
                   secondary={`${service.costFormat} ${VN_CURRENCY}`}
                 />
               </ListItem>

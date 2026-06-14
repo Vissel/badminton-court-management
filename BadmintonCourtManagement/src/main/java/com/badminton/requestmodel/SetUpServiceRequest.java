@@ -16,6 +16,7 @@ import java.util.List;
 public class SetUpServiceRequest {
     private int totalCourt;
     private float costInPerson;
+    private float rentByTime;
     private List<ShuttleBallDTO> addedShuttleBalls;
     private List<ShuttleBallDTO> deletedShuttleBalls;
     private List<ServiceDTO> addedServices;

@@ -95,7 +95,8 @@ public class CourtServicesServiceImpl {
     public List<AvaPlayerDTO> getCurrentAvailablePlayers() {
         List<Session> activeSessions = session.findListCurrentSession();
         if (!activeSessions.isEmpty()) {
-            return activeSessions.getFirst().getAvailablePlayers().stream().filter(ava -> ava.getLeaveTime() == null).map(ava -> new AvaPlayerDTO(ava)).collect(Collectors.toList());
+            return activeSessions.getFirst().getAvailablePlayers().stream().filter(ava -> ava.getLeaveTime() == null)
+                    .map(ava -> new AvaPlayerDTO(ava)).collect(Collectors.toList());
         }
         return new ArrayList<>();
     }
@@ -129,15 +130,16 @@ public class CourtServicesServiceImpl {
                     courtExcludes.add(g.getCourt().getCourtId());
                 });
                 // remove the null Team player
-                if (playerExcludes.size() > 1) playerExcludes.remove(NULL_OF_LONG);
+                if (playerExcludes.size() > 1)
+                    playerExcludes.remove(NULL_OF_LONG);
             }
 
             log.info("Getting current session.");
             List<Session> activeSessions = session.findListCurrentSession();
             if (!activeSessions.isEmpty()) {
                 log.info("Getting list of Remain available players.");
-                List<AvailablePlayer> listOfRemainAvaPlayer =
-                        avaPlayerRepo.findAllBySessionAndAvaIdNotInAndLeaveTimeIsNull(activeSessions.getFirst(), playerExcludes);
+                List<AvailablePlayer> listOfRemainAvaPlayer = avaPlayerRepo
+                        .findAllBySessionAndAvaIdNotInAndLeaveTimeIsNull(activeSessions.getFirst(), playerExcludes);
                 log.debug("Size of Remain available players:{}", listOfRemainAvaPlayer.size());
                 res.convertToAvaPlayerDTOs(listOfRemainAvaPlayer);
                 log.debug("Added Remain available players into result.");
@@ -179,16 +181,67 @@ public class CourtServicesServiceImpl {
                 return transactionTemplate.execute(new TransactionCallback<Boolean>() {
                     @Override
                     public Boolean doInTransaction(TransactionStatus status) {
-                        return transactionAddPlayerToCurrentSession(name.replace(CommonConstant.DOUBLE_QUOTES, CommonConstant.EMPTY).trim());
+                        return transactionAddPlayerToCurrentSession(
+                                name.replace(CommonConstant.DOUBLE_QUOTES, CommonConstant.EMPTY).trim());
                     }
                 });
             }
         });
     }
 
-    //    @Transactional(rollbackFor = {BusinessException.class, Exception.class})
+    public Result<Boolean> updateAvailablePlayer(AvaPlayerDTO avaPlayerDTO) {
+        return serviceTemple.execute(new ProcessCallback<AvaPlayerDTO, Boolean>() {
+            @Override
+            public AvaPlayerDTO getRequest() {
+                return avaPlayerDTO;
+            }
+
+            @Override
+            public void preProcess(AvaPlayerDTO request) {
+                Assert.notNull(request, "Player update request must not be null.");
+                Assert.isTrue(StringUtils.isNotBlank(request.getOldPlayerName()),
+                        "Current player name must not be blank.");
+                Assert.isTrue(StringUtils.isNotBlank(request.getPlayerName()), "New player name must not be blank.");
+            }
+
+            @Override
+            public Boolean process() throws BusinessException {
+                return transactionTemplate.execute(new TransactionCallback<Boolean>() {
+                    @Override
+                    public Boolean doInTransaction(TransactionStatus status) {
+                        return transactionUpdateAvailablePlayer(avaPlayerDTO);
+                    }
+                });
+            }
+        });
+    }
+
+    public Boolean transactionUpdateAvailablePlayer(AvaPlayerDTO avaPlayerDTO) {
+        String oldPlayerName = avaPlayerDTO.getOldPlayerName()
+                .replace(CommonConstant.DOUBLE_QUOTES, CommonConstant.EMPTY).trim();
+        String newPlayerName = avaPlayerDTO.getPlayerName().replace(CommonConstant.DOUBLE_QUOTES, CommonConstant.EMPTY)
+                .trim();
+        Assert.isTrue(StringUtils.isNotBlank(oldPlayerName), "Current player name must not be blank.");
+        Assert.isTrue(StringUtils.isNotBlank(newPlayerName), "New player name must not be blank.");
+
+        AvailablePlayer availablePlayer = session.getAvailablePlayerInActiveSession(oldPlayerName);
+        Assert.notNull(availablePlayer, "Available player does not exist in current session.");
+
+        AvailablePlayer duplicatedAvailablePlayer = session.getAvailablePlayerInActiveSession(newPlayerName);
+        Assert.isTrue(
+                duplicatedAvailablePlayer == null || duplicatedAvailablePlayer.getAvaId() == availablePlayer.getAvaId(),
+                "Available player has already been added.");
+
+        Player player = availablePlayer.getPlayer();
+        player.setPlayerName(newPlayerName);
+        player.setPassword(newPlayerName);
+        userRepo.save(player);
+        return Boolean.TRUE;
+    }
+
+    // @Transactional(rollbackFor = {BusinessException.class, Exception.class})
     public Boolean transactionAddPlayerToCurrentSession(String name) {
-//        try {
+        // try {
         List<Player> listPlayer = userRepo.findAllByPlayerName(name);
 
         Player player = null;
@@ -214,13 +267,14 @@ public class CourtServicesServiceImpl {
             Session currSession = session.findListCurrentSession().getFirst();
             Assert.notNull(currSession, "Not available session.");
 
-            List<AvailablePlayer> availablePlayerList = avaPlayerRepo.findAllBySessionAndPlayerAndLeaveTimeIsNull(currSession, player);
+            List<AvailablePlayer> availablePlayerList = avaPlayerRepo
+                    .findAllBySessionAndPlayerAndLeaveTimeIsNull(currSession, player);
             Assert.isTrue(availablePlayerList.isEmpty(), "Available player has already been added.");
             avaPlayerRepo.save(new AvailablePlayer(player, currSession));
         }
-//        } catch (IllegalArgumentException e) {
-//            throw new BusinessException(ErrorCodeEnum.FLOW_ERROR, "");
-//        }
+        // } catch (IllegalArgumentException e) {
+        // throw new BusinessException(ErrorCodeEnum.FLOW_ERROR, "");
+        // }
         return Boolean.TRUE;
     }
 
@@ -235,7 +289,8 @@ public class CourtServicesServiceImpl {
         AvailablePlayer availablePlayer = session.getAvailablePlayerInActiveSession(playerName);
         if (availablePlayer != null) {
             ServiceDTO serviceDTO = ServiceConverter.convertRequestToDTO(serviceRequest);
-            availablePlayer.setServices(ServiceUtil.addServiceToJsonArray(availablePlayer.getCurrentServices(), serviceDTO));
+            availablePlayer
+                    .setServices(ServiceUtil.addServiceToJsonArray(availablePlayer.getCurrentServices(), serviceDTO));
             avaPlayerRepo.save(availablePlayer);
             return true;
         }
@@ -256,8 +311,9 @@ public class CourtServicesServiceImpl {
             availablePlayer.setServices(
                     ServiceUtil.divideServiceFromJsonArray(availablePlayer.getCurrentServices(),
                             serviceDTO));
-//                    ServiceUtil.divideService(availablePlayer.getCurrentServices(),
-//                    ServiceUtil.buildService(serviceDTO.getServiceName(), serviceDTO.getCost())));
+            // ServiceUtil.divideService(availablePlayer.getCurrentServices(),
+            // ServiceUtil.buildService(serviceDTO.getServiceName(),
+            // serviceDTO.getCost())));
             avaPlayerRepo.save(availablePlayer);
             return true;
         }
@@ -274,12 +330,13 @@ public class CourtServicesServiceImpl {
     public Boolean updateServicesToAvailablePlayer(List<ServiceRequest> listServiceRequest, String playerName) {
         AvailablePlayer availablePlayer = session.getAvailablePlayerInActiveSession(playerName);
         if (availablePlayer != null) {
-            List<ServiceDTO> listServiceDTO = listServiceRequest.stream().map(req -> ServiceConverter.convertRequestToDTO(req))
+            List<ServiceDTO> listServiceDTO = listServiceRequest.stream()
+                    .map(req -> ServiceConverter.convertRequestToDTO(req))
                     .collect(Collectors.toList());
             String listServiceString = ServiceUtil.buildJsonArrayStr(listServiceDTO);
-//                    listServiceDTO.stream().map(serviceDTO ->
-//                            ServiceUtil.buildJsonService(serviceDTO))
-//                    .collect(Collectors.joining(CommonConstant.STR_SEMI_COLON));
+            // listServiceDTO.stream().map(serviceDTO ->
+            // ServiceUtil.buildJsonService(serviceDTO))
+            // .collect(Collectors.joining(CommonConstant.STR_SEMI_COLON));
             availablePlayer.setServices(listServiceString);
             avaPlayerRepo.save(availablePlayer);
             return true;
@@ -296,7 +353,8 @@ public class CourtServicesServiceImpl {
      * @return
      */
     @Transactional(rollbackFor = Exception.class)
-    public Boolean addAvailablePlayerToCourtArea(String playerName, CourtDTO courtDTO, ShuttleBallDTO shuttleBallDTO) throws Exception {
+    public Boolean addAvailablePlayerToCourtArea(String playerName, CourtDTO courtDTO, ShuttleBallDTO shuttleBallDTO)
+            throws Exception {
         log.info(ErrorMess.ADD_PLAYER_INTO_COURT, CommonConstant.START);
         // create game if there is new, update otherwise
         Optional<Court> courtOpt = courtRepo.findById(Integer.valueOf(courtDTO.getCourtId()));
@@ -304,7 +362,8 @@ public class CourtServicesServiceImpl {
             return false;
         }
 
-        Optional<Game> gameOfCourtOpt = gameRepo.findByCourtAndStateAndEndedDateIsNull(courtOpt.get(), GameState.NOT_START.getValue());
+        Optional<Game> gameOfCourtOpt = gameRepo.findByCourtAndStateAndEndedDateIsNull(courtOpt.get(),
+                GameState.NOT_START.getValue());
         Game game = null;
         if (gameOfCourtOpt.isPresent()) {
             game = gameOfCourtOpt.get();
@@ -313,10 +372,12 @@ public class CourtServicesServiceImpl {
                 return false;
             }
         } else {
-            List<ShuttleBall> balls = ballRepo.findAllByShuttleNameAndCostAndIsActiveTrue(shuttleBallDTO.getShuttleName(), shuttleBallDTO.getShuttleCost());
+            List<ShuttleBall> balls = ballRepo.findAllByShuttleNameAndCostAndIsActiveTrue(
+                    shuttleBallDTO.getShuttleName(), shuttleBallDTO.getShuttleCost());
 
             if (balls.isEmpty()) {
-                log.error("No finding shuttleName:{} with cost:{}", shuttleBallDTO.getShuttleName(), shuttleBallDTO.getShuttleCost());
+                log.error("No finding shuttleName:{} with cost:{}", shuttleBallDTO.getShuttleName(),
+                        shuttleBallDTO.getShuttleCost());
                 return false;
             }
 
@@ -324,7 +385,6 @@ public class CourtServicesServiceImpl {
             game = new Game(courtOpt.get(), balls.get(0));
             gameRepo.save(game);
         }
-
 
         // create team 1 or 2 if there is new, update otherwise
         return addAvailablePlayerIntoGame(game, playerName, courtDTO.getCourtAreas().getFirst().getArea());
@@ -335,7 +395,8 @@ public class CourtServicesServiceImpl {
         try {
             Team team = getTeam(game, area);
 
-            Optional<AvailablePlayer> optPlayer = avaPlayerRepo.findAvailablePlayerInSessionByName(session.findListCurrentSession().getFirst(), playerName);
+            Optional<AvailablePlayer> optPlayer = avaPlayerRepo
+                    .findAvailablePlayerInSessionByName(session.findListCurrentSession().getFirst(), playerName);
             if (!optPlayer.isPresent()) {
                 throw new BusinessException(ErrorCodeEnum.PLAYER_NOT_FOUND, "Available player is not found.");
             }
@@ -394,7 +455,8 @@ public class CourtServicesServiceImpl {
             final int courtId = Integer.valueOf(gameDTO.getCourt().getCourtId());
             Optional<Game> gameOpt = gameRepo.findByCourtIdAndEndedDateIsNull(courtId);
             if (!gameOpt.isPresent()) {
-                throw new ElementNotExistException(ErrorCodeEnum.GAME_NOT_FOUND, String.format("No game is found by courtId [%s]", courtId));
+                throw new ElementNotExistException(ErrorCodeEnum.GAME_NOT_FOUND,
+                        String.format("No game is found by courtId [%s]", courtId));
             }
             Game game = gameOpt.get();
             GameState currentGameState = GameState.getGameState(game.getState());
@@ -429,7 +491,8 @@ public class CourtServicesServiceImpl {
 
     private void setSelectedBallIntoGame(Game game, List<ShuttleBallDTO> shuttleBalls, String gameStateChange) {
         if (GameState.START.equals(gameStateChange)) {
-            game.setShuttleMap(Arrays.asList(shuttleBallService.createGameShuttleMap(game, shuttleBalls.getFirst(), shuttleBalls.getFirst().getBallQuantity())));
+            game.setShuttleMap(Arrays.asList(shuttleBallService.createGameShuttleMap(game, shuttleBalls.getFirst(),
+                    shuttleBalls.getFirst().getBallQuantity())));
         }
     }
 
@@ -472,7 +535,6 @@ public class CourtServicesServiceImpl {
         }
         return isTeamOne;
     }
-
 
     private long getAvaIdFromPlayer(AvailablePlayer avaPlayer) {
         if (avaPlayer != null) {
@@ -534,7 +596,8 @@ public class CourtServicesServiceImpl {
                 return transactionTemplate.execute(new TransactionCallback<Boolean>() {
                     @Override
                     public Boolean doInTransaction(TransactionStatus status) {
-                        return session.removePlayerOutCurrentSession(playerName.replace(CommonConstant.DOUBLE_QUOTES, CommonConstant.EMPTY).trim());
+                        return session.removePlayerOutCurrentSession(
+                                playerName.replace(CommonConstant.DOUBLE_QUOTES, CommonConstant.EMPTY).trim());
                     }
                 });
             }
