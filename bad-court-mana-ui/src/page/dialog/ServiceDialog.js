@@ -14,8 +14,11 @@ import Paper from "@mui/material/Paper";
 import List from "@mui/material/List";
 import ListItem from "@mui/material/ListItem";
 import ListItemText from "@mui/material/ListItemText";
+import Chip from "@mui/material/Chip";
 import { TYPE } from "../HomePage";
 import { VN_CURRENCY, formatVND } from "./../MoneyUtils";
+
+const ADVANCE_SERVICE_NAME = "Tr\u1ea3 tr\u01b0\u1edbc";
 
 const ServiceDialog = ({
   playerName,
@@ -299,22 +302,53 @@ const ServiceDialog = ({
 
         {services.length > 0 ? (
           <List dense disablePadding>
-            {services.map((service, idx) => (
-              <ListItem
-                key={idx}
-                secondaryAction={
-                  <Button size="small" color="error" variant="outlined" onClick={() => handleRemoveService(idx)}>
-                    ✕
-                  </Button>
-                }
-                sx={{ borderBottom: 1, borderColor: "divider", py: 1 }}
-              >
-                <ListItemText
-                  primary={displayServiceName(service.serviceName)}
-                  secondary={`${service.costFormat} ${VN_CURRENCY}`}
-                />
-              </ListItem>
-            ))}
+            {services.map((service, idx) => {
+              const isAdvance = service.serviceName === ADVANCE_SERVICE_NAME;
+              return (
+                <ListItem
+                  key={idx}
+                  secondaryAction={
+                    isAdvance ? (
+                      <Chip label="Đã trả" size="small" color="info" variant="outlined" sx={{ fontSize: "0.7rem", height: 22 }} />
+                    ) : (
+                      <Button size="small" color="error" variant="outlined" onClick={() => handleRemoveService(idx)}>
+                        ✕
+                      </Button>
+                    )
+                  }
+                  sx={{
+                    borderBottom: 1,
+                    borderColor: "divider",
+                    py: 1,
+                    bgcolor: isAdvance ? "info.light" : "transparent",
+                  }}
+                >
+                  <ListItemText
+                    primary={
+                      isAdvance ? (
+                        <Typography variant="body2" color="info.dark" fontWeight={600}>
+                          {displayServiceName(service.serviceName)}
+                        </Typography>
+                      ) : (
+                        displayServiceName(service.serviceName)
+                      )
+                    }
+                    secondary={
+                      isAdvance
+                        ? `−${formatVND(Math.abs(service.cost))} ${VN_CURRENCY}`
+                        : `${service.costFormat} ${VN_CURRENCY}`
+                    }
+                    slotProps={{
+                      secondary: {
+                        sx: isAdvance
+                          ? { color: "info.dark", fontWeight: 600 }
+                          : undefined,
+                      },
+                    }}
+                  />
+                </ListItem>
+              );
+            })}
           </List>
         ) : (
           <Typography variant="body2" color="text.secondary">

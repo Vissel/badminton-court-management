@@ -93,10 +93,10 @@ public class CourtManagementController {
     }
 
     @PostMapping(value = "/addPlayer")
-    public ResponseEntity<Result<Boolean>> addPlayerToAvailableSession(@RequestBody String name) {
-        log.info("Adding player:{}", name);
+    public ResponseEntity<Result<Boolean>> addPlayerToAvailableSession(@RequestBody AddPlayerRequest request) {
+        log.info("Adding player:{} with advanceAmount:{}", request.getPlayerName(), request.getAdvanceAmount());
         Result<Boolean> res = courtService
-                .addPlayerToCurrentSession(name);
+                .addPlayerToCurrentSession(request);
         log.info("Result is:{}", res);
         // Error cases are not handled
         return ResponseConvertor.convert(res);

@@ -22,6 +22,7 @@ import GameDialog from "./dialog/GameDialog";
 import ShuttleBallDialog from "./dialog/ShuttleBallDialog";
 import CancelConfirm from "./dialog/CancelConfirm";
 import PayConfirm from "./dialog/PayConfirm";
+import AdvancePaymentDialog from "./dialog/AdvancePaymentDialog";
 import { VN_CURRENCY, formatVND, rawNumber } from "./MoneyUtils";
 
 const COST_IN_PERSON = "costInPerson";
@@ -100,6 +101,8 @@ function HomePage() {
   const [showPayConfirmDialog, setShowPayConfirmDialog] = useState(false);
   const [payConfirmData, setPayConfirmData] = useState(null);
   const [dialogHideActions, setDialogHideActions] = useState(false);
+  const [showAdvanceDialog, setShowAdvanceDialog] = useState(false);
+  const [pendingPlayerName, setPendingPlayerName] = useState(null);
 
   const responseSuccess = (response) => {
     return response != null && response.status === 200 && response.data != null;
@@ -231,12 +234,56 @@ function HomePage() {
   };
 
   const onAddPlayer = async (name) => {
+    // Show advance payment dialog first, then call API after user responds
+    setPendingPlayerName(name);
+    setShowAdvanceDialog(true);
+  };
+
+  const handleAdvanceConfirm = async (playerName, advanceAmount) => {
+    setShowAdvanceDialog(false);
     try {
-      await api.post("/court-mana/addPlayer", name);
+      await api.post("/court-mana/addPlayer", {
+        playerName: playerName,
+        advanceAmount: advanceAmount,
+      });
       console.log("Adding new player successfully.");
-      setAvailablePlayers((prev) => [...prev, name]);
-      // set costInPerson
-      handleDropService(name, VN_COST_IN_PERSON, costInPerson, formatVND(costInPerson));
+      setAvailablePlayers((prev) => [...prev, playerName]);
+      // Add Tiền sân service
+      handleDropService(playerName, VN_COST_IN_PERSON, costInPerson, formatVND(costInPerson));
+      // If advance > 0, add "Trả trước" to the local service map (backend already added it)
+      if (advanceAmount > 0) {
+        setPlayerServiceMap((prev) => {
+          const existing = prev[playerName] || [];
+          return {
+            ...prev,
+            [playerName]: [
+              ...existing,
+              {
+                serviceName: "Trả trước",
+                cost: -advanceAmount,
+                costFormat: formatVND(-advanceAmount),
+              },
+            ],
+          };
+        });
+      }
+    } catch (error) {
+      console.error("Error while adding player to available session.");
+      alert("Có lỗi khi thêm người chơi. Refresh lại trang này!");
+    }
+  };
+
+  const handleAdvanceSkip = async (playerName) => {
+    setShowAdvanceDialog(false);
+    try {
+      await api.post("/court-mana/addPlayer", {
+        playerName: playerName,
+        advanceAmount: 0,
+      });
+      console.log("Adding new player successfully (no advance).");
+      setAvailablePlayers((prev) => [...prev, playerName]);
+      // Add Tiền sân service
+      handleDropService(playerName, VN_COST_IN_PERSON, costInPerson, formatVND(costInPerson));
     } catch (error) {
       console.error("Error while adding player to available session.");
       alert("Có lỗi khi thêm người chơi. Refresh lại trang này!");
@@ -969,6 +1016,13 @@ function HomePage() {
             data={payConfirmData}
             onConfirm={handlePayment}
             onExit={() => setShowPayConfirmDialog(false)}
+          />
+          <AdvancePaymentDialog
+            show={showAdvanceDialog}
+            playerName={pendingPlayerName}
+            onConfirm={handleAdvanceConfirm}
+            onSkip={handleAdvanceSkip}
+            onClose={() => setShowAdvanceDialog(false)}
           />
         </Box>
       </Box>

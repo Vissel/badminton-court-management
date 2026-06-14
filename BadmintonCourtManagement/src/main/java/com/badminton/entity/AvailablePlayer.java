@@ -36,6 +36,8 @@ public class AvailablePlayer {
 
     private String payType;
 
+    private Float advancePayment;
+
     public AvailablePlayer(Player p) {
         this.player = p;
     }

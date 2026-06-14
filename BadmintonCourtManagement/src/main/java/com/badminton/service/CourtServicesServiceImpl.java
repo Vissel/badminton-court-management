@@ -189,6 +189,34 @@ public class CourtServicesServiceImpl {
         });
     }
 
+    public Result<Boolean> addPlayerToCurrentSession(AddPlayerRequest request) {
+        return serviceTemple.execute(new ProcessCallback<AddPlayerRequest, Boolean>() {
+            @Override
+            public AddPlayerRequest getRequest() {
+                return request;
+            }
+
+            @Override
+            public void preProcess(AddPlayerRequest req) {
+                Assert.notNull(req, "Request must not be null.");
+                Assert.isTrue(StringUtils.isNotBlank(req.getPlayerName()), "Player name must not be blank.");
+            }
+
+            @Override
+            public Boolean process() throws BusinessException {
+                return transactionTemplate.execute(new TransactionCallback<Boolean>() {
+                    @Override
+                    public Boolean doInTransaction(TransactionStatus status) {
+                        String name = request.getPlayerName()
+                                .replace(CommonConstant.DOUBLE_QUOTES, CommonConstant.EMPTY).trim();
+                        Float advanceAmount = request.getAdvanceAmount() != null ? request.getAdvanceAmount() : 0f;
+                        return transactionAddPlayerToCurrentSessionWithAdvance(name, advanceAmount);
+                    }
+                });
+            }
+        });
+    }
+
     public Result<Boolean> updateAvailablePlayer(AvaPlayerDTO avaPlayerDTO) {
         return serviceTemple.execute(new ProcessCallback<AvaPlayerDTO, Boolean>() {
             @Override
@@ -241,6 +269,10 @@ public class CourtServicesServiceImpl {
 
     // @Transactional(rollbackFor = {BusinessException.class, Exception.class})
     public Boolean transactionAddPlayerToCurrentSession(String name) {
+        return transactionAddPlayerToCurrentSessionWithAdvance(name, 0f);
+    }
+
+    public Boolean transactionAddPlayerToCurrentSessionWithAdvance(String name, Float advanceAmount) {
         // try {
         List<Player> listPlayer = userRepo.findAllByPlayerName(name);
 
@@ -270,7 +302,20 @@ public class CourtServicesServiceImpl {
             List<AvailablePlayer> availablePlayerList = avaPlayerRepo
                     .findAllBySessionAndPlayerAndLeaveTimeIsNull(currSession, player);
             Assert.isTrue(availablePlayerList.isEmpty(), "Available player has already been added.");
-            avaPlayerRepo.save(new AvailablePlayer(player, currSession));
+            AvailablePlayer newAvaPlayer = new AvailablePlayer(player, currSession);
+
+            // Handle advance payment
+            if (advanceAmount != null && advanceAmount > 0) {
+                newAvaPlayer.setAdvancePayment(advanceAmount);
+                // Add "Trả trước" as a negative-cost service line item
+                ServiceDTO advanceServiceDTO = new ServiceDTO();
+                advanceServiceDTO.setServiceName(com.badminton.constant.GameConstant.ADVANCE_PAYMENT_VN);
+                advanceServiceDTO.setCost(-advanceAmount);
+                newAvaPlayer.setServices(
+                        ServiceUtil.addServiceToJsonArray(newAvaPlayer.getCurrentServices(), advanceServiceDTO));
+            }
+
+            avaPlayerRepo.save(newAvaPlayer);
         }
         // } catch (IllegalArgumentException e) {
         // throw new BusinessException(ErrorCodeEnum.FLOW_ERROR, "");

@@ -753,6 +753,7 @@ public class ExcelExportService implements ExportService {
         return new ArrayList<>(availablePlayers.stream()
                 .flatMap(p -> ServiceUtil.convertStringToListService(p.getCurrentServices()).stream())
                 .filter(s -> !s.getServiceName().toLowerCase().contains(GameConstant.COST_IN_PERSON_VN.toLowerCase()))
+                .filter(s -> !s.getServiceName().toLowerCase().contains(GameConstant.ADVANCE_PAYMENT_VN.toLowerCase()))
                 .filter(s -> !(s.getServiceName().toLowerCase().contains(RentConstant.RENT_BY_TIME_STR.toLowerCase()) ||
                         s.getServiceName().toLowerCase().contains(RentConstant.RENT_BY_TIME_EN_STR.toLowerCase())))
                 .collect(Collectors.toMap(

@@ -13,8 +13,11 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelOutlinedIcon from "@mui/icons-material/CancelOutlined";
 import PersonOutlinedIcon from "@mui/icons-material/PersonOutlined";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
+import PaymentsOutlinedIcon from "@mui/icons-material/PaymentsOutlined";
 import { TYPE } from "../HomePage";
 import { VN_CURRENCY, formatVND } from "../MoneyUtils";
+
+const ADVANCE_SERVICE_NAME = "Tr\u1ea3 tr\u01b0\u1edbc";
 
 const PayConfirm = ({ show, data, onConfirm, onExit }) => {
   if (!show || !data) return null;
@@ -29,7 +32,18 @@ const PayConfirm = ({ show, data, onConfirm, onExit }) => {
   );
   const actionLabel = isPayment ? "Xác nhận thanh toán" : "Xác nhận huỷ";
 
-  const services = data.services || [];
+  const allServices = data.services || [];
+  // Separate advance (Trả trước) from regular services
+  const advanceItem = allServices.find(
+    (s) => s.serviceName === ADVANCE_SERVICE_NAME
+  );
+  const regularServices = allServices.filter(
+    (s) => s.serviceName !== ADVANCE_SERVICE_NAME
+  );
+  const advanceAmount = advanceItem ? Math.abs(advanceItem.cost || 0) : 0;
+  const netTotal = data.expense;
+
+  const services = regularServices;
 
   return (
     <Dialog
@@ -150,6 +164,32 @@ const PayConfirm = ({ show, data, onConfirm, onExit }) => {
 
       <Divider />
 
+      {/* ── Advance deduction (if any) ── */}
+      {advanceAmount > 0 && (
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            px: 3,
+            py: 1,
+            bgcolor: "info.light",
+            borderBottom: 1,
+            borderColor: "divider",
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+            <PaymentsOutlinedIcon fontSize="small" color="info.dark" />
+            <Typography variant="body2" color="info.dark" fontWeight={600}>
+              Đã trả trước
+            </Typography>
+          </Box>
+          <Typography variant="body2" color="info.dark" fontWeight={700}>
+            −{formatVND(advanceAmount)} {VN_CURRENCY}
+          </Typography>
+        </Box>
+      )}
+
       {/* ── Total line ── */}
       <Box
         sx={{
@@ -165,7 +205,7 @@ const PayConfirm = ({ show, data, onConfirm, onExit }) => {
           Tổng cộng
         </Typography>
         <Typography variant="subtitle1" fontWeight={700} color={headerColor}>
-          {formatVND(data.expense)} {VN_CURRENCY}
+          {formatVND(netTotal)} {VN_CURRENCY}
         </Typography>
       </Box>
 
