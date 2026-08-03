@@ -24,9 +24,10 @@ import CancelConfirm from "./dialog/CancelConfirm";
 import PayConfirm from "./dialog/PayConfirm";
 import AdvancePaymentDialog from "./dialog/AdvancePaymentDialog";
 import RentByTimeDialog from "./dialog/RentByTimeDialog";
-import { VN_CURRENCY, formatVND, rawNumber } from "./MoneyUtils";
+import RentFinishConfirm from "./dialog/RentFinishConfirm";
+import { VN_CURRENCY, formatVND } from "./MoneyUtils";
 
-const COST_IN_PERSON = "costInPerson";
+const RENT_BY_TIME_PREFIX = "Thuê theo giờ "
 const VN_COST_IN_PERSON = "Tiền sân";
 export const TYPE = {
   PAY: "PAY",
@@ -34,21 +35,12 @@ export const TYPE = {
 };
 /* HomePage */
 function HomePage() {
-  const [courtIds, setCourtIds] = useState([]);
   const [activeCourts, setActiveCourts] = useState([]);
 
   const [activeTab, setActiveTab] = useState(0);
   const COURTS_PER_TAB = 8;
 
   const courtNumber = (court) => parseInt(court.courtName.replace("Sân ", ""), 10);
-
-  const rightColumn = useMemo(() => {
-    const half = Math.ceil(activeCourts.length / 2);
-    return activeCourts
-      .filter((c) => courtNumber(c) <= half)
-      .sort((a, b) => courtNumber(a) - courtNumber(b))
-      .map((c) => ({ courtId: c.courtId, courtName: c.courtName }));
-  }, [activeCourts]);
 
   const tabCourts = useMemo(() => {
     const start = activeTab * COURTS_PER_TAB;
@@ -72,14 +64,6 @@ function HomePage() {
   }, [tabCourts]);
 
   const totalTabs = Math.max(1, Math.ceil(activeCourts.length / COURTS_PER_TAB));
-
-  const leftColumn = useMemo(() => {
-    const half = Math.ceil(activeCourts.length / 2);
-    return activeCourts
-      .filter((c) => courtNumber(c) > half)
-      .sort((a, b) => courtNumber(a) - courtNumber(b))
-      .map((c) => ({ courtId: c.courtId, courtName: c.courtName }));
-  }, [activeCourts]);
 
   const [courts, setCourts] = useState({});
 
@@ -114,6 +98,8 @@ function HomePage() {
   const [rentInitialData, setRentInitialData] = useState(null);
   const [rentPlayerName, setRentPlayerName] = useState("");
   const [rentalInfoMap, setRentalInfoMap] = useState({}); // courtId -> rental info
+  const [showFinishConfirm, setShowFinishConfirm] = useState(false);
+  const [finishRentCourtId, setFinishRentCourtId] = useState(null);
 
   const responseSuccess = (response) => {
     return response != null && response.status === 200 && response.data != null;
@@ -304,8 +290,8 @@ function HomePage() {
   // ── Rent by time handlers ──────────────────────────────────────────────
   const handleRentByTime = (courtId) => {
     const court = activeCourts.find((c) => c.courtId === courtId);
-    const courtNum = court ? parseInt(court.courtName.replace("Sân ", ""), 10) : null;
-    const autoPlayer = courtNum ? `Người chơi ${courtNum}` : "";
+
+    const autoPlayer = findPlayerNameFromCourt(courtId);
     setRentCourtId(courtId);
     setRentCourtName(court?.courtName || courtId);
     setRentEditMode(false);
@@ -316,13 +302,16 @@ function HomePage() {
 
   const handleRentConfirm = async (rentData) => {
     try {
+      const areaKey = findPlayerNameFromCourt(rentCourtId);
       const res = await api.post("/court-mana/applyRentByTime", {
         courtId: rentCourtId,
-        playerName: rentData.playerName || "Thuê theo giờ",
+        playerName: rentData.playerName,
+        courtArea: areaKey,
         numTime: rentData.numTime || 1,
         shuttleBalls: rentData.shuttleBalls || [],
         startTime: rentData.startTime,
         endTime: rentData.endTime,
+        costPerHour: rentData.fee
       });
       if (responseSuccess(res)) {
         setShowRentDialog(false);
@@ -337,25 +326,54 @@ function HomePage() {
       alert("Có lỗi khi thuê sân theo giờ. Vui lòng thử lại!");
     }
   };
+  // drop player back to available players area
+  const removePlayerFromCourt = (rentResponse) => {
+    const court = courts[rentResponse.courtId];
+    const area = Object.keys(court).find((key) => court[key] != null);
 
-  const handleFinishRent = async (courtId) => {
-    const rental = rentalInfoMap[courtId];
+    removePlayerFromCourtApi(rentResponse.playerName, rentCourtId, area);
+  }
+
+  // Step 1: Button click just opens the confirm dialog
+  const handleFinishRent = (courtId) => {
+    setFinishRentCourtId(courtId);
+    setShowFinishConfirm(true);
+  };
+
+  // Step 2: Actual API call happens after user confirms in the dialog
+  const handleConfirmFinishRent = async ({ courtFee, shuttleList }) => {
+    const rental = rentalInfoMap[finishRentCourtId];
     if (!rental) return;
     try {
-      const res = await api.post(`/court-mana/payRentByTime?rentId=${rental.id}&customFee=0`);
+      const res = await api.post(
+        `/court-mana/payRentByTime?rentId=${rental.id}`
+        // ,
+        // {
+        //   courtFee,
+        //   shuttleBalls: shuttleList,
+        // }
+      );
       if (responseSuccess(res)) {
         setRentalInfoMap((prev) => {
           const next = { ...prev };
-          delete next[courtId];
+          delete next[finishRentCourtId];
           return next;
         });
+        removePlayerFromCourt(res.data);
+        setServiceToPlayer(res.data.playerName, RENT_BY_TIME_PREFIX+res.data.courtName ,res.data.fee, formatVND(res.data.fee));
       }
     } catch (error) {
       console.error("Error finishing rent:", error);
       alert("Có lỗi khi kết thúc thuê sân. Vui lòng thử lại!");
+    } finally {
+      setShowFinishConfirm(false);
+      setFinishRentCourtId(null);
     }
   };
-
+  const handleExitFinishConfirm = () => {
+    setShowFinishConfirm(false);
+    setFinishRentCourtId(null);
+  };
   const handleCancelRent = async (courtId) => {
     const rental = rentalInfoMap[courtId];
     if (!rental) return;
@@ -368,6 +386,7 @@ function HomePage() {
           delete next[courtId];
           return next;
         });
+        removePlayerFromCourt(res.data);
       }
     } catch (error) {
       console.error("Error cancelling rent:", error);
@@ -642,12 +661,9 @@ function HomePage() {
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [showDialog, setShowDialog] = useState(false);
 
-  const handleDropService = (playerName, serviceName, cost, costFormat) => {
+  // set a service to player, no api call
+  const setServiceToPlayer= (playerName, serviceName, cost, costFormat) => {
     if (!playerName) return;
-    // add to db
-    saveServiceToPlayer(playerName, serviceName, cost, costFormat);
-
-    // player: Array[Services]
     setPlayerServiceMap((prev) => {
       const existing = prev[playerName] || [];
       // if (existing.includes(serviceName)) return prev;
@@ -663,6 +679,14 @@ function HomePage() {
         ],
       };
     });
+  }
+
+  const handleDropService = (playerName, serviceName, cost, costFormat) => {
+    // add to db
+    saveServiceToPlayer(playerName, serviceName, cost, costFormat);
+
+    // player: Array[Services]
+    setServiceToPlayer(playerName, serviceName, cost, costFormat);
   };
 
   // Handle clicking on player
@@ -681,6 +705,7 @@ function HomePage() {
     setShowDialog(true);
   };
   const saveServiceToPlayer = async (playerName, serviceName, cost) => {
+    if (!playerName) return;
     return await api.post(`/court-mana/addServiceToPlayer?playerName=${playerName}`, {
       serviceName: serviceName,
       cost: cost,
@@ -697,7 +722,6 @@ function HomePage() {
           const courts = courtRes.data;
           setActiveCourts(courts);
           const ids = courts.map((c) => c.courtId);
-          setCourtIds(ids);
           setCourts(
             ids.reduce((acc, id) => ({ ...acc, [id]: { A: null, B: null, C: null, D: null } }), {})
           );
@@ -805,6 +829,9 @@ function HomePage() {
             });
           }
           console.info(`Courts:${courts}`);
+          // court rent
+          const courtRents = resCourtMana.data.courtRents;
+          // loop and lock the court that has rentStatus is STARTED.
 
           const resAvaPlayers = resCourtMana.data.availablePlayerDTOs;
           if (resAvaPlayers !== "") {
@@ -910,6 +937,15 @@ function HomePage() {
     setShowPayConfirmDialog(false);
     setShowDialog(false);
     setAvailablePlayers((prev) => prev.filter((p) => p !== data.playerName));
+  };
+
+  // find player name from court
+  const findPlayerNameFromCourt = (courtId) => {
+    const court = courts[courtId];
+    if (court) {
+      return Object.values(court).find((areaKey) => areaKey !== null);
+    }
+    return null;
   };
 
   return (
@@ -1146,6 +1182,12 @@ function HomePage() {
             hourlyRate={rentByTime || 100000}
             onConfirm={handleRentConfirm}
             onExit={() => setShowRentDialog(false)}
+          />
+          <RentFinishConfirm
+            show={showFinishConfirm}
+            rental={rentalInfoMap[finishRentCourtId]}
+            onConfirm={handleConfirmFinishRent}
+            onExit={handleExitFinishConfirm}
           />
         </Box>
       </Box>

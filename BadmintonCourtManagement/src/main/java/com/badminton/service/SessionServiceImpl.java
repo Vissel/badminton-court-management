@@ -45,7 +45,7 @@ public class SessionServiceImpl {
     private SessionRepository sessionRepo;
 
     @Autowired
-    private ServiceTemple serviceTemple;
+    private ServiceTemplate serviceTemple;
 
     @Autowired
     private GameService gameService;

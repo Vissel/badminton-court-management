@@ -12,6 +12,7 @@ import com.badminton.model.dto.ServiceDTO;
 import com.badminton.model.dto.ShuttleBallDTO;
 import com.badminton.repository.*;
 import com.badminton.requestmodel.*;
+import com.badminton.response.CourtManagementResponse;
 import com.badminton.response.ServiceResponse;
 import com.badminton.response.result.Result;
 import com.badminton.service.calculator.GameExpenseCalculator;
@@ -31,7 +32,7 @@ import java.util.stream.Collectors;
 
 @org.springframework.stereotype.Service
 @Slf4j
-public class CourtServicesServiceImpl {
+public class CourtServicesService {
 
     private final BadmintonCourtManagementApplication badmintonCourtManagementApplication;
 
@@ -49,7 +50,7 @@ public class CourtServicesServiceImpl {
     private UserRepository userRepo;
 
     @Autowired
-    private ServiceTemple serviceTemple;
+    private ServiceTemplate serviceTemple;
     @Autowired
     TransactionTemplate transactionTemplate;
 
@@ -68,7 +69,7 @@ public class CourtServicesServiceImpl {
     private static final Long NULL_OF_LONG = -1L;
     private static final int FIRST = 0;
 
-    CourtServicesServiceImpl(BadmintonCourtManagementApplication badmintonCourtManagementApplication) {
+    CourtServicesService(BadmintonCourtManagementApplication badmintonCourtManagementApplication) {
         this.badmintonCourtManagementApplication = badmintonCourtManagementApplication;
     }
 
@@ -105,9 +106,9 @@ public class CourtServicesServiceImpl {
      * @return CourtManagement DTO include Game, Court, AvailablePlayer
      */
     @Transactional
-    public CourtManagementDTO getCourtManagement() {
+    public CourtManagementResponse getCourtManagement() {
         log.info("Service getCourtManagement {}", CommonConstant.START);
-        CourtManagementDTO res = new CourtManagementDTO();
+        CourtManagementResponse res = new CourtManagementResponse();
         Set<Long> playerExcludes = initExcludeSet();
         Set<Integer> courtExcludes = initExcludeSet();
         try {

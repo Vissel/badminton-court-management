@@ -115,7 +115,7 @@ const RentByTimeDialog = ({
             setEndH(et.h); setEndM(et.m);
             setDurH(dur.h); setDurM(dur.m);
             setFee(minutesToFee(totalMin, hourlyRate));
-            setLocalPlayerName(initialData.playerName || "");
+            setLocalPlayerName(playerName || "");
             setAddedShuttles(
                 (initialData.shuttleBalls || []).map((b) => ({
                     shuttleName: b.shuttleName,
@@ -218,7 +218,7 @@ const RentByTimeDialog = ({
             courtId,
             courtName,
             playerName: localPlayerName,
-            numTime,
+            numTime: numTime,
             startTime: toISO(startH, startM),
             endTime: endToISO(startH, startM, endH, endM),
             fee,

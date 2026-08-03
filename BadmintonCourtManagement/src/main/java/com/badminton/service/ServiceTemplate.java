@@ -10,7 +10,7 @@ import org.springframework.stereotype.Service;
 
 @Slf4j
 @Service
-public class ServiceTemple {
+public class ServiceTemplate {
     public <R, T> Result<T> execute(ProcessCallback<R, T> callback) {
         Result<T> result = new Result<>();
         String errorMess = null;
