@@ -9,15 +9,15 @@ import Divider from "@mui/material/Divider";
 import List from "@mui/material/List";
 import ListItem from "@mui/material/ListItem";
 import ListItemText from "@mui/material/ListItemText";
+import Chip from "@mui/material/Chip";
+import Stack from "@mui/material/Stack";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelOutlinedIcon from "@mui/icons-material/CancelOutlined";
 import PersonOutlinedIcon from "@mui/icons-material/PersonOutlined";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
-import PaymentsOutlinedIcon from "@mui/icons-material/PaymentsOutlined";
-import { TYPE } from "../HomePage";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import { TYPE, ADVANCE_SERVICE_NAME } from "../HomePage";
 import { VN_CURRENCY, formatVND } from "../MoneyUtils";
-
-const ADVANCE_SERVICE_NAME = "Tr\u1ea3 tr\u01b0\u1edbc";
 
 const PayConfirm = ({ show, data, onConfirm, onExit }) => {
   if (!show || !data) return null;
@@ -41,9 +41,21 @@ const PayConfirm = ({ show, data, onConfirm, onExit }) => {
     (s) => s.serviceName !== ADVANCE_SERVICE_NAME
   );
   const advanceAmount = advanceItem ? Math.abs(advanceItem.cost || 0) : 0;
-  const netTotal = data.expense;
-
-  const services = regularServices;
+  
+  // Calculate total of regular services
+  const regularTotal = regularServices.reduce((sum, item) => sum + (item.cost || 0), 0);
+  
+  // Calculate remaining amount to pay (can be negative if advance > total)
+  const remainingAmount = regularTotal - advanceAmount;
+  
+  // Amount to pay now (0 if remaining is negative, otherwise show remaining)
+  const amountToPay = remainingAmount > 0 ? remainingAmount : 0;
+  
+  // Total cost (this is what the player has to pay in total)
+  const totalCost = regularTotal;
+  
+  // Amount to return to customer (if advance > total)
+  const returnAmount = advanceAmount > regularTotal ? advanceAmount - regularTotal : 0;
 
   return (
     <Dialog
@@ -100,7 +112,7 @@ const PayConfirm = ({ show, data, onConfirm, onExit }) => {
           color={headerColor}
           sx={{ mt: 0.5, lineHeight: 1.2 }}
         >
-          {formatVND(data.expense)}{" "}
+          {formatVND(amountToPay)}{" "}
           <Typography
             component="span"
             variant="h6"
@@ -128,7 +140,7 @@ const PayConfirm = ({ show, data, onConfirm, onExit }) => {
         </Box>
 
         {/* Service breakdown */}
-        {services.length > 0 && (
+        {regularServices.length > 0 && (
           <>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
               <ReceiptLongIcon fontSize="small" color="action" />
@@ -137,8 +149,17 @@ const PayConfirm = ({ show, data, onConfirm, onExit }) => {
               </Typography>
             </Box>
             <List dense disablePadding sx={{ pl: 4 }}>
-              {services.map((svc, idx) => (
-                <ListItem key={idx} disableGutters disablePadding sx={{ py: 0.3 }}>
+              {regularServices.map((svc, idx) => (
+                <ListItem 
+                  key={idx} 
+                  disableGutters 
+                  disablePadding 
+                  sx={{ 
+                    py: 0.5,
+                    borderBottom: 1,
+                    borderColor: "divider",
+                  }}
+                >
                   <ListItemText
                     primary={
                       <Box
@@ -160,35 +181,57 @@ const PayConfirm = ({ show, data, onConfirm, onExit }) => {
             </List>
           </>
         )}
+
+        {/* Advance service display (aligned with ServiceDialog) */}
+        {advanceItem && (
+          <List dense disablePadding sx={{ pl: 4, mt: 1 }}>
+            <ListItem 
+              disableGutters 
+              disablePadding 
+              sx={{ 
+                py: 1,
+                pl: 2,
+                borderLeft: 4,
+                borderLeftColor: "success.main",
+                bgcolor: "success.50",
+                borderBottom: 1,
+                borderColor: "divider",
+              }}
+            >
+              <ListItemText
+                primary={
+                  <Stack direction="row" alignItems="center" spacing={1}>
+                    <Chip 
+                      label="Đã trả" 
+                      size="small" 
+                      color="success" 
+                      variant="outlined" 
+                      sx={{ fontSize: "0.65rem", height: 20, fontWeight: 500 }}
+                    />
+                    <Typography variant="body2" fontWeight={600}>
+                      {ADVANCE_SERVICE_NAME}
+                    </Typography>
+                  </Stack>
+                }
+                secondary={
+                  <Typography 
+                    variant="body2" 
+                    sx={{ 
+                      color: "success.dark",
+                      fontWeight: 600,
+                      mt: 0.5
+                    }}
+                  >
+                    {formatVND(advanceAmount)} {VN_CURRENCY}
+                  </Typography>
+                }
+              />
+            </ListItem>
+          </List>
+        )}
       </DialogContent>
 
       <Divider />
-
-      {/* ── Advance deduction (if any) ── */}
-      {advanceAmount > 0 && (
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            px: 3,
-            py: 1,
-            bgcolor: "info.light",
-            borderBottom: 1,
-            borderColor: "divider",
-          }}
-        >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
-            <PaymentsOutlinedIcon fontSize="small" color="info.dark" />
-            <Typography variant="body2" color="info.dark" fontWeight={600}>
-              Đã trả trước
-            </Typography>
-          </Box>
-          <Typography variant="body2" color="info.dark" fontWeight={700}>
-            −{formatVND(advanceAmount)} {VN_CURRENCY}
-          </Typography>
-        </Box>
-      )}
 
       {/* ── Total line ── */}
       <Box
@@ -205,9 +248,35 @@ const PayConfirm = ({ show, data, onConfirm, onExit }) => {
           Tổng cộng
         </Typography>
         <Typography variant="subtitle1" fontWeight={700} color={headerColor}>
-          {formatVND(netTotal)} {VN_CURRENCY}
+          {formatVND(totalCost)} {VN_CURRENCY}
         </Typography>
       </Box>
+
+      {/* ── Return amount line (if advance > total) ── */}
+      {returnAmount > 0 && (
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            px: 3,
+            py: 1.5,
+            bgcolor: "warning.light",
+            borderTop: 1,
+            borderColor: "divider",
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+            <ArrowBackIcon fontSize="small" color="warning.dark" />
+            <Typography variant="body2" color="warning.dark" fontWeight={600}>
+              Tiền trả lại
+            </Typography>
+          </Box>
+          <Typography variant="body2" color="warning.dark" fontWeight={700}>
+            {formatVND(returnAmount)} {VN_CURRENCY}
+          </Typography>
+        </Box>
+      )}
 
       {/* ── Actions ── */}
       <DialogActions sx={{ px: 3, pb: 2.5, pt: 1.5, gap: 1.5 }}>
@@ -229,7 +298,12 @@ const PayConfirm = ({ show, data, onConfirm, onExit }) => {
         <Button
           variant="contained"
           color={isPayment ? "success" : "error"}
-          onClick={() => onConfirm(data)}
+          onClick={() => onConfirm({
+            ...data,
+            returnAmount: returnAmount,
+            amountToPay: amountToPay,
+            totalCost: totalCost
+          })}
           fullWidth
           size="large"
           disableElevation

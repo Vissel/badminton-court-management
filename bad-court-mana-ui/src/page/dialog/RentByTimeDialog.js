@@ -223,6 +223,7 @@ const RentByTimeDialog = ({
             endTime: endToISO(startH, startM, endH, endM),
             fee,
             shuttleBalls: ballList,
+            editMode,
         });
     };
 

@@ -33,6 +33,7 @@ export const TYPE = {
   PAY: "PAY",
   CANCEL: "CANCEL",
 };
+export const ADVANCE_SERVICE_NAME = "Trả trước";
 /* HomePage */
 function HomePage() {
   const [activeCourts, setActiveCourts] = useState([]);
@@ -256,9 +257,9 @@ function HomePage() {
             [playerName]: [
               ...existing,
               {
-                serviceName: "Trả trước",
-                cost: -advanceAmount,
-                costFormat: formatVND(-advanceAmount),
+                serviceName: ADVANCE_SERVICE_NAME,
+                cost: advanceAmount,
+                costFormat: formatVND(advanceAmount),
               },
             ],
           };
@@ -303,16 +304,35 @@ function HomePage() {
   const handleRentConfirm = async (rentData) => {
     try {
       const areaKey = findPlayerNameFromCourt(rentCourtId);
-      const res = await api.post("/court-mana/applyRentByTime", {
-        courtId: rentCourtId,
-        playerName: rentData.playerName,
-        courtArea: areaKey,
-        numTime: rentData.numTime || 1,
-        shuttleBalls: rentData.shuttleBalls || [],
-        startTime: rentData.startTime,
-        endTime: rentData.endTime,
-        costPerHour: rentData.fee
-      });
+      let res;
+
+      if (rentData.editMode) {
+        // Update existing rental
+        const rental = rentalInfoMap[rentCourtId];
+        res = await api.post(`/court-mana/updateRentByTime?rentId=${rental.id}`, {
+          courtId: rentCourtId,
+          playerName: rentData.playerName,
+          courtArea: areaKey,
+          numTime: rentData.numTime || 1,
+          shuttleBalls: rentData.shuttleBalls || [],
+          startTime: rentData.startTime,
+          endTime: rentData.endTime,
+          costPerHour: rentData.fee
+        });
+      } else {
+        // Create new rental
+        res = await api.post("/court-mana/applyRentByTime", {
+          courtId: rentCourtId,
+          playerName: rentData.playerName,
+          courtArea: areaKey,
+          numTime: rentData.numTime || 1,
+          shuttleBalls: rentData.shuttleBalls || [],
+          startTime: rentData.startTime,
+          endTime: rentData.endTime,
+          costPerHour: rentData.fee
+        });
+      }
+
       if (responseSuccess(res)) {
         setShowRentDialog(false);
         // Update rental info for this court
@@ -794,7 +814,19 @@ function HomePage() {
         const resCourtMana = await api.get(`/court-mana/getCourtManagement`);
         if (resCourtMana.status === 200 && resCourtMana.data !== "") {
           const resGames = resCourtMana.data.gameDTOs;
-          // const resCourts = resCourtMana.data.remainCourts;
+          
+          // set rental info map
+          setRentalInfoMap((prev) => {
+            const currInfo = { ...prev };
+            if (resCourtMana.data.rentByTimeResponses) {
+              resCourtMana.data.rentByTimeResponses.forEach((rental) => {
+                const id = parseInt(rental.courtId);
+                currInfo[id] = rental;
+              });
+            }
+            return currInfo;
+          });
+
           if (resGames !== "") {
             setCourts((prev) => {
               const currCourts = { ...prev };
@@ -829,9 +861,6 @@ function HomePage() {
             });
           }
           console.info(`Courts:${courts}`);
-          // court rent
-          const courtRents = resCourtMana.data.courtRents;
-          // loop and lock the court that has rentStatus is STARTED.
 
           const resAvaPlayers = resCourtMana.data.availablePlayerDTOs;
           if (resAvaPlayers !== "") {
@@ -839,16 +868,6 @@ function HomePage() {
 
             resAvaPlayers.forEach((player) => {
               const playerServiceList = player.serviceResponses;
-              //  player.serviceDTOs.map((service) => {
-              //   let serviceString = service;
-              //   if (service.includes(COST_IN_PERSON)) {
-              //     serviceString = service.replace(
-              //       COST_IN_PERSON,
-              //       VN_COST_IN_PERSON
-              //     );
-              //   }
-              //   return convertStringToService(serviceString);
-              // });
 
               setPlayerServiceMap((prevMap) => {
                 return {
@@ -861,11 +880,6 @@ function HomePage() {
         } else {
           console.error(`Cannot get court management data.`);
         }
-        // fetch available players in current session
-        // const avaPlayers = await api.get("/court-mana/getAvailablePlayers");
-        // if (avaPlayers.status === 200) {
-        //   setAvailablePlayers(avaPlayers.data.map((p) => p.playerName));
-        // }
       } catch (error) {
         console.error(
           `Error while checking available session. Error: ${error}`
@@ -924,14 +938,25 @@ function HomePage() {
   const handlePayment = (data) => {
     console.log(`handle: ${data.title}`);
 
+    // Calculate total expense of services (excluding advance service)
+    const servicesWithoutAdvance = data.services.filter(s => s.serviceName !== ADVANCE_SERVICE_NAME);
+    const totalExpense = servicesWithoutAdvance.reduce((sum, item) => sum + (item.cost || 0), 0);
+
+    // Subtract advance payment from total expense
+    const advanceService = data.services.find(s => s.serviceName === ADVANCE_SERVICE_NAME);
+    const advanceAmount = advanceService ? advanceService.cost : 0;
+    const amountToPay = totalExpense - advanceAmount;
+
+    // Calculate return amount if advance > total
+    const returnAmount = advanceAmount > totalExpense ? advanceAmount - totalExpense : 0;
+
     // send api pay
-
-    // send api cancel.
-
     api.post(`/api/v1/pay/payToPlayer`, {
       playerName: data.playerName,
       serviceRequests: data.services,
-      totalExpense: data.expense,
+      totalExpense: totalExpense, // Total cost of services
+      amountToPay: amountToPay > 0 ? amountToPay : 0, // Amount to pay now (0 if advance covers cost)
+      returnAmount: returnAmount > 0 ? returnAmount : 0, // Amount to return to customer
       payType: data.type,
     });
     setShowPayConfirmDialog(false);
