@@ -36,6 +36,7 @@ public class AvailablePlayer {
 
     private String payType;
 
+    @Column(name = "advance_payment", nullable = true)
     private Float advancePayment;
 
     public AvailablePlayer(Player p) {

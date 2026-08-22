@@ -8,6 +8,7 @@ import com.badminton.response.RentByTimeResponse;
 import com.badminton.response.ServiceResponse;
 import com.badminton.response.result.Result;
 import com.badminton.response.result.ShuttleBallResponse;
+import com.badminton.service.CourtManagementInterface;
 import com.badminton.service.CourtServicesService;
 import com.badminton.service.RentByTimeService;
 import com.badminton.service.ShuttleBallServiceImpl;
@@ -32,6 +33,8 @@ public class CourtManagementController {
     private ShuttleBallServiceImpl ballService;
     @Autowired
     private CourtServicesService courtService;
+    @Autowired
+    CourtManagementInterface courtManagementInterface;
     @Autowired
     private RentByTimeService rentByTimeService;
 
@@ -87,7 +90,7 @@ public class CourtManagementController {
     public ResponseEntity<CourtManagementResponse> getCourtManagement() {
         log.info("Received GET /getCourtManagement request");
 
-        CourtManagementResponse courtManaDTO = courtService.getCourtManagement();
+        CourtManagementResponse courtManaDTO = courtManagementInterface.getCourtManagement();
 
         // Error cases are not handled
         return ResponseEntity.ok().body(courtManaDTO);
@@ -158,7 +161,8 @@ public class CourtManagementController {
      * Req5 - Change game state: Started, Finish, Cancel
      */
     @PostMapping(value = "/changeGameState")
-    public ResponseEntity<Boolean> changeGameState(@RequestBody GameDTO gameDTO) {
+    public ResponseEntity<Boolean>
+    changeGameState(@RequestBody GameDTO gameDTO) {
         if (gameDTO != null && StringUtils.isNoneBlank(gameDTO.getGameState(), gameDTO.getCourt().getCourtId())) {
             Boolean res = courtService.changeGameState(gameDTO);
             // Error cases are not handled

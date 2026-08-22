@@ -22,7 +22,7 @@ public class CourtManagementResponse extends ResponseDTO {
     private List<GameDTO> gameDTOs;
     private List<AvaPlayerDTO> availablePlayerDTOs;
     private List<CourtDTO> remainCourtDTOs;
-    private List<CourtRentResponse> courtRents;
+    private List<RentByTimeResponse> rentByTimeResponses;
 
     public CourtManagementResponse() {
         this.gameDTOs = new ArrayList<>();
@@ -41,4 +41,5 @@ public class CourtManagementResponse extends ResponseDTO {
     public void convertToRemainCourtDTOs(List<Court> listOfCourt) {
         this.remainCourtDTOs = listOfCourt.stream().map(c -> new CourtDTO(c)).collect(Collectors.toList());
     }
+
 }

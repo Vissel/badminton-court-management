@@ -3,6 +3,7 @@ package com.badminton.service;
 import com.badminton.BadmintonCourtManagementApplication;
 import com.badminton.constant.CommonConstant;
 import com.badminton.constant.GameState;
+import com.badminton.constant.GameType;
 import com.badminton.entity.*;
 import com.badminton.exception.BusinessException;
 import com.badminton.exception.ElementNotExistException;
@@ -311,7 +312,7 @@ public class CourtServicesService {
                 // Add "Trả trước" as a negative-cost service line item
                 ServiceDTO advanceServiceDTO = new ServiceDTO();
                 advanceServiceDTO.setServiceName(com.badminton.constant.GameConstant.ADVANCE_PAYMENT_VN);
-                advanceServiceDTO.setCost(-advanceAmount);
+                advanceServiceDTO.setCost(advanceAmount);
                 newAvaPlayer.setServices(
                         ServiceUtil.addServiceToJsonArray(newAvaPlayer.getCurrentServices(), advanceServiceDTO));
             }
@@ -509,11 +510,18 @@ public class CourtServicesService {
             GameState changeGameState = GameState.getGameState(stateChange);
             if (currentGameState != null && changeGameState != null) {
                 boolean validGameState = ServiceUtil.validGameStateUpdate(currentGameState, changeGameState);
-                boolean isStartGame = readyToStart(changeGameState, game.getTeamOne(), game.getTeamTwo());
+                boolean isStartGame = gameDTO.getGameType() == null
+                        ? readyToStart(changeGameState, game.getTeamOne(), game.getTeamTwo())
+                        : true;
                 // update
                 if (validGameState && isStartGame) {
                     game.setState(stateChange);
                     setSelectedBallIntoGame(game, gameDTO.getShuttleBalls(), stateChange);
+                    if (gameDTO.getGameType() != null) {
+                        game.setGtype(GameType.getGameTypeString(gameDTO.getGameType()));
+
+                    }
+
                     // update ended time for FINISH & CANCEL state
                     if (ServiceUtil.isEndedState(changeGameState)) {
                         game.setEndedDate(session.getUTCPlus7Instant());

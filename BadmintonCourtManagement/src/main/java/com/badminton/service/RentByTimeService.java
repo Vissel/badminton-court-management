@@ -11,8 +11,11 @@ import com.badminton.model.dto.RentShuttleDTO;
 import com.badminton.model.dto.ServiceDTO;
 import com.badminton.model.dto.ShuttleBallDTO;
 import com.badminton.repository.*;
+import com.badminton.requestmodel.CourtDTO;
+import com.badminton.requestmodel.GameDTO;
 import com.badminton.requestmodel.RentByTimeRequest;
 import com.badminton.response.RentByTimeResponse;
+import com.badminton.time.model.SessionScope;
 import com.badminton.util.ServiceUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,6 +28,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -71,11 +75,11 @@ public class RentByTimeService {
             throw new IllegalArgumentException("Player not found in active session");
         }
 
-        gameRepo.findByCourtIdAndEndedDateIsNull(court.getCourtId())
-                .ifPresent(g -> {
-                    throw new IllegalArgumentException("Court already has an active game");
-                });
-        rentByTimeRepo.findByCourtCourtIdAndState(court.getCourtId(), RentState.STARTED.name())
+        if (!gameRepo.findByCourtIdAndEndedDateIsNullAndGameStateNotStart(court.getCourtId(), GameState.NOT_START.getValue()).isPresent()) {
+            throw new IllegalArgumentException("Game has NOT available");
+        }
+
+        getActiveRentByTimeForCourt(court.getCourtId())
                 .ifPresent(r -> {
                     throw new IllegalArgumentException("Court already has an active rental");
                 });
@@ -87,8 +91,11 @@ public class RentByTimeService {
 
         String shuttlesJson = buildShuttlesJson(request.getShuttleBalls());
 
-        RentByTime rental = new RentByTime(player, court, startTime, endTime, numTime, shuttlesJson, RentState.STARTED.name());
+        RentByTime rental = new RentByTime(player, court, startTime, endTime, numTime, shuttlesJson,
+                RentState.STARTED.name());
         rentByTimeRepo.save(rental);
+        GameDTO gameDTO = buildGameDTO(request);
+        courtService.changeGameState(gameDTO);
 
         // Add service to player
         BigDecimal hourlyRate = getHourlyRate();
@@ -98,10 +105,17 @@ public class RentByTimeService {
         serviceDTO.setServiceName(serviceName);
         serviceDTO.setCost(cost.floatValue());
 
-        // player.setServices(ServiceUtil.addServiceToJsonArray(player.getCurrentServices(), serviceDTO));
+        // player.setServices(ServiceUtil.addServiceToJsonArray(player.getCurrentServices(),
+        // serviceDTO));
         avaPlayerRepo.save(player);
 
         return toResponse(rental);
+    }
+
+    private GameDTO buildGameDTO(RentByTimeRequest request) {
+        CourtDTO courtDTO = new CourtDTO();
+        courtDTO.setCourtId(request.getCourtId());
+        return new GameDTO(request.getPlayerName(), courtDTO, request.getShuttleBalls(), "Rent", null, "Start");
     }
 
     @Transactional
@@ -122,10 +136,10 @@ public class RentByTimeService {
 
         List<ServiceDTO> services = ServiceUtil.convertStringToListService(player.getCurrentServices());
         // for (ServiceDTO s : services) {
-        //     if (s.getServiceName().equals(serviceName)) {
-        //         s.setCost(totalCost.floatValue());
-        //         break;
-        //     }
+        // if (s.getServiceName().equals(serviceName)) {
+        // s.setCost(totalCost.floatValue());
+        // break;
+        // }
         // }
         services.add(new ServiceDTO(serviceName, totalCost.floatValue()));
         player.setServices(ServiceUtil.buildJsonArrayStr(services));
@@ -222,8 +236,23 @@ public class RentByTimeService {
         return toResponse(rental);
     }
 
+    /**
+     * Get all RentByTime by courtIds within session scope time range
+     *
+     * @param courtIds
+     * @return
+     */
+    public List<RentByTimeResponse> getRentsBySessionScopeAndCourtIds(Set<Integer> courtIds) {
+        SessionScope sessionScope = sessionService.getSessionScope();
+        return rentByTimeRepo.findByCourtCourtIdInAndStartTimeAfterAndEndTimeBefore(
+                courtIds,
+                sessionScope.getStart(),
+                sessionScope.getEnd()
+        ).stream().map(this::toResponse).collect(Collectors.toList());
+    }
+
     public Optional<RentByTimeResponse> getActiveRentByTimeForCourt(int courtId) {
-        return rentByTimeRepo.findByCourtCourtIdAndState(courtId, RentState.STARTED.name()).map(this::toResponse);
+        return rentByTimeRepo.findByCourtCourtIdAndStateAndEndTimeIsNull(courtId, RentState.STARTED.name()).map(this::toResponse);
     }
 
     public Instant getCurrentDbTime() {

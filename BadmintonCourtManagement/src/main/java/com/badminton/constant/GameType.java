@@ -18,5 +18,14 @@ public enum GameType {
      * RENT_BY_TIME 
      * this is a type of game that a player rent a court by time.
      */
-    RENT
+    RENT;
+
+    public static String getGameTypeString(String key){
+        for(GameType val : GameType.values()){
+            if(val.name().equals(key.toUpperCase())){
+                return val.name();
+            }
+        }
+        return CommonConstant.EMPTY;
+    }
 }
