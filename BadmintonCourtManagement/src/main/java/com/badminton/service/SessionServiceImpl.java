@@ -14,6 +14,7 @@ import com.badminton.requestmodel.Pagination;
 import com.badminton.requestmodel.SessionRequest;
 import com.badminton.response.result.Result;
 import com.badminton.response.result.SessionResult;
+import com.badminton.time.model.SessionScope;
 import com.badminton.util.Converter;
 import com.badminton.util.TimeUtils;
 import lombok.extern.slf4j.Slf4j;
@@ -45,7 +46,7 @@ public class SessionServiceImpl {
     private SessionRepository sessionRepo;
 
     @Autowired
-    private ServiceTemple serviceTemple;
+    private ServiceTemplate serviceTemple;
 
     @Autowired
     private GameService gameService;
@@ -318,4 +319,22 @@ public class SessionServiceImpl {
         avaPlayerRepo.saveAll(availablePlayerList);
         return Boolean.TRUE;
     }
+
+    /**
+     * Get session scope with UTC+7 timezone
+     *
+     * @return SessionScope with start and end times in UTC+7
+     */
+    @Transactional
+    public SessionScope getSessionScope() {
+        List<Session> currentSessions = findListCurrentSession();
+        if (currentSessions.isEmpty() || currentSessions.size() != 1) {
+            throw new IllegalStateException("No active session found or invalid");
+        }
+        Instant startOfDay = currentSessions.getFirst().getFromTime();
+        Instant endOfDay = toEndOfDay(startOfDay);
+        return new SessionScope(startOfDay, endOfDay);
+    }
+
+
 }

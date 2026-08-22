@@ -16,4 +16,7 @@
     <changeSet id="004" author="thach">
         <sqlFile path="db/changelog/rent-by-time.sql"/>
     </changeSet>
+    <changeSet id="005" author="thach">
+        <sqlFile path="db/changelog/advance-payment.sql"/>
+    </changeSet>
 </databaseChangeLog>

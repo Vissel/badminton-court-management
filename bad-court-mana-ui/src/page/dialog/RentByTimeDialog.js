@@ -97,6 +97,8 @@ const RentByTimeDialog = ({
     const [endM, setEndM] = useState(0);
     // Fee
     const [fee, setFee] = useState(hourlyRate);
+    // Player name (editable)
+    const [localPlayerName, setLocalPlayerName] = useState("");
     // Shuttles
     const [addedShuttles, setAddedShuttles] = useState([]);
     const [selectedBallName, setSelectedBallName] = useState("");
@@ -112,7 +114,8 @@ const RentByTimeDialog = ({
             setStartH(st.h); setStartM(st.m);
             setEndH(et.h); setEndM(et.m);
             setDurH(dur.h); setDurM(dur.m);
-            setFee(minutesToFee(totalMin));
+            setFee(minutesToFee(totalMin, hourlyRate));
+            setLocalPlayerName(playerName || "");
             setAddedShuttles(
                 (initialData.shuttleBalls || []).map((b) => ({
                     shuttleName: b.shuttleName,
@@ -130,10 +133,11 @@ const RentByTimeDialog = ({
             setDurH(1); setDurM(0);
             setEndH(end.h); setEndM(end.m);
             setFee(hourlyRate);
+            setLocalPlayerName(playerName || "");
             setAddedShuttles([]);
         }
         setSelectedBallName("");
-    }, [show, editMode, initialData, hourlyRate]);
+    }, [show, editMode, initialData, hourlyRate, playerName]);
 
     // ── Cross-field handlers ────────────────────────────────────────────────
 
@@ -213,12 +217,13 @@ const RentByTimeDialog = ({
         onConfirm({
             courtId,
             courtName,
-            playerName,
-            numTime,
+            playerName: localPlayerName,
+            numTime: numTime,
             startTime: toISO(startH, startM),
             endTime: endToISO(startH, startM, endH, endM),
             fee,
             shuttleBalls: ballList,
+            editMode,
         });
     };
 
@@ -249,7 +254,13 @@ const RentByTimeDialog = ({
                     {/* Player */}
                     <Stack direction="row" spacing={1} alignItems="center">
                         <Typography fontWeight={700} sx={{ minWidth: 100 }}>Người chơi:</Typography>
-                        <TextField size="small" value={playerName || ""} disabled fullWidth />
+                        <TextField
+                            size="small"
+                            value={localPlayerName}
+                            onChange={(e) => setLocalPlayerName(e.target.value)}
+                            placeholder="Nhập tên người chơi"
+                            fullWidth
+                        />
                     </Stack>
 
                     {/* Start Time — time-only picker */}

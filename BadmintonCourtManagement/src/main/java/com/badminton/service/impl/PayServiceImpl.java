@@ -10,7 +10,7 @@ import com.badminton.response.PayResponse;
 import com.badminton.response.result.Result;
 import com.badminton.service.PayService;
 import com.badminton.service.ProcessCallback;
-import com.badminton.service.ServiceTemple;
+import com.badminton.service.ServiceTemplate;
 import com.badminton.service.SessionServiceImpl;
 import com.badminton.util.ServiceConverter;
 import com.badminton.util.ServiceUtil;
@@ -27,7 +27,7 @@ import java.util.stream.Collectors;
 @Service
 public class PayServiceImpl implements PayService {
     @Autowired
-    ServiceTemple serviceTemple;
+    ServiceTemplate serviceTemple;
     @Autowired
     AvailablePlayerRepository availablePlayerRepository;
     @Autowired

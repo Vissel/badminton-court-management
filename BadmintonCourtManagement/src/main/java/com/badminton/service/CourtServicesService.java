@@ -3,6 +3,7 @@ package com.badminton.service;
 import com.badminton.BadmintonCourtManagementApplication;
 import com.badminton.constant.CommonConstant;
 import com.badminton.constant.GameState;
+import com.badminton.constant.GameType;
 import com.badminton.entity.*;
 import com.badminton.exception.BusinessException;
 import com.badminton.exception.ElementNotExistException;
@@ -12,6 +13,7 @@ import com.badminton.model.dto.ServiceDTO;
 import com.badminton.model.dto.ShuttleBallDTO;
 import com.badminton.repository.*;
 import com.badminton.requestmodel.*;
+import com.badminton.response.CourtManagementResponse;
 import com.badminton.response.ServiceResponse;
 import com.badminton.response.result.Result;
 import com.badminton.service.calculator.GameExpenseCalculator;
@@ -31,7 +33,7 @@ import java.util.stream.Collectors;
 
 @org.springframework.stereotype.Service
 @Slf4j
-public class CourtServicesServiceImpl {
+public class CourtServicesService {
 
     private final BadmintonCourtManagementApplication badmintonCourtManagementApplication;
 
@@ -49,7 +51,7 @@ public class CourtServicesServiceImpl {
     private UserRepository userRepo;
 
     @Autowired
-    private ServiceTemple serviceTemple;
+    private ServiceTemplate serviceTemple;
     @Autowired
     TransactionTemplate transactionTemplate;
 
@@ -68,7 +70,7 @@ public class CourtServicesServiceImpl {
     private static final Long NULL_OF_LONG = -1L;
     private static final int FIRST = 0;
 
-    CourtServicesServiceImpl(BadmintonCourtManagementApplication badmintonCourtManagementApplication) {
+    CourtServicesService(BadmintonCourtManagementApplication badmintonCourtManagementApplication) {
         this.badmintonCourtManagementApplication = badmintonCourtManagementApplication;
     }
 
@@ -105,9 +107,9 @@ public class CourtServicesServiceImpl {
      * @return CourtManagement DTO include Game, Court, AvailablePlayer
      */
     @Transactional
-    public CourtManagementDTO getCourtManagement() {
+    public CourtManagementResponse getCourtManagement() {
         log.info("Service getCourtManagement {}", CommonConstant.START);
-        CourtManagementDTO res = new CourtManagementDTO();
+        CourtManagementResponse res = new CourtManagementResponse();
         Set<Long> playerExcludes = initExcludeSet();
         Set<Integer> courtExcludes = initExcludeSet();
         try {
@@ -189,6 +191,34 @@ public class CourtServicesServiceImpl {
         });
     }
 
+    public Result<Boolean> addPlayerToCurrentSession(AddPlayerRequest request) {
+        return serviceTemple.execute(new ProcessCallback<AddPlayerRequest, Boolean>() {
+            @Override
+            public AddPlayerRequest getRequest() {
+                return request;
+            }
+
+            @Override
+            public void preProcess(AddPlayerRequest req) {
+                Assert.notNull(req, "Request must not be null.");
+                Assert.isTrue(StringUtils.isNotBlank(req.getPlayerName()), "Player name must not be blank.");
+            }
+
+            @Override
+            public Boolean process() throws BusinessException {
+                return transactionTemplate.execute(new TransactionCallback<Boolean>() {
+                    @Override
+                    public Boolean doInTransaction(TransactionStatus status) {
+                        String name = request.getPlayerName()
+                                .replace(CommonConstant.DOUBLE_QUOTES, CommonConstant.EMPTY).trim();
+                        Float advanceAmount = request.getAdvanceAmount() != null ? request.getAdvanceAmount() : 0f;
+                        return transactionAddPlayerToCurrentSessionWithAdvance(name, advanceAmount);
+                    }
+                });
+            }
+        });
+    }
+
     public Result<Boolean> updateAvailablePlayer(AvaPlayerDTO avaPlayerDTO) {
         return serviceTemple.execute(new ProcessCallback<AvaPlayerDTO, Boolean>() {
             @Override
@@ -241,6 +271,10 @@ public class CourtServicesServiceImpl {
 
     // @Transactional(rollbackFor = {BusinessException.class, Exception.class})
     public Boolean transactionAddPlayerToCurrentSession(String name) {
+        return transactionAddPlayerToCurrentSessionWithAdvance(name, 0f);
+    }
+
+    public Boolean transactionAddPlayerToCurrentSessionWithAdvance(String name, Float advanceAmount) {
         // try {
         List<Player> listPlayer = userRepo.findAllByPlayerName(name);
 
@@ -270,7 +304,20 @@ public class CourtServicesServiceImpl {
             List<AvailablePlayer> availablePlayerList = avaPlayerRepo
                     .findAllBySessionAndPlayerAndLeaveTimeIsNull(currSession, player);
             Assert.isTrue(availablePlayerList.isEmpty(), "Available player has already been added.");
-            avaPlayerRepo.save(new AvailablePlayer(player, currSession));
+            AvailablePlayer newAvaPlayer = new AvailablePlayer(player, currSession);
+
+            // Handle advance payment
+            if (advanceAmount != null && advanceAmount > 0) {
+                newAvaPlayer.setAdvancePayment(advanceAmount);
+                // Add "Trả trước" as a negative-cost service line item
+                ServiceDTO advanceServiceDTO = new ServiceDTO();
+                advanceServiceDTO.setServiceName(com.badminton.constant.GameConstant.ADVANCE_PAYMENT_VN);
+                advanceServiceDTO.setCost(advanceAmount);
+                newAvaPlayer.setServices(
+                        ServiceUtil.addServiceToJsonArray(newAvaPlayer.getCurrentServices(), advanceServiceDTO));
+            }
+
+            avaPlayerRepo.save(newAvaPlayer);
         }
         // } catch (IllegalArgumentException e) {
         // throw new BusinessException(ErrorCodeEnum.FLOW_ERROR, "");
@@ -463,11 +510,18 @@ public class CourtServicesServiceImpl {
             GameState changeGameState = GameState.getGameState(stateChange);
             if (currentGameState != null && changeGameState != null) {
                 boolean validGameState = ServiceUtil.validGameStateUpdate(currentGameState, changeGameState);
-                boolean isStartGame = readyToStart(changeGameState, game.getTeamOne(), game.getTeamTwo());
+                boolean isStartGame = gameDTO.getGameType() == null
+                        ? readyToStart(changeGameState, game.getTeamOne(), game.getTeamTwo())
+                        : true;
                 // update
                 if (validGameState && isStartGame) {
                     game.setState(stateChange);
                     setSelectedBallIntoGame(game, gameDTO.getShuttleBalls(), stateChange);
+                    if (gameDTO.getGameType() != null) {
+                        game.setGtype(GameType.getGameTypeString(gameDTO.getGameType()));
+
+                    }
+
                     // update ended time for FINISH & CANCEL state
                     if (ServiceUtil.isEndedState(changeGameState)) {
                         game.setEndedDate(session.getUTCPlus7Instant());

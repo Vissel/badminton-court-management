@@ -1,35 +1,34 @@
 package com.badminton.service;
 
 import com.badminton.constant.ApiConstant;
+import com.badminton.constant.GameState;
+import com.badminton.constant.GameType;
+import com.badminton.constant.RentState;
 import com.badminton.entity.AvailablePlayer;
 import com.badminton.entity.Court;
 import com.badminton.entity.RentByTime;
 import com.badminton.model.dto.RentShuttleDTO;
 import com.badminton.model.dto.ServiceDTO;
 import com.badminton.model.dto.ShuttleBallDTO;
-import com.badminton.repository.AvailablePlayerRepository;
-import com.badminton.repository.CourtRepositoty;
-import com.badminton.repository.RentByTimeRepository;
-import com.badminton.repository.ServiceRepositoty;
+import com.badminton.repository.*;
+import com.badminton.requestmodel.CourtDTO;
+import com.badminton.requestmodel.GameDTO;
 import com.badminton.requestmodel.RentByTimeRequest;
 import com.badminton.response.RentByTimeResponse;
-import com.badminton.util.MoneyUtils;
+import com.badminton.time.model.SessionScope;
 import com.badminton.util.ServiceUtil;
-import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.lang.reflect.Type;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -37,9 +36,6 @@ import java.util.stream.Collectors;
 public class RentByTimeService {
 
     private static final String RENT_BY_TIME_PREFIX = "Thuê theo giờ ";
-    private static final String STATE_STARTED = "Started";
-    private static final String STATE_FINISH = "Finish";
-    private static final String STATE_CANCEL = "Cancel";
 
     @Autowired
     private RentByTimeRepository rentByTimeRepo;
@@ -49,8 +45,17 @@ public class RentByTimeService {
     private AvailablePlayerRepository avaPlayerRepo;
     @Autowired
     private ServiceRepositoty serviceRepo;
+
     @Autowired
     private SessionServiceImpl sessionService;
+
+    @Autowired
+    private CourtServicesService courtService;
+    @Autowired
+    private GameRepository gameRepo;
+
+    @Autowired
+    private ShuttleBallServiceImpl shuttleBallService;
 
     private BigDecimal getHourlyRate() {
         Optional<com.badminton.entity.Service> opt = serviceRepo.findBySerName(ApiConstant.RENT_BY_TIME);
@@ -70,14 +75,27 @@ public class RentByTimeService {
             throw new IllegalArgumentException("Player not found in active session");
         }
 
+        if (!gameRepo.findByCourtIdAndEndedDateIsNullAndGameStateNotStart(court.getCourtId(), GameState.NOT_START.getValue()).isPresent()) {
+            throw new IllegalArgumentException("Game has NOT available");
+        }
+
+        getActiveRentByTimeForCourt(court.getCourtId())
+                .ifPresent(r -> {
+                    throw new IllegalArgumentException("Court already has an active rental");
+                });
+
         Instant startTime = sessionService.getUTCPlus7Instant();
         BigDecimal numTime = BigDecimal.valueOf(request.getNumTime()).setScale(2, RoundingMode.HALF_UP);
+
         Instant endTime = startTime.plus(Duration.ofMinutes(numTime.multiply(BigDecimal.valueOf(60)).longValue()));
 
         String shuttlesJson = buildShuttlesJson(request.getShuttleBalls());
 
-        RentByTime rental = new RentByTime(player, court, startTime, endTime, numTime, shuttlesJson, STATE_STARTED);
+        RentByTime rental = new RentByTime(player, court, startTime, endTime, numTime, shuttlesJson,
+                RentState.STARTED.name());
         rentByTimeRepo.save(rental);
+        GameDTO gameDTO = buildGameDTO(request);
+        courtService.changeGameState(gameDTO);
 
         // Add service to player
         BigDecimal hourlyRate = getHourlyRate();
@@ -87,10 +105,17 @@ public class RentByTimeService {
         serviceDTO.setServiceName(serviceName);
         serviceDTO.setCost(cost.floatValue());
 
-        player.setServices(ServiceUtil.addServiceToJsonArray(player.getCurrentServices(), serviceDTO));
+        // player.setServices(ServiceUtil.addServiceToJsonArray(player.getCurrentServices(),
+        // serviceDTO));
         avaPlayerRepo.save(player);
 
         return toResponse(rental);
+    }
+
+    private GameDTO buildGameDTO(RentByTimeRequest request) {
+        CourtDTO courtDTO = new CourtDTO();
+        courtDTO.setCourtId(request.getCourtId());
+        return new GameDTO(request.getPlayerName(), courtDTO, request.getShuttleBalls(), "Rent", null, "Start");
     }
 
     @Transactional
@@ -104,27 +129,29 @@ public class RentByTimeService {
         BigDecimal courtFee = customFee != null
                 ? BigDecimal.valueOf(customFee).setScale(0, RoundingMode.HALF_UP)
                 : (rental.getNumTime() != null
-                        ? rental.getNumTime().multiply(getHourlyRate()).setScale(0, RoundingMode.HALF_UP)
-                        : BigDecimal.ZERO);
+                ? rental.getNumTime().multiply(getHourlyRate()).setScale(0, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO);
         BigDecimal shuttleCost = calculateShuttleCost(rental.getShuttles());
         BigDecimal totalCost = courtFee.add(shuttleCost);
 
         List<ServiceDTO> services = ServiceUtil.convertStringToListService(player.getCurrentServices());
-        for (ServiceDTO s : services) {
-            if (s.getServiceName().equals(serviceName)) {
-                s.setCost(totalCost.floatValue());
-                break;
-            }
-        }
+        // for (ServiceDTO s : services) {
+        // if (s.getServiceName().equals(serviceName)) {
+        // s.setCost(totalCost.floatValue());
+        // break;
+        // }
+        // }
+        services.add(new ServiceDTO(serviceName, totalCost.floatValue()));
         player.setServices(ServiceUtil.buildJsonArrayStr(services));
         avaPlayerRepo.save(player);
 
-        rental.setState(STATE_FINISH);
+        rental.setState(RentState.FINISH.name());
         Instant now = sessionService.getUTCPlus7Instant();
         if (rental.getEndTime() == null || now.isAfter(rental.getEndTime())) {
             rental.setEndTime(now);
         }
         rentByTimeRepo.save(rental);
+        updateRentGameState(rental.getCourt(), GameState.FINISH);
         return toResponse(rental);
     }
 
@@ -143,9 +170,10 @@ public class RentByTimeService {
     public RentByTimeResponse cancelRentByTime(int rentId) {
         RentByTime rental = rentByTimeRepo.findById(rentId)
                 .orElseThrow(() -> new IllegalArgumentException("Rental not found"));
-        rental.setState(STATE_CANCEL);
+        rental.setState(RentState.CANCEL.name());
         rental.setEndTime(sessionService.getUTCPlus7Instant());
         rentByTimeRepo.save(rental);
+        updateRentGameState(rental.getCourt(), GameState.CANCEL);
 
         // Remove rentByTime service from player
         AvailablePlayer player = rental.getAvailablePlayer();
@@ -208,12 +236,37 @@ public class RentByTimeService {
         return toResponse(rental);
     }
 
+    /**
+     * Get all RentByTime by courtIds within session scope time range
+     *
+     * @param courtIds
+     * @return
+     */
+    public List<RentByTimeResponse> getRentsBySessionScopeAndCourtIds(Set<Integer> courtIds) {
+        SessionScope sessionScope = sessionService.getSessionScope();
+        return rentByTimeRepo.findByCourtCourtIdInAndStartTimeAfterAndEndTimeBefore(
+                courtIds,
+                sessionScope.getStart(),
+                sessionScope.getEnd()
+        ).stream().map(this::toResponse).collect(Collectors.toList());
+    }
+
     public Optional<RentByTimeResponse> getActiveRentByTimeForCourt(int courtId) {
-        return rentByTimeRepo.findByCourtCourtIdAndState(courtId, STATE_STARTED).map(this::toResponse);
+        return rentByTimeRepo.findByCourtCourtIdAndStateAndEndTimeIsNull(courtId, RentState.STARTED.name()).map(this::toResponse);
     }
 
     public Instant getCurrentDbTime() {
         return sessionService.getUTCPlus7Instant();
+    }
+
+    private void updateRentGameState(Court court, GameState targetState) {
+        gameRepo.findByCourtIdAndEndedDateIsNull(court.getCourtId())
+                .filter(g -> GameType.RENT.name().equals(g.getGtype()))
+                .ifPresent(game -> {
+                    game.setState(targetState.getValue());
+                    game.setEndedDate(sessionService.getUTCPlus7Instant());
+                    gameRepo.save(game);
+                });
     }
 
     private String buildShuttlesJson(List<ShuttleBallDTO> shuttleBalls) {
@@ -233,6 +286,7 @@ public class RentByTimeService {
     private RentByTimeResponse toResponse(RentByTime rental) {
         RentByTimeResponse res = new RentByTimeResponse();
         res.setId(rental.getId());
+        res.setCourtId(rental.getCourt().getCourtId());
         res.setCourtName(rental.getCourt().getCourtName());
         res.setPlayerName(rental.getAvailablePlayer().getPlayer().getPlayerName());
         res.setStartTime(rental.getStartTime());

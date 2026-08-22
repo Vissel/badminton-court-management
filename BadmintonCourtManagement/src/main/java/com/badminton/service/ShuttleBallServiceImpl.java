@@ -35,7 +35,7 @@ public class ShuttleBallServiceImpl {
     @Autowired
     private ShuttleBallRepositoty shuttleBallRepo;
     @Autowired
-    ServiceTemple serviceTemple;
+    ServiceTemplate serviceTemple;
 
     public List<ShuttleBallResponse> getListActiveShuttleBallDTOs() {
         List<ShuttleBall> activeBalls = ballRepo.findAllByIsActive(true);

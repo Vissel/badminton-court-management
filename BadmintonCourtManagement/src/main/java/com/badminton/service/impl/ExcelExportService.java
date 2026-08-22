@@ -27,7 +27,7 @@ import com.badminton.response.ReportResponse;
 import com.badminton.response.result.Result;
 import com.badminton.service.ExportService;
 import com.badminton.service.ProcessCallback;
-import com.badminton.service.ServiceTemple;
+import com.badminton.service.ServiceTemplate;
 import com.badminton.service.SessionServiceImpl;
 import com.badminton.util.MoneyUtils;
 import com.badminton.util.ServiceUtil;
@@ -63,7 +63,7 @@ import java.util.stream.IntStream;
 @Service
 public class ExcelExportService implements ExportService {
     @Autowired
-    ServiceTemple serviceTemple;
+    ServiceTemplate serviceTemple;
     @Autowired
     SessionServiceImpl sessionService;
     @Autowired
@@ -753,6 +753,7 @@ public class ExcelExportService implements ExportService {
         return new ArrayList<>(availablePlayers.stream()
                 .flatMap(p -> ServiceUtil.convertStringToListService(p.getCurrentServices()).stream())
                 .filter(s -> !s.getServiceName().toLowerCase().contains(GameConstant.COST_IN_PERSON_VN.toLowerCase()))
+                .filter(s -> !s.getServiceName().toLowerCase().contains(GameConstant.ADVANCE_PAYMENT_VN.toLowerCase()))
                 .filter(s -> !(s.getServiceName().toLowerCase().contains(RentConstant.RENT_BY_TIME_STR.toLowerCase()) ||
                         s.getServiceName().toLowerCase().contains(RentConstant.RENT_BY_TIME_EN_STR.toLowerCase())))
                 .collect(Collectors.toMap(

@@ -14,7 +14,8 @@ import Paper from "@mui/material/Paper";
 import List from "@mui/material/List";
 import ListItem from "@mui/material/ListItem";
 import ListItemText from "@mui/material/ListItemText";
-import { TYPE } from "../HomePage";
+import Chip from "@mui/material/Chip";
+import { TYPE, ADVANCE_SERVICE_NAME  } from "../HomePage";
 import { VN_CURRENCY, formatVND } from "./../MoneyUtils";
 
 const ServiceDialog = ({
@@ -46,10 +47,25 @@ const ServiceDialog = ({
   }, [serviceName, serviceOptions]);
 
   const recalcTotal = useCallback((serviceList) => {
-    return serviceList.reduce((sum, item) => {
+    // Calculate total of all services except advance service
+    // Advance service is prepayment, so it should not be included in the total cost
+    const total = serviceList.reduce((sum, item) => {
+      if (item.serviceName === ADVANCE_SERVICE_NAME) {
+        return sum; // Skip advance service in total calculation
+      }
       const amount = item.cost || 0;
       return sum + amount;
     }, 0);
+
+    // Subtract advance service amount from total
+    // Advance service is prepayment, so it should reduce the remaining amount to pay
+    const advanceService = serviceList.find(item => item.serviceName === ADVANCE_SERVICE_NAME);
+    if (advanceService) {
+      const remaining = total - advanceService.cost;
+      return remaining > 0 ? remaining : 0; // Don't show negative total
+    }
+
+    return total;
   }, []);
 
   const handleAddService = useCallback(() => {
@@ -299,22 +315,60 @@ const ServiceDialog = ({
 
         {services.length > 0 ? (
           <List dense disablePadding>
-            {services.map((service, idx) => (
-              <ListItem
-                key={idx}
-                secondaryAction={
-                  <Button size="small" color="error" variant="outlined" onClick={() => handleRemoveService(idx)}>
-                    ✕
-                  </Button>
-                }
-                sx={{ borderBottom: 1, borderColor: "divider", py: 1 }}
-              >
-                <ListItemText
-                  primary={displayServiceName(service.serviceName)}
-                  secondary={`${service.costFormat} ${VN_CURRENCY}`}
-                />
-              </ListItem>
-            ))}
+            {services.map((service, idx) => {
+              const isAdvance = service.serviceName === ADVANCE_SERVICE_NAME;
+              return (
+                <ListItem
+                  key={idx}
+                  secondaryAction={
+                    <Button size="small" color="error" variant="outlined" onClick={() => handleRemoveService(idx)}>
+                      ✕
+                    </Button>
+                  }
+                  sx={{
+                    borderBottom: 1,
+                    borderColor: "divider",
+                    py: 1,
+                    pl: isAdvance ? 2 : 1,
+                    borderLeft: isAdvance ? 4 : 0,
+                    borderLeftColor: isAdvance ? "success.main" : "transparent",
+                    bgcolor: isAdvance ? "success.50" : "transparent",
+                  }}
+                >
+                  <ListItemText
+                    primary={
+                      <Stack direction="row" alignItems="center" spacing={1}>
+                        {isAdvance && (
+                          <Chip 
+                            label="Đã trả" 
+                            size="small" 
+                            color="success" 
+                            variant="outlined" 
+                            sx={{ fontSize: "0.65rem", height: 20, fontWeight: 500 }}
+                          />
+                        )}
+                        <Typography variant="body2" sx={{ fontWeight: isAdvance ? 600 : 400 }}>
+                          {displayServiceName(service.serviceName)}
+                        </Typography>
+                      </Stack>
+                    }
+                    secondary={
+                      <Typography 
+                        variant="body2" 
+                        sx={{ 
+                          color: isAdvance ? "success.dark" : "text.secondary",
+                          fontWeight: isAdvance ? 600 : 400
+                        }}
+                      >
+                        {isAdvance
+                          ? `${formatVND(Math.abs(service.cost))} ${VN_CURRENCY}`
+                          : `${service.costFormat} ${VN_CURRENCY}`}
+                      </Typography>
+                    }
+                  />
+                </ListItem>
+              );
+            })}
           </List>
         ) : (
           <Typography variant="body2" color="text.secondary">

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Stack from "@mui/material/Stack";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
@@ -12,24 +12,11 @@ import DropZone from "./DropZone";
 
 const areaKeys = ["A", "C", "B", "D"];
 
-function formatCountdown(endTimeStr) {
-  const end = new Date(endTimeStr);
-  // Backend stores UTC+7 wall-clock time as UTC label.
-  // Compare time-of-day in UTC+7 so it's robust to any date-part mismatch.
-  const endMinUTC7 = end.getUTCHours() * 60 + end.getUTCMinutes();
-  const now = new Date();
-  const nowMinUTC7 = ((now.getUTCHours() + 7) % 24) * 60 + now.getUTCMinutes();
-  let diff = endMinUTC7 - nowMinUTC7;
-  if (diff < 0) {
-    // Could be overnight wrap OR countdown already expired.
-    // If the gap is > 12 h it's almost certainly expired.
-    if (diff < -12 * 60) return "00:00";
-    diff += 24 * 60;
-  }
-  if (diff <= 0) return "00:00";
-  const hours = Math.floor(diff / 60);
-  const minutes = diff % 60;
-  return `${hours}h ${String(minutes).padStart(2, "0")}m`;
+function formatTime(totalSeconds) {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return ` (${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")})`;
 }
 
 export default function Court({
@@ -54,21 +41,9 @@ export default function Court({
 }) {
   const [hovering, setHovering] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState(null);
-  const [countdown, setCountdown] = useState("");
 
   const isRental = !!rentalInfo;
   const effectivelyLocked = isLocked || isRental;
-
-  useEffect(() => {
-    if (!rentalInfo?.endTime) {
-      setCountdown("");
-      return;
-    }
-    const tick = () => setCountdown(formatCountdown(rentalInfo.endTime));
-    tick();
-    const interval = setInterval(tick, 1000);
-    return () => clearInterval(interval);
-  }, [rentalInfo]);
 
   const handleMenuOpen = (e) => {
     e.stopPropagation();
@@ -89,7 +64,9 @@ export default function Court({
         sx={{ pr: effectivelyLocked ? (isRental ? 26 : 18) : 0 }}
       >
         <Typography variant="body2" sx={{ py: 0.5 }}>
-          {name} {isLocked && "(Đang diễn ra ...)"} {isRental && `(Còn ${countdown})`}{" "}
+          {name}
+          {isRental && rentalInfo.remainingMinutes >= 0 && formatTime(rentalInfo.remainingMinutes * 60)}
+          {isLocked && !isRental && "(Đang diễn ra ...)"}
         </Typography>
 
         {effectivelyLocked && (

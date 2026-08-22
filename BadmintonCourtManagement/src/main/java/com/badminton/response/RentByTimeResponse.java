@@ -11,6 +11,7 @@ import java.util.List;
 @Setter
 public class RentByTimeResponse {
     private int id;
+    private int courtId;
     private String courtName;
     private String playerName;
     private Instant startTime;

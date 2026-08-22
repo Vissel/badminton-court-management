@@ -48,7 +48,7 @@ api.interceptors.response.use(
       if (!isExcluded) {
         console.warn("Unauthorized / Forbidden – forcing logout");
         authRef.logout?.();
-        return new Promise(() => {});
+        return new Promise(() => { });
       }
     }
     /* ===============================
@@ -85,7 +85,7 @@ api.interceptors.response.use(
     /* ===============================
        Other client errors (400, 404…)
     ================================ */
-    if (status === 400 || status > 403 ) {
+    if (status === 400 || status > 403) {
       console.warn("Client error:", error.response);
       alert("Yêu cầu không hợp lệ.");
     }
@@ -98,3 +98,13 @@ export default api;
 // export const addNewServiceAPI = (payload) =>
 //   api.post("/api/addSetupService", payload);
 // export const getSettings = () => api.get("/api/getSetupServices");
+
+// Rent by time API calls
+export const applyRentByTime = (payload) =>
+  api.post("/court-mana/applyRentByTime", payload);
+export const payRentByTime = (rentId, customFee) =>
+  api.post(`/court-mana/payRentByTime?rentId=${rentId}&customFee=${customFee}`);
+export const cancelRentByTime = (rentId) =>
+  api.post(`/court-mana/cancelRentByTime?rentId=${rentId}`);
+export const updateRentByTime = (rentId, payload) =>
+  api.post(`/court-mana/updateRentByTime?rentId=${rentId}`, payload);

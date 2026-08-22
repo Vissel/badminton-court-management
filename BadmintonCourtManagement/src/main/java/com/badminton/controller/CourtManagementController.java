@@ -3,11 +3,13 @@ package com.badminton.controller;
 import com.badminton.model.dto.ServiceDTO;
 import com.badminton.model.dto.ShuttleBallDTO;
 import com.badminton.requestmodel.*;
+import com.badminton.response.CourtManagementResponse;
 import com.badminton.response.RentByTimeResponse;
 import com.badminton.response.ServiceResponse;
 import com.badminton.response.result.Result;
 import com.badminton.response.result.ShuttleBallResponse;
-import com.badminton.service.CourtServicesServiceImpl;
+import com.badminton.service.CourtManagementInterface;
+import com.badminton.service.CourtServicesService;
 import com.badminton.service.RentByTimeService;
 import com.badminton.service.ShuttleBallServiceImpl;
 import com.badminton.util.CommonUtil;
@@ -30,7 +32,9 @@ public class CourtManagementController {
     @Autowired
     private ShuttleBallServiceImpl ballService;
     @Autowired
-    private CourtServicesServiceImpl courtService;
+    private CourtServicesService courtService;
+    @Autowired
+    CourtManagementInterface courtManagementInterface;
     @Autowired
     private RentByTimeService rentByTimeService;
 
@@ -44,14 +48,14 @@ public class CourtManagementController {
 
     @PostMapping(value = "/addListBallIntoCourt")
     public ResponseEntity<Boolean> addListBallIntoCourt(@RequestParam String courtId,
-            @RequestBody List<ShuttleBallRequest> listBall) {
+                                                        @RequestBody List<ShuttleBallRequest> listBall) {
         Boolean res = ballService.addListOfShuttleBallIntoCourt(Integer.valueOf(courtId), listBall);
         return ResponseEntity.ok().body(res);
     }
 
     @PostMapping(value = "/changeBallQuantity")
     public ResponseEntity<Result<Boolean>> changeBallQuantity(@RequestParam String courtId,
-            @RequestBody ShuttleBallDTO ballDTO) {
+                                                              @RequestBody ShuttleBallDTO ballDTO) {
         return ResponseConvertor.convert(ballService.changeShuttleBallQuantity(courtId, ballDTO));
     }
 
@@ -83,20 +87,20 @@ public class CourtManagementController {
     }
 
     @GetMapping(value = "/getCourtManagement")
-    public ResponseEntity<CourtManagementDTO> getCourtManagement() {
+    public ResponseEntity<CourtManagementResponse> getCourtManagement() {
         log.info("Received GET /getCourtManagement request");
 
-        CourtManagementDTO courtManaDTO = courtService.getCourtManagement();
+        CourtManagementResponse courtManaDTO = courtManagementInterface.getCourtManagement();
 
         // Error cases are not handled
         return ResponseEntity.ok().body(courtManaDTO);
     }
 
     @PostMapping(value = "/addPlayer")
-    public ResponseEntity<Result<Boolean>> addPlayerToAvailableSession(@RequestBody String name) {
-        log.info("Adding player:{}", name);
+    public ResponseEntity<Result<Boolean>> addPlayerToAvailableSession(@RequestBody AddPlayerRequest request) {
+        log.info("Adding player:{} with advanceAmount:{}", request.getPlayerName(), request.getAdvanceAmount());
         Result<Boolean> res = courtService
-                .addPlayerToCurrentSession(name);
+                .addPlayerToCurrentSession(request);
         log.info("Result is:{}", res);
         // Error cases are not handled
         return ResponseConvertor.convert(res);
@@ -113,7 +117,7 @@ public class CourtManagementController {
 
     @PostMapping(value = "/removeServiceOutPlayer")
     public ResponseEntity<Boolean> removeServiceOutAvaPlayer(@RequestParam String playerName,
-            @RequestBody ServiceDTO serviceDTO) {
+                                                             @RequestBody ServiceDTO serviceDTO) {
         Boolean res = courtService.removeServiceOutAvailablePlayer(serviceDTO, playerName);
         // Error cases are not handled
         return ResponseEntity.ok(res);
@@ -121,7 +125,7 @@ public class CourtManagementController {
 
     @PostMapping(value = "/updateServiceToPlayer")
     public ResponseEntity<Boolean> updateServiceToAvaPlayer(@RequestParam String playerName,
-            @RequestBody List<ServiceRequest> listServiceDTO) {
+                                                            @RequestBody List<ServiceRequest> listServiceDTO) {
         Boolean res = courtService.updateServicesToAvailablePlayer(listServiceDTO, playerName);
         // Error cases are not handled
         return ResponseEntity.ok(res);
@@ -129,7 +133,7 @@ public class CourtManagementController {
 
     @PostMapping(value = "/addServiceToPlayer")
     public ResponseEntity<Boolean> addServiceToAvaPlayer(@RequestParam String playerName,
-            @RequestBody ServiceRequest serviceRequest) {
+                                                         @RequestBody ServiceRequest serviceRequest) {
         Boolean res = courtService.addServiceToAvailablePlayer(serviceRequest, playerName);
         // Error cases are not handled
         return ResponseEntity.ok(res);
@@ -157,7 +161,8 @@ public class CourtManagementController {
      * Req5 - Change game state: Started, Finish, Cancel
      */
     @PostMapping(value = "/changeGameState")
-    public ResponseEntity<Boolean> changeGameState(@RequestBody GameDTO gameDTO) {
+    public ResponseEntity<Boolean>
+    changeGameState(@RequestBody GameDTO gameDTO) {
         if (gameDTO != null && StringUtils.isNoneBlank(gameDTO.getGameState(), gameDTO.getCourt().getCourtId())) {
             Boolean res = courtService.changeGameState(gameDTO);
             // Error cases are not handled
@@ -181,7 +186,7 @@ public class CourtManagementController {
 
     @PostMapping(value = "/payRentByTime")
     public ResponseEntity<RentByTimeResponse> payRentByTime(@RequestParam int rentId,
-            @RequestParam(required = false) Float customFee) {
+                                                            @RequestParam(required = false) Float customFee) {
         RentByTimeResponse res = rentByTimeService.payRentByTime(rentId, customFee);
         return ResponseEntity.ok().body(res);
     }
@@ -194,7 +199,7 @@ public class CourtManagementController {
 
     @PostMapping(value = "/updateRentByTime")
     public ResponseEntity<RentByTimeResponse> updateRentByTime(@RequestParam int rentId,
-            @RequestBody RentByTimeRequest request) {
+                                                               @RequestBody RentByTimeRequest request) {
         RentByTimeResponse res = rentByTimeService.updateRentByTime(rentId, request);
         return ResponseEntity.ok().body(res);
     }
