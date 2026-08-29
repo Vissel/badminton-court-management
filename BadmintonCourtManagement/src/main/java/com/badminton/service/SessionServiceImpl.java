@@ -153,21 +153,25 @@ public class SessionServiceImpl {
     }
 
     public List<Session> findListSessionBy(String yearMonthString, Pagination pagination) {
-//        Pageable pageable = PageRequest.of(pagination.getCurrent(), pagination.getPageSize(), Sort.by(Sort.Direction.DESC, "fromTime"));
+        // Pageable pageable = PageRequest.of(pagination.getCurrent(),
+        // pagination.getPageSize(), Sort.by(Sort.Direction.DESC, "fromTime"));
         Page<Session> pageSessions;
-//        if (!StringUtils.isNoneBlank(yearMonthString) || "Tất cả".equals(yearMonthString)) {
-//            pageSessions = sessionRepo.findAll(pageable);
-//        } else {
+        // if (!StringUtils.isNoneBlank(yearMonthString) || "Tất
+        // cả".equals(yearMonthString)) {
+        // pageSessions = sessionRepo.findAll(pageable);
+        // } else {
 
         SessionParam sessionParam = buildSessionParams(yearMonthString, pagination);
 
-        pageSessions = sessionRepo.findByFromTimeBetween(sessionParam.getFrom(), sessionParam.getTo(), sessionParam.getPageable());
+        pageSessions = sessionRepo.findByFromTimeBetween(sessionParam.getFrom(), sessionParam.getTo(),
+                sessionParam.getPageable());
 
         return pageSessions.stream().toList();
     }
 
     private Pageable buildPageableFrom(Pagination pagination) {
-        return PageRequest.of(pagination.getCurrent(), pagination.getPageSize(), Sort.by(Sort.Direction.DESC, "fromTime"));
+        return PageRequest.of(pagination.getCurrent(), pagination.getPageSize(),
+                Sort.by(Sort.Direction.DESC, "fromTime"));
     }
 
     public long countSessionBy(String yearMonthString, Pagination pagination) {
@@ -176,8 +180,7 @@ public class SessionServiceImpl {
     }
 
     private SessionParam buildSessionParams(String yearMonthString, Pagination pagination) {
-        SessionParam sessionParam =
-                TimeUtils.convertYearMonthToInstant(yearMonthString);
+        SessionParam sessionParam = TimeUtils.convertYearMonthToInstant(yearMonthString);
 
         sessionParam.setPageable(buildPageableFrom(pagination));
         return sessionParam;
@@ -213,8 +216,8 @@ public class SessionServiceImpl {
 
                 // 3. remove all available players out closed sessions.
                 for (Session closedSession : closedSessions) {
-                    List<AvailablePlayer> availablePlayerList =
-                            avaPlayerRepo.findAllForUpdateBySessionAndLeaveTimeIsNull(closedSession);
+                    List<AvailablePlayer> availablePlayerList = avaPlayerRepo
+                            .findAllForUpdateBySessionAndLeaveTimeIsNull(closedSession);
                     removeListPlayerOutCurrentSession(availablePlayerList);
                 }
                 result.setMessage("Close session successfully!");
@@ -232,6 +235,11 @@ public class SessionServiceImpl {
                     .collect(Collectors.toList());
         }
         // set the to time for session.
+        if (closedSessions.isEmpty()) {
+            log.info("No sessions to close - operation completed successfully with no changes.");
+            return closedSessions;
+        }
+
         closedSessions.stream()
                 .forEach(s -> {
                     s.setActive(false);
@@ -244,12 +252,15 @@ public class SessionServiceImpl {
                     }
                     s.setToTime(endOfDayInclusive);
                 });
-        Assert.notEmpty(closedSessions, "There is no session to close.");
         return sessionRepo.saveAll(closedSessions);
     }
 
     public void cancelInprogressGames() {
         List<Game> availableGames = gameService.findAllInprogress();
+        if (availableGames.isEmpty()) {
+            log.info("No in-progress games to cancel - operation completed successfully with no changes.");
+            return;
+        }
         availableGames.stream().forEach(game -> {
             Instant endOfDayInclusive = toEndOfDay(game.getCreatedDate());
             game.setEndedDate(endOfDayInclusive);
@@ -301,7 +312,8 @@ public class SessionServiceImpl {
 
         List<Player> listPlayer = userRepo.findAllByPlayerName(playerName);
         Assert.notEmpty(listPlayer, "Cannot find player");
-        List<AvailablePlayer> availablePlayerList = avaPlayerRepo.findAllForUpdateBySessionAndPlayerAndLeaveTimeIsNull(currSession, listPlayer.getFirst());
+        List<AvailablePlayer> availablePlayerList = avaPlayerRepo
+                .findAllForUpdateBySessionAndPlayerAndLeaveTimeIsNull(currSession, listPlayer.getFirst());
         Assert.isTrue(!availablePlayerList.isEmpty(), "There is no Available player for update.");
 
         return removeListPlayerOutCurrentSession(availablePlayerList);
@@ -314,7 +326,8 @@ public class SessionServiceImpl {
      * @return
      * @throws IllegalArgumentException
      */
-    public Boolean removeListPlayerOutCurrentSession(List<AvailablePlayer> availablePlayerList) throws IllegalArgumentException {
+    public Boolean removeListPlayerOutCurrentSession(List<AvailablePlayer> availablePlayerList)
+            throws IllegalArgumentException {
         availablePlayerList.stream().forEach(a -> a.setLeaveTime(getUTCPlus7Instant()));
         avaPlayerRepo.saveAll(availablePlayerList);
         return Boolean.TRUE;
@@ -335,6 +348,5 @@ public class SessionServiceImpl {
         Instant endOfDay = toEndOfDay(startOfDay);
         return new SessionScope(startOfDay, endOfDay);
     }
-
 
 }

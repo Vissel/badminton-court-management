@@ -21,13 +21,13 @@ public class CourtManagementInterface {
 
     public CourtManagementResponse getCourtManagement() {
         CourtManagementResponse courtManaResponse = courtService.getCourtManagement();
-        List<RentByTimeResponse> rentByTimeResponses = rentByTimeService.getRentsBySessionScopeAndCourtIds(courtManaResponse.getGameDTOs().stream()
-                .filter(g -> g.getGameType().equals(GameType.RENT.name()))
-                .map(g -> parseCourtId(g.getCourt().getCourtId()))
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .collect(Collectors.toSet())
-        );
+        List<RentByTimeResponse> rentByTimeResponses = rentByTimeService
+                .getRentsBySessionScopeAndCourtIds(courtManaResponse.getGameDTOs().stream()
+                        .filter(g -> g.getGameType() != null && g.getGameType().equals(GameType.RENT.name()))
+                        .map(g -> parseCourtId(g.getCourt().getCourtId()))
+                        .filter(Optional::isPresent)
+                        .map(Optional::get)
+                        .collect(Collectors.toSet()));
         courtManaResponse.setRentByTimeResponses(rentByTimeResponses);
         return courtManaResponse;
     }

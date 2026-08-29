@@ -18,6 +18,10 @@ public interface AvailablePlayerRepository extends JpaRepository<AvailablePlayer
     @Query("select aplayer from AvailablePlayer aplayer where aplayer.session = ?1 AND aplayer.player.playerName = ?2 AND aplayer.leaveTime is NULL")
     Optional<AvailablePlayer> findAvailablePlayerInSessionByName(Session session, String playerName);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select aplayer from AvailablePlayer aplayer where aplayer.session = ?1 AND aplayer.player.playerName = ?2 AND aplayer.leaveTime is NULL")
+    Optional<AvailablePlayer> findForUpdateAvailablePlayerInSessionByName(Session session, String playerName);
+
     List<AvailablePlayer> findAllBySessionAndAvaIdNotInAndLeaveTimeIsNull(Session session, Set<Long> excludes);
 
     @Lock(LockModeType.PESSIMISTIC_READ)

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Stack from "@mui/material/Stack";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
@@ -41,9 +41,32 @@ export default function Court({
 }) {
   const [hovering, setHovering] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState(null);
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
 
   const isRental = !!rentalInfo;
   const effectivelyLocked = isLocked || isRental;
+
+  // Countdown timer for rental time
+  useEffect(() => {
+    if (isRental && rentalInfo.remainingMinutes >= 0) {
+      // Initialize remaining seconds
+      setRemainingSeconds(rentalInfo.remainingMinutes * 60);
+
+      const timerId = setInterval(() => {
+        setRemainingSeconds((prevSeconds) => {
+          if (prevSeconds <= 0) {
+            clearInterval(timerId);
+            return 0;
+          }
+          return prevSeconds - 1;
+        });
+      }, 1000);
+
+      return () => clearInterval(timerId);
+    } else {
+      setRemainingSeconds(0);
+    }
+  }, [isRental, rentalInfo?.remainingMinutes]);
 
   const handleMenuOpen = (e) => {
     e.stopPropagation();
@@ -65,7 +88,7 @@ export default function Court({
       >
         <Typography variant="body2" sx={{ py: 0.5 }}>
           {name}
-          {isRental && rentalInfo.remainingMinutes >= 0 && formatTime(rentalInfo.remainingMinutes * 60)}
+          {isRental && remainingSeconds >= 0 && formatTime(remainingSeconds)}
           {isLocked && !isRental && "(Đang diễn ra ...)"}
         </Typography>
 

@@ -288,6 +288,57 @@ function HomePage() {
     }
   };
 
+  const handleUpdatePlayerName = async (oldName, newName) => {
+    try {
+      const res = await api.post("/court-mana/updatePlayerName", {
+        currName: oldName,
+        newName: newName,
+      });
+      
+      if (responseSuccess(res)) {
+        // Update available players list
+        setAvailablePlayers((prev) => 
+          prev.map((player) => player === oldName ? newName : player)
+        );
+        
+        // Update player service map
+        setPlayerServiceMap((prev) => {
+          const updated = { ...prev };
+          if (updated[oldName]) {
+            updated[newName] = updated[oldName];
+            delete updated[oldName];
+          }
+          return updated;
+        });
+        
+        // Update courts if player is on a court
+        setCourts((prev) => {
+          const updated = { ...prev };
+          for (const courtId in updated) {
+            for (const area in updated[courtId]) {
+              if (updated[courtId][area] === oldName) {
+                updated[courtId][area] = newName;
+              }
+            }
+          }
+          return updated;
+        });
+        
+        // Update selected player if it's the renamed player
+        if (selectedPlayer === oldName) {
+          setSelectedPlayer(newName);
+        }
+        
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Error updating player name:", error);
+      alert("Có lỗi khi đổi tên người chơi. Vui lòng thử lại!");
+      return false;
+    }
+  };
+
   // ── Rent by time handlers ──────────────────────────────────────────────
   const handleRentByTime = (courtId) => {
     const court = activeCourts.find((c) => c.courtId === courtId);
@@ -1074,6 +1125,8 @@ function HomePage() {
               onPay={onPayConfirm}
               onDelete={onPayConfirm}
               onUpdateServices={handleUpdateServices}
+              onUpdatePlayerName={handleUpdatePlayerName}
+              canEditPlayerName={true}
               hideActions={dialogHideActions}
               serviceOptions={services}
             />

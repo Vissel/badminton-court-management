@@ -106,6 +106,17 @@ public class CourtManagementController {
         return ResponseConvertor.convert(res);
     }
 
+    @PostMapping(value = "/updatePlayerName")
+    public ResponseEntity<Result<Boolean>> updatePlayerName(@RequestBody UpdatePlayerNameRequest request) {
+        log.info("Updating player from name:{} to name:{}", request.getCurrName(), request.getNewName());
+        Result<Boolean> res = courtService
+                .updatePlayerName(request);
+        log.info("Result is:{}", res);
+        // Error cases are not handled
+        return ResponseConvertor.convert(res);
+    }
+
+
     @PostMapping(value = "/updateAvailablePlayer")
     public ResponseEntity<Result<Boolean>> updateAvailablePlayer(@RequestBody AvaPlayerDTO avaPlayerDTO) {
         log.info("Updating available player from:{} to:{}", avaPlayerDTO.getOldPlayerName(),

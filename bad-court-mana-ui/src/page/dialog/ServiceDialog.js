@@ -5,6 +5,8 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import IconButton from "@mui/material/IconButton";
 import CloseIcon from "@mui/icons-material/Close";
+import DriveFileRenameOutlineIcon from "@mui/icons-material/DriveFileRenameOutline";
+import ModeEditIcon from '@mui/icons-material/ModeEdit';
 import TextField from "@mui/material/TextField";
 import Button from "@mui/material/Button";
 import Typography from "@mui/material/Typography";
@@ -15,7 +17,7 @@ import List from "@mui/material/List";
 import ListItem from "@mui/material/ListItem";
 import ListItemText from "@mui/material/ListItemText";
 import Chip from "@mui/material/Chip";
-import { TYPE, ADVANCE_SERVICE_NAME  } from "../HomePage";
+import { TYPE, ADVANCE_SERVICE_NAME } from "../HomePage";
 import { VN_CURRENCY, formatVND } from "./../MoneyUtils";
 
 const ServiceDialog = ({
@@ -195,54 +197,58 @@ const ServiceDialog = ({
         <Typography variant="h6" align="center" component="span" display="block">
           Bảng chi phí của:
         </Typography>
-        <Typography variant="subtitle1" align="center" fontWeight={600}>
-          {playerName}
-        </Typography>
-        {canEditPlayerName && !hideActions && (
-          <Box sx={{ mt: 1, display: "flex", justifyContent: "center" }}>
-            {isEditingName ? (
-              <Box sx={{ width: "100%", maxWidth: 360 }}>
-                <Stack direction="row" spacing={1} alignItems="center" justifyContent="center">
-                  <TextField
-                    autoFocus
-                    size="small"
-                    label="Tên người chơi"
-                    value={editPlayerName}
-                    error={Boolean(editError)}
-                    onChange={(e) => {
-                      setEditPlayerName(e.target.value);
-                      setEditError("");
-                    }}
-                    onKeyDown={(e) => {
-                      e.stopPropagation();
-                      if (e.key === "Enter" && !e.nativeEvent.isComposing) {
-                        e.preventDefault();
-                        handleSaveEditName();
-                      }
-                      if (e.key === "Escape") {
-                        e.preventDefault();
-                        handleCancelEditName();
-                      }
-                    }}
-                    sx={{ flex: 1 }}
-                  />
-                  <Button size="small" variant="contained" onClick={handleSaveEditName}>
-                    Lưu
-                  </Button>
-                  <Button size="small" variant="outlined" onClick={handleCancelEditName}>
-                    Huỷ
-                  </Button>
-                </Stack>
-                {editError && (
-                  <Typography variant="caption" color="error" sx={{ display: "block", mt: 0.5, textAlign: "center" }}>
-                    {editError}
-                  </Typography>
-                )}
-              </Box>
-            ) : (
-              <Button size="small" variant="text" onClick={() => setIsEditingName(true)}>
-                Sửa tên
+        {canEditPlayerName && !hideActions && isEditingName ? (
+          <Box sx={{ width: "100%", maxWidth: 360, mt: 1 }}>
+            <Stack direction="row" spacing={1} alignItems="center" justifyContent="center">
+              <TextField
+                autoFocus
+                size="small"
+                label="Tên người chơi"
+                value={editPlayerName}
+                error={Boolean(editError)}
+                onChange={(e) => {
+                  setEditPlayerName(e.target.value);
+                  setEditError("");
+                }}
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                    e.preventDefault();
+                    handleSaveEditName();
+                  }
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    handleCancelEditName();
+                  }
+                }}
+                sx={{ flex: 1 }}
+              />
+              <Button size="small" variant="contained" onClick={handleSaveEditName}>
+                Lưu
               </Button>
+              <Button size="small" variant="outlined" color="error" onClick={handleCancelEditName}>
+                Huỷ
+              </Button>
+            </Stack>
+            {editError && (
+              <Typography variant="caption" color="error" sx={{ display: "block", mt: 0.5, textAlign: "center" }}>
+                {editError}
+              </Typography>
+            )}
+          </Box>
+        ) : (
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0.5, mt: 0.5 }}>
+            <Typography variant="subtitle1" fontWeight={600}>
+              {playerName}
+            </Typography>
+            {canEditPlayerName && !hideActions && (
+              <IconButton
+                size="small"
+                sx={{ color: "primary.main", p: 0.5 }}
+                onClick={() => setIsEditingName(true)}
+              >
+                <ModeEditIcon fontSize="small" />
+              </IconButton>
             )}
           </Box>
         )}
@@ -339,11 +345,11 @@ const ServiceDialog = ({
                     primary={
                       <Stack direction="row" alignItems="center" spacing={1}>
                         {isAdvance && (
-                          <Chip 
-                            label="Đã trả" 
-                            size="small" 
-                            color="success" 
-                            variant="outlined" 
+                          <Chip
+                            label="Đã trả"
+                            size="small"
+                            color="success"
+                            variant="outlined"
                             sx={{ fontSize: "0.65rem", height: 20, fontWeight: 500 }}
                           />
                         )}
@@ -353,9 +359,9 @@ const ServiceDialog = ({
                       </Stack>
                     }
                     secondary={
-                      <Typography 
-                        variant="body2" 
-                        sx={{ 
+                      <Typography
+                        variant="body2"
+                        sx={{
                           color: isAdvance ? "success.dark" : "text.secondary",
                           fontWeight: isAdvance ? 600 : 400
                         }}

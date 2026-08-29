@@ -4,6 +4,7 @@ import com.badminton.BadmintonCourtManagementApplication;
 import com.badminton.constant.CommonConstant;
 import com.badminton.constant.GameState;
 import com.badminton.constant.GameType;
+import com.badminton.core.player.AvailablePlayerService;
 import com.badminton.entity.*;
 import com.badminton.exception.BusinessException;
 import com.badminton.exception.ElementNotExistException;
@@ -49,6 +50,10 @@ public class CourtServicesService {
     ShuttleBallServiceImpl shuttleBallService;
     @Autowired
     private UserRepository userRepo;
+
+    @Autowired
+    AvailablePlayerService availablePlayerService;
+
 
     @Autowired
     private ServiceTemplate serviceTemple;
@@ -166,16 +171,18 @@ public class CourtServicesService {
         return exSet;
     }
 
-    public Result<Boolean> addPlayerToCurrentSession(String name) {
-        return serviceTemple.execute(new ProcessCallback<String, Boolean>() {
+    public Result<Boolean> updatePlayerName(UpdatePlayerNameRequest request) {
+        return serviceTemple.execute(new ProcessCallback<UpdatePlayerNameRequest, Boolean>() {
             @Override
-            public String getRequest() {
-                return name;
+            public UpdatePlayerNameRequest getRequest() {
+                return request;
             }
 
             @Override
-            public void preProcess(String request) {
-                Assert.isTrue(StringUtils.isNotBlank(request), "Name must not be blank.");
+            public void preProcess(UpdatePlayerNameRequest request) {
+                Assert.isTrue(StringUtils.isNotBlank(request.getCurrName()), "Current name must not be blank.");
+                Assert.isTrue(StringUtils.isNotBlank(request.getNewName()), "New name must not be blank.");
+                Assert.isTrue(isValidPlayerName(request.getNewName()), "New name contains invalid characters.");
             }
 
             @Override
@@ -183,8 +190,7 @@ public class CourtServicesService {
                 return transactionTemplate.execute(new TransactionCallback<Boolean>() {
                     @Override
                     public Boolean doInTransaction(TransactionStatus status) {
-                        return transactionAddPlayerToCurrentSession(
-                                name.replace(CommonConstant.DOUBLE_QUOTES, CommonConstant.EMPTY).trim());
+                        return availablePlayerService.updateAvailablePlayerName(request.getCurrName(), request.getNewName());
                     }
                 });
             }
@@ -267,11 +273,6 @@ public class CourtServicesService {
         player.setPassword(newPlayerName);
         userRepo.save(player);
         return Boolean.TRUE;
-    }
-
-    // @Transactional(rollbackFor = {BusinessException.class, Exception.class})
-    public Boolean transactionAddPlayerToCurrentSession(String name) {
-        return transactionAddPlayerToCurrentSessionWithAdvance(name, 0f);
     }
 
     public Boolean transactionAddPlayerToCurrentSessionWithAdvance(String name, Float advanceAmount) {
@@ -595,6 +596,16 @@ public class CourtServicesService {
             return avaPlayer.getAvaId();
         }
         return NULL_OF_LONG;
+    }
+
+    private boolean isValidPlayerName(String name) {
+        if (name == null || name.trim().isEmpty()) {
+            return false;
+        }
+        // Allow Vietnamese characters (with diacritics), regular letters, spaces, hyphens, and apostrophes
+        // Reject harmful characters: SQL injection chars, script tags, special symbols
+        String pattern = "^[\\p{L}\\s\\-']+$";
+        return name.matches(pattern);
     }
 
     public Boolean removeAvailablePlayerFromCourtArea(CourtDTO courtDTO) {
