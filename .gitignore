@@ -1,9 +1,9 @@
 HELP.md
-target/
-.mvn/wrapper/maven-wrapper.jar
+BadmintonCourtManagement/target/
+BadmintonCourtManagement/.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
-.war
+*.war
 
 ### STS ## #
 .apt_generated
@@ -19,16 +19,19 @@ target/
 *.iws
 *.iml
 *.ipr
+.DS_Store
 
 ### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-build/
+bad-court-mana-ui/nbproject/private/
+bad-court-mana-ui/nbbuild/
+bad-court-mana-ui/dist/
+bad-court-mana-ui/nbdist/
+bad-court-mana-ui/.nb-gradle/
+bad-court-mana-ui/build/
 !**/src/main/**/build/
 !**/src/test/**/build/
 
 ### VS Code ###
 .vscode/
+
+deployment/*

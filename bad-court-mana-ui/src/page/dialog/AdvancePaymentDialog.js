@@ -107,6 +107,12 @@ const AdvancePaymentDialog = ({ show, playerName, onConfirm, onSkip, onClose }) 
                     onClick={handleConfirm}
                     disableElevation
                     sx={{ flex: 1, borderRadius: 1.5, fontWeight: 700 }}
+                    onKeyPress={(e) => {
+                        if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleConfirm();
+                        }
+                    }}
                 >
                     Xác nhận
                 </Button>

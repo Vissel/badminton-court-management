@@ -20,5 +20,6 @@ public class RentByTimeResponse {
     private float fee;
     private List<RentShuttleDTO> shuttleBalls;
     private String state;
-    private long remainingMinutes;
+    private int remainingMinutes;
+    private long remainingSeconds;
 }

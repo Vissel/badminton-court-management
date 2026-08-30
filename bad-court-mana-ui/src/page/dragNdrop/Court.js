@@ -48,25 +48,30 @@ export default function Court({
 
   // Countdown timer for rental time
   useEffect(() => {
-    if (isRental && rentalInfo.remainingMinutes >= 0) {
-      // Initialize remaining seconds
-      setRemainingSeconds(rentalInfo.remainingMinutes * 60);
+    if (isRental && (rentalInfo.remainingMinutes >= 0 || rentalInfo.remainingSeconds >= 0)) {
+      // Store the initial timestamp when the rental info was received
+      const initialTimestamp = Date.now();
+      // Calculate total remaining seconds from both remainingMinutes and remainingSeconds
+      const initialTotalSeconds = (rentalInfo.remainingMinutes * 60) + rentalInfo.remainingSeconds;
 
       const timerId = setInterval(() => {
-        setRemainingSeconds((prevSeconds) => {
-          if (prevSeconds <= 0) {
-            clearInterval(timerId);
-            return 0;
-          }
-          return prevSeconds - 1;
-        });
+        const elapsedSeconds = Math.floor((Date.now() - initialTimestamp) / 1000);
+        const currentRemainingSeconds = Math.max(0, initialTotalSeconds - elapsedSeconds);
+        setRemainingSeconds(currentRemainingSeconds);
+
+        if (currentRemainingSeconds <= 0) {
+          clearInterval(timerId);
+        }
       }, 1000);
+
+      // Set initial value immediately
+      setRemainingSeconds(initialTotalSeconds);
 
       return () => clearInterval(timerId);
     } else {
       setRemainingSeconds(0);
     }
-  }, [isRental, rentalInfo?.remainingMinutes]);
+  }, [isRental, rentalInfo?.remainingMinutes, rentalInfo?.remainingSeconds]);
 
   const handleMenuOpen = (e) => {
     e.stopPropagation();

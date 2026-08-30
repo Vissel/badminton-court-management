@@ -599,13 +599,10 @@ public class CourtServicesService {
     }
 
     private boolean isValidPlayerName(String name) {
-        if (name == null || name.trim().isEmpty()) {
-            return false;
-        }
-        // Allow Vietnamese characters (with diacritics), regular letters, spaces, hyphens, and apostrophes
-        // Reject harmful characters: SQL injection chars, script tags, special symbols
-        String pattern = "^[\\p{L}\\s\\-']+$";
-        return name.matches(pattern);
+        // Reject only harmful characters: script tags and control characters
+        // Allow all other normal characters including quotes, hyphens, etc.
+        String harmfulPattern = ".*[<>\\x00-\\x1F].*";
+        return !name.matches(harmfulPattern);
     }
 
     public Boolean removeAvailablePlayerFromCourtArea(CourtDTO courtDTO) {

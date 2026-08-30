@@ -300,9 +300,12 @@ public class RentByTimeService {
 
         Instant now = sessionService.getUTCPlus7Instant();
         if (rental.getEndTime() != null && now.isBefore(rental.getEndTime())) {
-            res.setRemainingMinutes(Duration.between(now, rental.getEndTime()).toMinutes());
+            Duration duration = Duration.between(now, rental.getEndTime());
+            res.setRemainingMinutes((int) duration.toMinutes());
+            res.setRemainingSeconds(duration.toSeconds() % 60);
         } else {
             res.setRemainingMinutes(0);
+            res.setRemainingSeconds(0);
         }
         return res;
     }
