@@ -19,6 +19,13 @@ public class ResponseConvertor {
         return ResponseEntity.status(response.getErrorCode()).body(response);
     }
 
+    public static final <T> ResponseEntity<T> convertToResponseEntity(Result<T> response) {
+        if (response.isSuccess()) {
+            return ResponseEntity.ok(response.getData());
+        }
+        return ResponseEntity.status(response.getErrorCode()).body(response.getData());
+    }
+
     public static <R extends Resource> ResponseEntity<R> convertExportToResource(Result<ExportReportResult> response) {
         if (response.isSuccess()) {
             ExportReportResult data = response.getData();

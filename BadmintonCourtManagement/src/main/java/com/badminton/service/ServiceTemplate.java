@@ -26,7 +26,7 @@ public class ServiceTemplate {
             errorMess = e.getMessage();
         } catch (BusinessException e) {
             log.error(ErrorMess.BIZ_VAL, e.getMessage());
-            result.setErrorCode(HttpStatus.CONFLICT.value());
+            result.setErrorCode(Integer.valueOf(e.getErrorCodeEnum().getCode()));
             errorMess = e.getMessage();
         } catch (Throwable e) {
             log.error(ErrorMess.INTERNAL_SERVER_ERROR, e.getMessage());

@@ -16,7 +16,7 @@ import java.util.Optional;
 
 @Slf4j
 @Service
-public class AvailablePlayerService {
+public class CoreAvailablePlayerService {
     @Autowired
     AvailablePlayerRepository availablePlayerRepository;
 
@@ -57,4 +57,15 @@ public class AvailablePlayerService {
         return false;
     }
 
+    public AvailablePlayer getAvailablePlayerByName(Session session, String name) {
+        return availablePlayerRepository.findAvailablePlayerInSessionByName(session, name).orElse(null);
+    }
+
+    public Player checkAvailableAndGetPlayer(Session session, String name) {
+        AvailablePlayer availablePlayer = getAvailablePlayerByName(session, name);
+        if (availablePlayer == null) {
+            return null;
+        }
+        return userRepository.findByPlayerName(name).orElse(null);
+    }
 }

@@ -4,7 +4,7 @@ import com.badminton.BadmintonCourtManagementApplication;
 import com.badminton.constant.CommonConstant;
 import com.badminton.constant.GameState;
 import com.badminton.constant.GameType;
-import com.badminton.core.player.AvailablePlayerService;
+import com.badminton.core.player.CoreAvailablePlayerService;
 import com.badminton.entity.*;
 import com.badminton.exception.BusinessException;
 import com.badminton.exception.ElementNotExistException;
@@ -52,7 +52,7 @@ public class CourtServicesService {
     private UserRepository userRepo;
 
     @Autowired
-    AvailablePlayerService availablePlayerService;
+    CoreAvailablePlayerService coreAvailablePlayerService;
 
 
     @Autowired
@@ -190,7 +190,7 @@ public class CourtServicesService {
                 return transactionTemplate.execute(new TransactionCallback<Boolean>() {
                     @Override
                     public Boolean doInTransaction(TransactionStatus status) {
-                        return availablePlayerService.updateAvailablePlayerName(request.getCurrName(), request.getNewName());
+                        return coreAvailablePlayerService.updateAvailablePlayerName(request.getCurrName(), request.getNewName());
                     }
                 });
             }

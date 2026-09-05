@@ -19,4 +19,16 @@
     <changeSet id="005" author="thach">
         <sqlFile path="db/changelog/advance-payment.sql"/>
     </changeSet>
+    <changeSet id="016" author="thach">
+        <sqlFile path="db/changelog/debit-table.sql"/>
+    </changeSet>
+    <changeSet id="017" author="thach">
+        <sqlFile path="db/changelog/debit-summary-table.sql"/>
+    </changeSet>
+    <changeSet id="018" author="thach">
+        <sqlFile path="db/changelog/payment-table.sql"/>
+    </changeSet>
+    <changeSet id="019" author="thach">
+        <sqlFile path="db/changelog/payment-debit-table.sql"/>
+    </changeSet>
 </databaseChangeLog>

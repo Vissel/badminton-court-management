@@ -28,10 +28,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
 
-import java.time.Instant;
-import java.time.LocalTime;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
+import java.time.*;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.time.format.TextStyle;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -347,6 +346,39 @@ public class SessionServiceImpl {
         Instant startOfDay = currentSessions.getFirst().getFromTime();
         Instant endOfDay = toEndOfDay(startOfDay);
         return new SessionScope(startOfDay, endOfDay);
+    }
+
+    /**
+     * Get session by date time (UTC+7)
+     *
+     * @param dateTime Date time string in ISO-8601 format (e.g., "2026-09-05T10:00:00")
+     * @return Single session for that day, or null if not found
+     */
+    @Transactional(readOnly = true)
+    public Session getSessionByDateTime(String dateTime) {
+        if (dateTime == null || dateTime.isBlank()) {
+            return null;
+        }
+
+        try {
+            // Parse the UTC+7 datetime string to Instant
+            LocalDateTime localDateTime = LocalDateTime.parse(dateTime, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+            ZonedDateTime utcPlus7 = localDateTime.atZone(ZoneOffset.of("+7"));
+            Instant instant = utcPlus7.toInstant();
+
+            // Calculate start and end of day for that date using existing pattern
+            Instant startOfDay = utcPlus7.toLocalDate().atStartOfDay(ZoneOffset.of("+7")).toInstant();
+            Instant endOfDay = toEndOfDay(instant);
+
+            // Query sessions for that day, ordered by fromTime desc
+            List<Session> sessions = sessionRepo.findByFromTimeBetweenOrderByFromTimeDesc(startOfDay, endOfDay);
+
+            // Return first session or null
+            return sessions.isEmpty() ? null : sessions.getFirst();
+        } catch (DateTimeParseException e) {
+            log.error("Failed to parse dateTime: {}", dateTime, e);
+            return null;
+        }
     }
 
 }

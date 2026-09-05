@@ -14,4 +14,10 @@ public class BusinessException extends Exception {
         this.errorCodeEnum = errorCodeEnum;
         this.errorMessage = StringUtils.isNotEmpty(errorMessage) ? errorMessage : errorCodeEnum.getDescription();
     }
+
+    public BusinessException(ErrorCodeEnum errorCodeEnum) {
+        super(errorCodeEnum.getDescription());
+        this.errorCodeEnum = errorCodeEnum;
+        this.errorMessage = errorCodeEnum.getDescription();
+    }
 }

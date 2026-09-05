@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
@@ -21,7 +22,6 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
 import org.springframework.stereotype.Component;
-import org.springframework.http.HttpHeaders;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
@@ -44,18 +44,17 @@ public class SecurityConfig {
     SecurityFilterChain securityFilterChain(HttpSecurity http, UrlBasedCorsConfigurationSource corsConfigurationSource)
             throws Exception {
         http
-                // Disable CSRF for simpler development (be cautious in production)
+                // CSRF protection enabled for production
                 .csrf(csrf ->
-
-                        csrf.ignoringRequestMatchers("/login", "/logout")
+                        csrf.ignoringRequestMatchers("/login", "/logout", "/index", "/error",
+                                        "/public/**", "/csrf", "/api/v1/health")
                                 .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
-
                 )
                 // Configure CORS
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 // Authorize all requests (adjust as per your security requirements)
                 .authorizeHttpRequests(authorize -> authorize.requestMatchers("/login", "/logout", "/index", "/error",
-                                "/public/**", "/csrf").permitAll()
+                                "/public/**", "/csrf", "/api/v1/health").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()// a part to handle OPTIONs from FE
                         .anyRequest().authenticated())
                 .sessionManagement(session ->

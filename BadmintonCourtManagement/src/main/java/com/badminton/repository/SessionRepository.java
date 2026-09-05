@@ -52,4 +52,12 @@ public interface SessionRepository extends JpaRepository<Session, Integer> {
                 ORDER BY YEAR(s.fromTime) DESC, MONTH(s.fromTime) DESC
             """)
     List<Object[]> findDistinctYearMonthFromSessions();
+
+    @Query("""
+                SELECT s FROM Session s
+                WHERE s.fromTime >= :startOfDay
+                  AND s.fromTime < :endOfDay
+                ORDER BY s.fromTime DESC
+            """)
+    List<Session> findByFromTimeBetweenOrderByFromTimeDesc(@Param("startOfDay") Instant startOfDay, @Param("endOfDay") Instant endOfDay);
 }
