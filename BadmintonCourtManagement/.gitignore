@@ -1,0 +1,30 @@
+# Java / Maven
+/target/
+!.mvn/wrapper/maven-wrapper.jar
+.mvn/wrapper/*.jar
+deployment/*
+bad-court-mana-ui/build
+../bad-court-mana-ui/caulong-qa
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.class
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Local environment
+.env
+.env.*
+
+# Generated / temporary files
+*.tmp
+*.bak
+*.swp
+*~
