@@ -1,13 +1,9 @@
 package com.badminton.controller;
 
-import com.badminton.entity.DebitSummary;
 import com.badminton.requestmodel.debit.DebitRequest;
 import com.badminton.requestmodel.debit.GetRemainingDebtRequest;
 import com.badminton.requestmodel.debit.PayDebitRequest;
-import com.badminton.response.debit.DebitResponse;
-import com.badminton.response.debit.DebitSummaryResponse;
-import com.badminton.response.debit.GetRemainingDebtResponse;
-import com.badminton.response.debit.PayDebitResponse;
+import com.badminton.response.debit.*;
 import com.badminton.response.result.Result;
 import com.badminton.service.DebitService;
 import com.badminton.util.ResponseConvertor;
@@ -16,7 +12,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.math.BigDecimal;
 import java.util.List;
 
 @Slf4j
@@ -59,11 +54,16 @@ public class DebitController {
         return ResponseConvertor.convert(debitService.getAllDebits());
     }
 
-    @PostMapping("/pay/{debitId}")
-    public ResponseEntity<Result<DebitSummary>> payForDebit(
-            @PathVariable Integer debitId,
-            @RequestParam BigDecimal paymentAmount) {
-        return ResponseConvertor.convert(debitService.payForDebit(debitId, paymentAmount));
+    /**
+     * pre pay
+     *
+     * @param payDebitRequest
+     * @return
+     */
+    @PostMapping("/prePay")
+    public ResponseEntity<PrepayDebitResponse> prePayForPlayerDebits(
+            @RequestBody PayDebitRequest payDebitRequest) {
+        return ResponseConvertor.convertToResponseEntity(debitService.prepayDebitsForPlayer(payDebitRequest));
     }
 
     /**
@@ -75,7 +75,7 @@ public class DebitController {
     @PostMapping("/pay")
     public ResponseEntity<PayDebitResponse> payForPlayerDebits(
             @RequestBody PayDebitRequest payDebitRequest) {
-        return ResponseConvertor.convert(debitService.payForPlayerDebits(playerId, paymentAmount));
+        return ResponseConvertor.convertToResponseEntity(debitService.payDebitsForPlayer(payDebitRequest));
     }
 
     /**

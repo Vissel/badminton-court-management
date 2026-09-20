@@ -6,6 +6,7 @@ import Typography from "@mui/material/Typography";
 import api from "./api/index";
 import PayConfirm from "./page/dialog/PayConfirm";
 import { AuthContext } from "./context/AuthContext";
+import { formatVNDateTime } from "./page/DateTimeUtils";
 
 function DateTimeBar() {
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
@@ -29,21 +30,6 @@ function DateTimeBar() {
 
   const location = useLocation();
   const isHomePage = location.pathname === "/home";
-
-  const formatVietnameseDateTime = (date) => {
-    const weekday = date.toLocaleDateString("vi-VN", { weekday: "long" });
-    const day = date.getDate().toString().padStart(2, "0");
-    const month = (date.getMonth() + 1).toString().padStart(2, "0");
-    const year = date.getFullYear();
-    const time = date.toLocaleTimeString("vi-VN", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: false,
-    });
-
-    return `${weekday}, ngày ${day}, tháng ${month}, năm ${year} - ${time}`;
-  };
 
   const onEndSession = () => {
     setShow(true);
@@ -102,7 +88,7 @@ function DateTimeBar() {
         )}
       </Box>
       <Typography variant="body2" color="text.secondary" sx={{ textAlign: { xs: "left", sm: "right" }, flex: 1 }}>
-        {formatVietnameseDateTime(currentDateTime)}
+        {formatVNDateTime(currentDateTime)}
       </Typography>
       <PayConfirm
         show={show}

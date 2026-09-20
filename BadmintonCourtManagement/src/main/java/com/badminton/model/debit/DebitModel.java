@@ -9,6 +9,7 @@ import java.time.Instant;
 @Data
 @Builder
 public class DebitModel {
+    private Integer debitId;
     private Instant dateTime;
     private BigDecimal money;
     private String note;

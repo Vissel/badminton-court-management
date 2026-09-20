@@ -14,4 +14,6 @@ public class PayDebitRequest {
 
     @NotBlank(message = "Payment method must not be blank")
     private String paymentMethod;
+
+    private String note;
 }

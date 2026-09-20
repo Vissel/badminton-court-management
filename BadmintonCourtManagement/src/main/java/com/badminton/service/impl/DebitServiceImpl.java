@@ -1,11 +1,13 @@
 package com.badminton.service.impl;
 
 import com.badminton.core.debit.CoreDebitService;
-import com.badminton.entity.DebitSummary;
+import com.badminton.enums.PaymentStatus;
 import com.badminton.exception.BusinessException;
 import com.badminton.exception.enums.ErrorCodeEnum;
 import com.badminton.model.debit.RemainingDebitModel;
-import com.badminton.model.dto.DebitDTO;
+import com.badminton.model.dto.AllocateDebitPaymentRequest;
+import com.badminton.model.dto.AllocateDebitPaymentResponse;
+import com.badminton.model.dto.RemainingDebitDTO;
 import com.badminton.requestmodel.Pagination;
 import com.badminton.requestmodel.debit.DebitRequest;
 import com.badminton.requestmodel.debit.GetRemainingDebtRequest;
@@ -25,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
 
 import java.math.BigDecimal;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -127,37 +130,32 @@ public class DebitServiceImpl implements DebitService {
             }
         });
     }
-
-    @Transactional
+    
     @Override
-    public Result<DebitSummary> payForDebit(Integer debitId, BigDecimal paymentAmount) {
-        return serviceTemplate.execute(new ProcessCallback<Void, DebitSummary>() {
+    public Result<PrepayDebitResponse> prepayDebitsForPlayer(PayDebitRequest payDebitRequest) {
+        return serviceTemplate.execute(new ProcessCallback<PayDebitRequest, PrepayDebitResponse>() {
             @Override
-            public Void getRequest() {
-                return null;
+            public PayDebitRequest getRequest() {
+                return payDebitRequest;
             }
 
             @Override
-            public void preProcess(Void request) {
-                Assert.notNull(debitId, "Debit ID must not be null");
-                Assert.notNull(paymentAmount, "Payment amount must not be null");
-                Assert.isTrue(paymentAmount.compareTo(BigDecimal.ZERO) > 0, "Payment amount must be positive");
+            public void preProcess(PayDebitRequest request) {
+                Assert.notNull(request.getPlayerName(), "Player name must not be null");
+                Assert.notNull(request.getPaymentAmount(), "Payment amount must not be null");
+                Assert.isTrue(request.getPaymentAmount() > 0, "Payment amount must be positive");
             }
 
             @Override
-            public DebitSummary process() throws BusinessException {
-                DebitSummary response = coreDebitService.payForDebit(debitId, paymentAmount);
-                if (response == null) {
-                    throw new BusinessException(ErrorCodeEnum.DEBIT_NOT_FOUND, "Debit not found or invalid payment amount");
-                }
-                return response;
+            public PrepayDebitResponse process() throws BusinessException {
+                AllocateDebitPaymentRequest request = convertToAllocateDebitPaymentRequest(getRequest());
+                return coreDebitService.prepayDebitsForPlayer(request);
             }
         });
     }
 
-    @Transactional
     @Override
-    public Result<PayDebitResponse> payForPlayerDebits(PayDebitRequest payDebitRequest) {
+    public Result<PayDebitResponse> payDebitsForPlayer(PayDebitRequest payDebitRequest) {
         return serviceTemplate.execute(new ProcessCallback<PayDebitRequest, PayDebitResponse>() {
             @Override
             public PayDebitRequest getRequest() {
@@ -168,15 +166,29 @@ public class DebitServiceImpl implements DebitService {
             public void preProcess(PayDebitRequest request) {
                 Assert.notNull(request.getPlayerName(), "Player name must not be null");
                 Assert.notNull(request.getPaymentAmount(), "Payment amount must not be null");
+                Assert.isTrue(request.getPaymentAmount() > 0, "Payment amount must be positive");
             }
 
             @Override
             public PayDebitResponse process() throws BusinessException {
-                DebitSummary response = coreDebitService.payForPlayerDebits(playerId, paymentAmount);
+
+                AllocateDebitPaymentResponse response = coreDebitService.allocateDebitPayment(convertToAllocateDebitPaymentRequest(getRequest()));
                 if (response == null) {
-                    throw new BusinessException(ErrorCodeEnum.PLAYER_NOT_FOUND, "Player not found or no debits found or invalid payment amount");
+                    throw new BusinessException(ErrorCodeEnum.INTERNAL_SERVER_ERROR, "Debit allocation returned empty response");
                 }
-                return response;
+
+                PayDebitResponse payDebitResponse = convertToPayDebitResponse(response);
+
+                if (PaymentStatus.FAIL.equals(response.getStatus())) {
+                    log.error("Pay debits failed for player [{}]: {}", getRequest().getPlayerName(), response.getMessage());
+                    throw new BusinessException(
+                            resolveErrorCode(response.getErrorCode()),
+                            response.getMessage(),
+                            payDebitResponse);
+                }
+
+                log.info("Pay debits result for player [{}]: {}", getRequest().getPlayerName(), response.getMessage());
+                return payDebitResponse;
             }
         });
     }
@@ -201,13 +213,44 @@ public class DebitServiceImpl implements DebitService {
         });
     }
 
-    private DebitDTO convertToDebitDTO(GetRemainingDebtRequest request) {
+    private AllocateDebitPaymentRequest convertToAllocateDebitPaymentRequest(PayDebitRequest request) {
+        return AllocateDebitPaymentRequest.builder()
+                .playerName(request.getPlayerName())
+                .payAmount(BigDecimal.valueOf(request.getPaymentAmount()))
+                .payMethod(request.getPaymentMethod())
+                .note(request.getNote())
+                .build();
+    }
+
+    private PayDebitResponse convertToPayDebitResponse(AllocateDebitPaymentResponse model) {
+        PayDebitResponse response = new PayDebitResponse();
+        response.setPlayerName(model.getPlayerName());
+        response.setPaymentAmount(model.getPaymentAmount() != null ? model.getPaymentAmount().floatValue() : 0f);
+        response.setPaymentMethod(model.getPaymentMethod());
+        response.setPaidDebts(model.getPaidDebts() != null ? model.getPaidDebts().floatValue() : 0f);
+        response.setRemainingDebts(model.getRemainingDebts() != null ? model.getRemainingDebts().floatValue() : 0f);
+        response.setNumPaidDebts(model.getNumPaidDebts());
+        response.setNumRemainingDebts(model.getNumRemainingDebts());
+        response.setPaymentDate(TimeUtils.toDateTimeDisplay(model.getPaymentDate()));
+        response.setStatus(model.getStatus() != null ? model.getStatus().name() : null);
+        response.setMessage(model.getMessage());
+        return response;
+    }
+
+    private ErrorCodeEnum resolveErrorCode(int errorCode) {
+        return Arrays.stream(ErrorCodeEnum.values())
+                .filter(code -> Integer.parseInt(code.getCode()) == errorCode)
+                .findFirst()
+                .orElse(ErrorCodeEnum.INTERNAL_SERVER_ERROR);
+    }
+
+    private RemainingDebitDTO convertToDebitDTO(GetRemainingDebtRequest request) {
         Pagination pagination = request.getPagination();
         if (pagination == null) {
             pagination = new Pagination(1, 10, 0);
         }
 
-        return DebitDTO.builder()
+        return RemainingDebitDTO.builder()
                 .pagination(pagination)
                 .playerName(request.getPlayerNames().get(0))
                 .from(TimeUtils.convertToInstant(request.getFilter().getFrom()))

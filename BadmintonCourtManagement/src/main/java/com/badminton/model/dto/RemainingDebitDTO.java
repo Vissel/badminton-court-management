@@ -8,7 +8,7 @@ import java.time.Instant;
 
 @Data
 @Builder
-public class DebitDTO {
+public class RemainingDebitDTO {
     private Pagination pagination;
     private String playerName;
     private Instant from;

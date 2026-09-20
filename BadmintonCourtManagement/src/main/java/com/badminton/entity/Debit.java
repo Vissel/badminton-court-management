@@ -22,6 +22,9 @@ public class Debit {
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal debtAmount;
 
+    /**
+     * remaining unpaid amount
+     */
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal remainingAmount;
 

@@ -11,6 +11,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface DebitRepository extends JpaRepository<Debit, Integer> {
@@ -22,13 +23,13 @@ public interface DebitRepository extends JpaRepository<Debit, Integer> {
 
     @Lock(LockModeType.PESSIMISTIC_READ)
     @Query("SELECT d FROM Debit d WHERE d.player.playerId = :playerId " +
-           "AND (:from IS NULL OR d.createdDate >= :from) " +
-           "AND (:to IS NULL OR d.createdDate <= :to) " +
-           "ORDER BY d.createdDate DESC")
+            "AND (:from IS NULL OR d.createdDate >= :from) " +
+            "AND (:to IS NULL OR d.createdDate <= :to) " +
+            "ORDER BY d.createdDate DESC")
     Page<Debit> findByPlayerIdOrderByCreatedDateDesc(@Param("playerId") Integer playerId,
-                                                       @Param("from") java.time.Instant from,
-                                                       @Param("to") java.time.Instant to,
-                                                       Pageable pageable);
+                                                     @Param("from") java.time.Instant from,
+                                                     @Param("to") java.time.Instant to,
+                                                     Pageable pageable);
 
     @Query("SELECT SUM(d.debtAmount) FROM Debit d WHERE d.player.playerId = :playerId")
     java.math.BigDecimal sumDebtAmountByPlayerId(@Param("playerId") Integer playerId);
@@ -39,6 +40,11 @@ public interface DebitRepository extends JpaRepository<Debit, Integer> {
     @Query("SELECT d FROM Debit d WHERE d.player.playerId = :playerId AND d.status = 'PENDING' ORDER BY d.createdDate ASC")
     List<Debit> findPendingDebitsByPlayerIdOrderByCreatedDateAsc(@Param("playerId") Integer playerId);
 
+    @Lock(LockModeType.PESSIMISTIC_READ)
     @Query("SELECT d FROM Debit d WHERE d.player.playerId = :playerId AND d.remainingAmount > 0 ORDER BY d.createdDate ASC")
     List<Debit> findUnpaidDebitsByPlayerIdOrderByCreatedDateAsc(@Param("playerId") Integer playerId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT d FROM Debit d WHERE d.debitId = :debitId")
+    Optional<Debit> findByIdForUpdate(@Param("debitId") Integer debitId);
 }
