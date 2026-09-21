@@ -7,6 +7,7 @@ import com.badminton.exception.enums.ErrorCodeEnum;
 import com.badminton.model.debit.RemainingDebitModel;
 import com.badminton.model.dto.AllocateDebitPaymentRequest;
 import com.badminton.model.dto.AllocateDebitPaymentResponse;
+import com.badminton.model.dto.DebitPayDTO;
 import com.badminton.model.dto.RemainingDebitDTO;
 import com.badminton.requestmodel.Pagination;
 import com.badminton.requestmodel.debit.DebitRequest;
@@ -130,7 +131,7 @@ public class DebitServiceImpl implements DebitService {
             }
         });
     }
-    
+
     @Override
     public Result<PrepayDebitResponse> prepayDebitsForPlayer(PayDebitRequest payDebitRequest) {
         return serviceTemplate.execute(new ProcessCallback<PayDebitRequest, PrepayDebitResponse>() {
@@ -142,8 +143,8 @@ public class DebitServiceImpl implements DebitService {
             @Override
             public void preProcess(PayDebitRequest request) {
                 Assert.notNull(request.getPlayerName(), "Player name must not be null");
-                Assert.notNull(request.getPaymentAmount(), "Payment amount must not be null");
-                Assert.isTrue(request.getPaymentAmount() > 0, "Payment amount must be positive");
+                Assert.notNull(request.getTotalPayAmount(), "Payment amount must not be null");
+                Assert.isTrue(request.getTotalPayAmount() > 0, "Payment amount must be positive");
             }
 
             @Override
@@ -165,8 +166,19 @@ public class DebitServiceImpl implements DebitService {
             @Override
             public void preProcess(PayDebitRequest request) {
                 Assert.notNull(request.getPlayerName(), "Player name must not be null");
-                Assert.notNull(request.getPaymentAmount(), "Payment amount must not be null");
-                Assert.isTrue(request.getPaymentAmount() > 0, "Payment amount must be positive");
+                Assert.notNull(request.getTotalPayAmount(), "Payment amount must not be null");
+                Assert.isTrue(request.getTotalPayAmount() > 0, "Payment amount must be positive");
+                Assert.notEmpty(request.getListDebitPay(), "Debit pay list must not be null or empty");
+                request.getListDebitPay().forEach(debitPay -> {
+                    Assert.notNull(debitPay, "Debit pay element must not be null");
+                    Assert.isTrue(StringUtils.isNotBlank(debitPay.getDateTime()), "Debit pay date time must not be blank");
+                    Assert.isTrue(debitPay.getPayAmount() > 0, "Debit pay amount must be positive");
+                });
+                BigDecimal listTotalAmount = request.getListDebitPay().stream()
+                        .map(debitPay -> BigDecimal.valueOf(debitPay.getPayAmount()))
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+                Assert.isTrue(listTotalAmount.compareTo(BigDecimal.valueOf(request.getTotalPayAmount())) == 0,
+                        "Total pay amount must equal the sum of pay amounts in the debit pay list");
             }
 
             @Override
@@ -216,9 +228,17 @@ public class DebitServiceImpl implements DebitService {
     private AllocateDebitPaymentRequest convertToAllocateDebitPaymentRequest(PayDebitRequest request) {
         return AllocateDebitPaymentRequest.builder()
                 .playerName(request.getPlayerName())
-                .payAmount(BigDecimal.valueOf(request.getPaymentAmount()))
+                .payAmount(BigDecimal.valueOf(request.getTotalPayAmount()))
                 .payMethod(request.getPaymentMethod())
                 .note(request.getNote())
+                .listDebitPay(request.getListDebitPay() != null
+                        ? request.getListDebitPay().stream()
+                                .map(debitPay -> DebitPayDTO.builder()
+                                        .dateTime(debitPay.getDateTime())
+                                        .payAmount(BigDecimal.valueOf(debitPay.getPayAmount()))
+                                        .build())
+                                .collect(Collectors.toList())
+                        : null)
                 .build();
     }
 

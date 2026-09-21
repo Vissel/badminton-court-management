@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Dialog from "@mui/material/Dialog";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
@@ -26,18 +26,22 @@ const PayConfirm = ({ show, data, onConfirm, onExit }) => {
   const [debitSummary, setDebitSummary] = useState(null);
   const [showDebitDialog, setShowDebitDialog] = useState(false);
 
+  const fetchDebitSummary = useCallback(() => {
+    api
+      .get(`/api/v1/debit/summary?playerName=${encodeURIComponent(data?.playerName)}`)
+      .then((res) => {
+        if (res?.data) setDebitSummary(res.data);
+      })
+      .catch(() => setDebitSummary(null));
+  }, [data?.playerName]);
+
   useEffect(() => {
     if (!show || !data?.playerName) {
       setDebitSummary(null);
       return;
     }
-    api
-      .get(`/api/v1/debit/summary?playerName=${encodeURIComponent(data.playerName)}`)
-      .then((res) => {
-        if (res?.data) setDebitSummary(res.data);
-      })
-      .catch(() => setDebitSummary(null));
-  }, [show, data?.playerName]);
+    fetchDebitSummary();
+  }, [show, data?.playerName, fetchDebitSummary]);
 
   if (!show || !data) return null;
 
@@ -366,6 +370,7 @@ const PayConfirm = ({ show, data, onConfirm, onExit }) => {
         show={showDebitDialog}
         playerName={data.playerName}
         onClose={() => setShowDebitDialog(false)}
+        onPaid={fetchDebitSummary}
       />
     </>
   );

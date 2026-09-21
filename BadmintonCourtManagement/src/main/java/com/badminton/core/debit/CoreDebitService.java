@@ -14,6 +14,7 @@ import com.badminton.model.debit.PayDebitModel;
 import com.badminton.model.debit.RemainingDebitModel;
 import com.badminton.model.dto.AllocateDebitPaymentRequest;
 import com.badminton.model.dto.AllocateDebitPaymentResponse;
+import com.badminton.model.dto.DebitPayDTO;
 import com.badminton.model.dto.PayDebitDTO;
 import com.badminton.model.dto.RemainingDebitDTO;
 import com.badminton.repository.DebitRepository;
@@ -38,7 +39,6 @@ import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -211,48 +211,47 @@ public class CoreDebitService {
                 .build();
         try {
             log.info("Allocating DebitPayment...");
-            BigDecimal payAmount = allocateDebitPaymentRequest.getPayAmount();
             Player player = userRepository.findByPlayerName(allocateDebitPaymentRequest.getPlayerName())
                     .orElseThrow(() -> new BusinessException(
                             ErrorCodeEnum.PLAYER_NOT_FOUND,
                             "Player not found with name: " + allocateDebitPaymentRequest.getPlayerName()));
 
-            List<Debit> unpaidDebits = debitRepository.findUnpaidDebitsByPlayerIdOrderByCreatedDateAsc(player.getPlayerId())
-                    .stream()
-                    .sorted(Comparator.comparingInt(d -> d.getStatus() == DebitStatus.PARTIALLY_PAID ? 0 : 1))
-                    .collect(Collectors.toList());
+            List<Debit> unpaidDebits = debitRepository.findUnpaidDebitsByPlayerIdOrderByCreatedDateAsc(player.getPlayerId());
             if (unpaidDebits.isEmpty()) {
                 throw new BusinessException(ErrorCodeEnum.DEBTS_NOT_FOUND);
             }
 
-            // call corePayDebitService to pay each debit until the pay amount is used all.
-            BigDecimal remainingPayment = payAmount;
+            // call corePayDebitService to pay each requested debit in the list.
+            BigDecimal totalPaid = BigDecimal.ZERO;
             int numPaidDebts = 0;
-            for (Debit debit : unpaidDebits) {
-                if (remainingPayment.compareTo(BigDecimal.ZERO) <= 0) {
-                    break;
-                }
+            List<DebitPayDTO> debitPays = allocateDebitPaymentRequest.getListDebitPay();
+            if (debitPays != null) {
+                for (DebitPayDTO debitPay : debitPays) {
+                    Debit debit = unpaidDebits.stream()
+                            .filter(d -> TimeUtils.toDateTimeDisplay(d.getCreatedDate()).equals(debitPay.getDateTime()))
+                            .findFirst()
+                            .orElseThrow(() -> new BusinessException(
+                                    ErrorCodeEnum.DEBIT_NOT_FOUND,
+                                    "Unpaid debit not found at: " + debitPay.getDateTime()));
 
-                BigDecimal debitRemaining = debit.getRemainingAmount();
-                BigDecimal appliedAmount = debitRemaining.min(remainingPayment);
+                    PayDebitModel payDebitModel = corePayDebitService.payForDebit(PayDebitDTO.builder()
+                            .playerName(player.getPlayerName())
+                            .payAmount(debitPay.getPayAmount())
+                            .payMethod(allocateDebitPaymentRequest.getPayMethod())
+                            .note(allocateDebitPaymentRequest.getNote())
+                            .payForDebit(DebitModel.builder().debitId(debit.getDebitId()).build())
+                            .build());
 
-                PayDebitModel payDebitModel = corePayDebitService.payForDebit(PayDebitDTO.builder()
-                        .playerName(player.getPlayerName())
-                        .payAmount(appliedAmount)
-                        .payMethod(allocateDebitPaymentRequest.getPayMethod())
-                        .note(allocateDebitPaymentRequest.getNote())
-                        .payForDebit(DebitModel.builder().debitId(debit.getDebitId()).build())
-                        .build());
-
-                remainingPayment = remainingPayment.subtract(appliedAmount);
-                if (DebitStatus.PAID.name().equals(payDebitModel.getStatus()) ||
-                        DebitStatus.PARTIALLY_PAID.name().equals(payDebitModel.getStatus())) {
-                    numPaidDebts++;
+                    totalPaid = totalPaid.add(debitPay.getPayAmount());
+                    if (DebitStatus.PAID.name().equals(payDebitModel.getStatus()) ||
+                            DebitStatus.PARTIALLY_PAID.name().equals(payDebitModel.getStatus())) {
+                        numPaidDebts++;
+                    }
                 }
             }
 
             DebitSummary summary = updatePlayerDebitSummary(player);
-            response.setPaidDebts(payAmount.subtract(remainingPayment));
+            response.setPaidDebts(totalPaid);
             response.setRemainingDebts(summary.getTotalDebts());
             response.setNumPaidDebts(numPaidDebts);
             response.setNumRemainingDebts(summary.getNumDebts());

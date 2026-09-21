@@ -22,6 +22,16 @@ export const parseServerDateTime = (dateTime) => {
   return isNaN(parsed.getTime()) ? null : parsed;
 };
 
+// Converts back to the server's display format "yyyy-MM-dd H:mm:ss"
+// (hour not zero-padded, UTC wall-clock). Endpoints like /debit/pay
+// match debits by comparing this string literally.
+export const toServerDateTimeString = (input) => {
+  const date = parseServerDateTime(input);
+  if (!date) return input ? String(input) : "";
+  const pad2 = (n) => String(n).padStart(2, "0");
+  return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(date.getUTCDate())} ${date.getUTCHours()}:${pad2(date.getUTCMinutes())}:${pad2(date.getUTCSeconds())}`;
+};
+
 const buildOptions = (baseOptions, timeZone) => ({
   ...baseOptions,
   ...(timeZone && { timeZone }),

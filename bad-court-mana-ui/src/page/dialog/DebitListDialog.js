@@ -14,7 +14,7 @@ import Checkbox from "@mui/material/Checkbox";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import api from "../../api/index";
 import { VN_CURRENCY, formatVND } from "../MoneyUtils";
-import { formatVNDateTime, parseServerDateTime } from "../DateTimeUtils";
+import { formatVNDateTime, parseServerDateTime, toServerDateTimeString } from "../DateTimeUtils";
 
 const DEFAULT_FILTER = {
   from: "2026-01-01",
@@ -29,7 +29,7 @@ const DEFAULT_PAGINATION = {
   totalPage: 0,
 };
 
-const DebitListDialog = ({ show, playerName, onClose }) => {
+const DebitListDialog = ({ show, playerName, onClose, onPaid }) => {
   const [debtData, setDebtData] = useState({
     remainingDebits: [],
     debitSummary: null,
@@ -37,8 +37,11 @@ const DebitListDialog = ({ show, playerName, onClose }) => {
   const [payAmount, setPayAmount] = useState("");
   const [selected, setSelected] = useState(new Set());
   const [partialSelected, setPartialSelected] = useState(new Set());
+  const [partialAmounts, setPartialAmounts] = useState(new Map());
   const [prePayResponse, setPrePayResponse] = useState(null);
+  const [paying, setPaying] = useState(false);
   const prePayTimerRef = useRef(null);
+  const skipPrePayRef = useRef(false);
 
   const normalizeDateTime = (dateTime) => {
     const parsed = parseServerDateTime(dateTime);
@@ -52,7 +55,9 @@ const DebitListDialog = ({ show, playerName, onClose }) => {
       setPayAmount("");
       setSelected(new Set());
       setPartialSelected(new Set());
+      setPartialAmounts(new Map());
       setPrePayResponse(null);
+      setPaying(false);
       return;
     }
     api
@@ -82,15 +87,23 @@ const DebitListDialog = ({ show, playerName, onClose }) => {
     if (prePayTimerRef.current) {
       clearTimeout(prePayTimerRef.current);
     }
+    if (skipPrePayRef.current) {
+      skipPrePayRef.current = false;
+      setPrePayResponse(null);
+      return;
+    }
     if (!numericPay || numericPay <= 0) {
       setPrePayResponse(null);
+      setSelected(new Set());
+      setPartialSelected(new Set());
+      setPartialAmounts(new Map());
       return;
     }
     prePayTimerRef.current = setTimeout(() => {
       api
         .post("/api/v1/debit/prePay", {
           playerName,
-          paymentAmount: numericPay,
+          totalPayAmount: numericPay,
           paymentMethod: "CASH",
           note: "",
         })
@@ -110,31 +123,80 @@ const DebitListDialog = ({ show, playerName, onClose }) => {
   const handlePayAmountChange = (e) => {
     const val = e.target.value;
     if (val === "" || /^\d+$/.test(val)) {
+      skipPrePayRef.current = false;
       setPayAmount(val);
     }
   };
 
   const toggleSelected = (idx) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(idx)) {
-        next.delete(idx);
-      } else {
-        next.add(idx);
+    const nextSelected = new Set(selected);
+    if (nextSelected.has(idx)) {
+      nextSelected.delete(idx);
+    } else {
+      nextSelected.add(idx);
+    }
+    setSelected(nextSelected);
+    setPartialSelected(new Set());
+    setPartialAmounts(new Map());
+
+    const total = [...nextSelected].reduce(
+      (sum, i) => sum + (remainingDebits[i]?.money?.amount || 0),
+      0
+    );
+    skipPrePayRef.current = true;
+    setPayAmount(total > 0 ? String(total) : "");
+  };
+
+  const handlePay = () => {
+    if (paying) return;
+    const listDebitPay = [];
+    selected.forEach((idx) => {
+      const debt = remainingDebits[idx];
+      const amount = debt?.money?.amount || 0;
+      if (debt?.dateTime && amount > 0) {
+        listDebitPay.push({
+          dateTime: toServerDateTimeString(debt.dateTime),
+          payAmount: amount,
+        });
       }
-      return next;
     });
-    setPartialSelected((prev) => {
-      const next = new Set(prev);
-      next.delete(idx);
-      return next;
+    partialSelected.forEach((idx) => {
+      const debt = remainingDebits[idx];
+      const amount = partialAmounts.get(idx) || 0;
+      if (debt?.dateTime && amount > 0) {
+        listDebitPay.push({
+          dateTime: toServerDateTimeString(debt.dateTime),
+          payAmount: amount,
+        });
+      }
     });
+    if (listDebitPay.length === 0) return;
+    if (prePayTimerRef.current) {
+      clearTimeout(prePayTimerRef.current);
+      prePayTimerRef.current = null;
+    }
+    const totalPayAmount = listDebitPay.reduce((sum, item) => sum + item.payAmount, 0);
+    setPaying(true);
+    api
+      .post("/api/v1/debit/pay", {
+        playerName,
+        totalPayAmount,
+        paymentMethod: "CASH",
+        note: "",
+        listDebitPay,
+      })
+      .then((res) => {
+        if (res?.data) {
+          onPaid?.();
+          onClose();
+        }
+      })
+      .catch(() => { })
+      .finally(() => setPaying(false));
   };
 
   useEffect(() => {
     if (!prePayResponse?.prepayDebits || remainingDebits.length === 0) {
-      setSelected(new Set());
-      setPartialSelected(new Set());
       return;
     }
     const fullQueueMap = new Map();
@@ -155,22 +217,28 @@ const DebitListDialog = ({ show, playerName, onClose }) => {
       if (item?.payStatus === "FULL_PAY") {
         enqueue(fullQueueMap, `${baseKey}|${debit?.money?.amount}`, true);
       } else if (item?.payStatus === "PARTIALLY_PAY") {
-        enqueue(partialQueueMap, baseKey, true);
+        enqueue(partialQueueMap, baseKey, debit?.money?.amount || 0);
       }
     });
 
     const full = new Set();
     const partial = new Set();
+    const newPartialAmounts = new Map();
     remainingDebits.forEach((debt, idx) => {
       const baseKey = `${normalizeDateTime(debt.dateTime)}|${debt.note}`;
       if (dequeue(fullQueueMap, `${baseKey}|${debt.money?.amount}`)) {
         full.add(idx);
-      } else if (dequeue(partialQueueMap, baseKey)) {
-        partial.add(idx);
+      } else {
+        const appliedAmount = dequeue(partialQueueMap, baseKey);
+        if (appliedAmount !== undefined) {
+          partial.add(idx);
+          newPartialAmounts.set(idx, appliedAmount);
+        }
       }
     });
     setSelected(full);
     setPartialSelected(partial);
+    setPartialAmounts(newPartialAmounts);
   }, [prePayResponse, remainingDebits]);
 
   return (
@@ -343,8 +411,8 @@ const DebitListDialog = ({ show, playerName, onClose }) => {
         <Button
           variant="contained"
           color="warning"
-          onClick={onClose}
-          disabled={numericPay <= 0}
+          onClick={handlePay}
+          disabled={paying || (selected.size === 0 && partialSelected.size === 0)}
           sx={{ flex: 1, borderRadius: 2, py: 1.2, fontWeight: 700 }}
           disableElevation
         >
