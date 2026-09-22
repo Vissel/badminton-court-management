@@ -66,6 +66,6 @@ public class CoreAvailablePlayerService {
         if (availablePlayer == null) {
             return null;
         }
-        return userRepository.findByPlayerName(name).orElse(null);
+        return availablePlayer.getPlayer();
     }
 }

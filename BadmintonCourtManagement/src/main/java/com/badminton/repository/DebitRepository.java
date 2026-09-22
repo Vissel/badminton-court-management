@@ -23,6 +23,7 @@ public interface DebitRepository extends JpaRepository<Debit, Integer> {
 
     @Lock(LockModeType.PESSIMISTIC_READ)
     @Query("SELECT d FROM Debit d WHERE d.player.playerId = :playerId " +
+            "AND d.remainingAmount > 0 " +
             "AND (:from IS NULL OR d.createdDate >= :from) " +
             "AND (:to IS NULL OR d.createdDate <= :to) " +
             "ORDER BY d.createdDate DESC")

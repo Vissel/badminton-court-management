@@ -444,7 +444,7 @@ public class CourtServicesService {
             Team team = getTeam(game, area);
 
             Optional<AvailablePlayer> optPlayer = avaPlayerRepo
-                    .findAvailablePlayerInSessionByName(session.findListCurrentSession().getFirst(), playerName);
+                    .findAvailablePlayerInSessionByNameAndLeaveTimeNull(session.findListCurrentSession().getFirst(), playerName);
             if (!optPlayer.isPresent()) {
                 throw new BusinessException(ErrorCodeEnum.PLAYER_NOT_FOUND, "Available player is not found.");
             }

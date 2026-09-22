@@ -361,14 +361,14 @@ public class SessionServiceImpl {
         }
 
         try {
-            // Parse the UTC+7 datetime string to Instant
+            // Parse the UTC+7 datetime string to get the requested local date
             LocalDateTime localDateTime = LocalDateTime.parse(dateTime, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
-            ZonedDateTime utcPlus7 = localDateTime.atZone(ZoneOffset.of("+7"));
-            Instant instant = utcPlus7.toInstant();
+            LocalDate requestDate = localDateTime.toLocalDate();
 
-            // Calculate start and end of day for that date using existing pattern
-            Instant startOfDay = utcPlus7.toLocalDate().atStartOfDay(ZoneOffset.of("+7")).toInstant();
-            Instant endOfDay = toEndOfDay(instant);
+            // DB instants are stored in UTC+7 wall-clock basis (see TimeUtils.toDateDisplay),
+            // so a session for VN date D has from_time within the UTC calendar day D.
+            Instant startOfDay = requestDate.atStartOfDay(ZoneOffset.UTC).toInstant();
+            Instant endOfDay = requestDate.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
 
             // Query sessions for that day, ordered by fromTime desc
             List<Session> sessions = sessionRepo.findByFromTimeBetweenOrderByFromTimeDesc(startOfDay, endOfDay);

@@ -11,4 +11,5 @@ public class PayResponse {
     private String payType;
     private Float payAmount;
     private String payTime;
+    private Float debitAmount;
 }

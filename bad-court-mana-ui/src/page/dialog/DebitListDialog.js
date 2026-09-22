@@ -11,6 +11,8 @@ import ListItem from "@mui/material/ListItem";
 import ListItemText from "@mui/material/ListItemText";
 import TextField from "@mui/material/TextField";
 import Checkbox from "@mui/material/Checkbox";
+import Snackbar from "@mui/material/Snackbar";
+import Alert from "@mui/material/Alert";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import api from "../../api/index";
 import { VN_CURRENCY, formatVND } from "../MoneyUtils";
@@ -40,8 +42,15 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid }) => {
   const [partialAmounts, setPartialAmounts] = useState(new Map());
   const [prePayResponse, setPrePayResponse] = useState(null);
   const [paying, setPaying] = useState(false);
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    severity: "success",
+    message: "",
+    autoHideDuration: null,
+  });
   const prePayTimerRef = useRef(null);
   const skipPrePayRef = useRef(false);
+  const successCloseTimerRef = useRef(null);
 
   const normalizeDateTime = (dateTime) => {
     const parsed = parseServerDateTime(dateTime);
@@ -58,6 +67,11 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid }) => {
       setPartialAmounts(new Map());
       setPrePayResponse(null);
       setPaying(false);
+      setSnackbar((s) => ({ ...s, open: false }));
+      if (successCloseTimerRef.current) {
+        clearTimeout(successCloseTimerRef.current);
+        successCloseTimerRef.current = null;
+      }
       return;
     }
     api
@@ -186,12 +200,36 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid }) => {
         listDebitPay,
       })
       .then((res) => {
-        if (res?.data) {
-          onPaid?.();
-          onClose();
+        const data = res?.data;
+        const status = data?.status;
+        if (status === "SUCCESS" || status === "PARTIAL") {
+          setSnackbar({
+            open: true,
+            severity: "success",
+            message: "Thanh toán thành công",
+            autoHideDuration: 2000,
+          });
+          successCloseTimerRef.current = setTimeout(() => {
+            onPaid?.();
+            onClose();
+          }, 2000);
+        } else {
+          setSnackbar({
+            open: true,
+            severity: "error",
+            message: data?.message || "Thanh toán thất bại",
+            autoHideDuration: null,
+          });
         }
       })
-      .catch(() => { })
+      .catch(() => {
+        setSnackbar({
+          open: true,
+          severity: "error",
+          message: "Thanh toán thất bại. Vui lòng thử lại.",
+          autoHideDuration: null,
+        });
+      })
       .finally(() => setPaying(false));
   };
 
@@ -242,184 +280,205 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid }) => {
   }, [prePayResponse, remainingDebits]);
 
   return (
-    <Dialog
-      open={show}
-      onClose={(event, reason) => {
-        if (reason === "backdropClick") return;
-        onClose();
-      }}
-      maxWidth="xs"
-      fullWidth
-      PaperProps={{ sx: { borderRadius: 3, overflow: "hidden" } }}
-    >
-      <Box
-        sx={{
-          bgcolor: "warning.light",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          py: 2.5,
-          px: 2,
+    <>
+      <Dialog
+        open={show}
+        onClose={(event, reason) => {
+          if (reason === "backdropClick") return;
+          onClose();
         }}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3, overflow: "hidden" } }}
       >
         <Box
           sx={{
-            bgcolor: "warning.main",
-            borderRadius: "50%",
-            width: 64,
-            height: 64,
+            bgcolor: "warning.light",
             display: "flex",
+            flexDirection: "column",
             alignItems: "center",
-            justifyContent: "center",
-            mb: 1,
-            boxShadow: "0 4px 14px 0 rgba(0,0,0,0.15)",
+            py: 2.5,
+            px: 2,
           }}
         >
-          <WarningAmberIcon sx={{ fontSize: 40, color: "#fff" }} />
-        </Box>
-        <Typography variant="h6" fontWeight={700} color="#fff">
-          Nợ của <strong>{playerName}</strong>
-        </Typography>
-      </Box>
-
-      <DialogContent sx={{ px: 3, py: 2 }}>
-        {remainingDebits.length === 0 ? (
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            textAlign="center"
-            sx={{ py: 2 }}
+          <Box
+            sx={{
+              bgcolor: "warning.main",
+              borderRadius: "50%",
+              width: 64,
+              height: 64,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              mb: 1,
+              boxShadow: "0 4px 14px 0 rgba(0,0,0,0.15)",
+            }}
           >
-            Không có khoản nợ nào.
+            <WarningAmberIcon sx={{ fontSize: 40, color: "#fff" }} />
+          </Box>
+          <Typography variant="h6" fontWeight={700} color="#fff">
+            Nợ của <strong>{playerName}</strong>
           </Typography>
-        ) : (
-          <>
-            <Box
-              sx={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                mb: 1.5,
-              }}
+        </Box>
+
+        <DialogContent sx={{ px: 3, py: 2 }}>
+          {remainingDebits.length === 0 ? (
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              textAlign="center"
+              sx={{ py: 2 }}
             >
-              <Typography variant="body2" color="text.secondary">
-                Tổng nợ ({numberDebit} khoản)
-              </Typography>
-              <Typography variant="body1" fontWeight={700} color="warning.main">
-                {formatVND(totalDebts)} {debitSummary?.totalDebts?.currency || VN_CURRENCY}
-              </Typography>
-            </Box>
+              Không có khoản nợ nào.
+            </Typography>
+          ) : (
+            <>
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  mb: 1.5,
+                }}
+              >
+                <Typography variant="body2" color="text.secondary">
+                  Tổng nợ ({numberDebit} khoản)
+                </Typography>
+                <Typography variant="body1" fontWeight={700} color="warning.main">
+                  {formatVND(totalDebts)} {debitSummary?.totalDebts?.currency || VN_CURRENCY}
+                </Typography>
+              </Box>
 
-            <Box
-              sx={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                mb: 1,
-              }}
-            >
-              <Typography variant="body2" color="text.secondary">
-                Tổng thanh toán
-              </Typography>
-              <Typography variant="body1" fontWeight={700} color="success.main">
-                {formatVND(appliedPayTotal)} {VN_CURRENCY}
-              </Typography>
-            </Box>
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  mb: 1,
+                }}
+              >
+                <Typography variant="body2" color="text.secondary">
+                  Tổng thanh toán
+                </Typography>
+                <Typography variant="body1" fontWeight={700} color="success.main">
+                  {formatVND(appliedPayTotal)} {VN_CURRENCY}
+                </Typography>
+              </Box>
 
-            <TextField
-              fullWidth
-              size="small"
-              label="Số tiền thanh toán"
-              placeholder="0"
-              value={payAmount}
-              onChange={handlePayAmountChange}
-              sx={{ mb: 1.5 }}
-            />
+              <TextField
+                fullWidth
+                size="small"
+                label="Số tiền thanh toán"
+                placeholder="0"
+                value={payAmount}
+                onChange={handlePayAmountChange}
+                sx={{ mb: 1.5 }}
+              />
 
-            <Divider sx={{ mb: 1 }} />
+              <Divider sx={{ mb: 1 }} />
 
-            <List dense disablePadding>
-              {remainingDebits.map((debt, idx) => (
-                <ListItem
-                  key={idx}
-                  disableGutters
-                  disablePadding
-                  sx={{
-                    py: 0.75,
-                    borderBottom: 1,
-                    borderColor: "divider",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 1,
-                  }}
-                >
-                  <Checkbox
-                    checked={selected.has(idx)}
-                    indeterminate={partialSelected.has(idx)}
-                    onChange={() => toggleSelected(idx)}
-                    size="small"
-                    sx={{ p: 0.5 }}
-                  />
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{ minWidth: 22, textAlign: "center" }}
+              <List dense disablePadding>
+                {remainingDebits.map((debt, idx) => (
+                  <ListItem
+                    key={idx}
+                    disableGutters
+                    disablePadding
+                    sx={{
+                      py: 0.75,
+                      borderBottom: 1,
+                      borderColor: "divider",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1,
+                    }}
                   >
-                    {idx + 1}
-                  </Typography>
-                  <ListItemText
-                    primary={
-                      <Box
-                        sx={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                        }}
-                      >
-                        <Typography variant="body2">{debt.note || "Nợ"}</Typography>
-                        <Typography
-                          variant="body2"
-                          fontWeight={600}
-                          color="warning.dark"
+                    <Checkbox
+                      checked={selected.has(idx)}
+                      indeterminate={partialSelected.has(idx)}
+                      onChange={() => toggleSelected(idx)}
+                      size="small"
+                      sx={{ p: 0.5 }}
+                    />
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ minWidth: 22, textAlign: "center" }}
+                    >
+                      {idx + 1}
+                    </Typography>
+                    <ListItemText
+                      primary={
+                        <Box
+                          sx={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                          }}
                         >
-                          {formatVND(debt.money?.amount)} {debt.money?.currency || VN_CURRENCY}
+                          <Typography variant="body2">{debt.note || "Nợ"}</Typography>
+                          <Typography
+                            variant="body2"
+                            fontWeight={600}
+                            color="warning.dark"
+                          >
+                            {formatVND(debt.money?.amount)} {debt.money?.currency || VN_CURRENCY}
+                          </Typography>
+                        </Box>
+                      }
+                      secondary={
+                        <Typography variant="caption" color="text.secondary">
+                          {formatVNDateTime(debt.dateTime)}
                         </Typography>
-                      </Box>
-                    }
-                    secondary={
-                      <Typography variant="caption" color="text.secondary">
-                        {formatVNDateTime(debt.dateTime)}
-                      </Typography>
-                    }
-                  />
-                </ListItem>
-              ))}
-            </List>
-          </>
-        )}
-      </DialogContent>
+                      }
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            </>
+          )}
+        </DialogContent>
 
-      <DialogActions sx={{ px: 3, pb: 2.5, pt: 1.5, gap: 1.5, display: "flex" }}>
-        <Button
-          variant="outlined"
-          color="inherit"
-          onClick={onClose}
-          sx={{ flex: 1, borderRadius: 2, py: 1.2, fontWeight: 700 }}
+        <DialogActions sx={{ px: 3, pb: 2.5, pt: 1.5, gap: 1.5, display: "flex" }}>
+          <Button
+            variant="outlined"
+            color="inherit"
+            onClick={onClose}
+            sx={{ flex: 1, borderRadius: 2, py: 1.2, fontWeight: 700 }}
+          >
+            Đóng
+          </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            onClick={handlePay}
+            disabled={paying || (selected.size === 0 && partialSelected.size === 0)}
+            sx={{ flex: 1, borderRadius: 2, py: 1.2, fontWeight: 700 }}
+            disableElevation
+          >
+            Thanh toán
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={snackbar.autoHideDuration}
+        anchorOrigin={{ vertical: "top", horizontal: "center" }}
+        onClose={(_, reason) => {
+          if (reason === "clickaway") return;
+          setSnackbar((s) => ({ ...s, open: false }));
+        }}
+      >
+        <Alert
+          severity={snackbar.severity}
+          variant="filled"
+          onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+          sx={{ width: "100%" }}
         >
-          Đóng
-        </Button>
-        <Button
-          variant="contained"
-          color="warning"
-          onClick={handlePay}
-          disabled={paying || (selected.size === 0 && partialSelected.size === 0)}
-          sx={{ flex: 1, borderRadius: 2, py: 1.2, fontWeight: 700 }}
-          disableElevation
-        >
-          Thanh toán
-        </Button>
-      </DialogActions>
-    </Dialog>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+    </>
   );
 };
 

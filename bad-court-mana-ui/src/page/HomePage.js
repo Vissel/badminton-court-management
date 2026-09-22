@@ -294,13 +294,13 @@ function HomePage() {
         currName: oldName,
         newName: newName,
       });
-      
+
       if (responseSuccess(res)) {
         // Update available players list
-        setAvailablePlayers((prev) => 
+        setAvailablePlayers((prev) =>
           prev.map((player) => player === oldName ? newName : player)
         );
-        
+
         // Update player service map
         setPlayerServiceMap((prev) => {
           const updated = { ...prev };
@@ -310,7 +310,7 @@ function HomePage() {
           }
           return updated;
         });
-        
+
         // Update courts if player is on a court
         setCourts((prev) => {
           const updated = { ...prev };
@@ -323,12 +323,12 @@ function HomePage() {
           }
           return updated;
         });
-        
+
         // Update selected player if it's the renamed player
         if (selectedPlayer === oldName) {
           setSelectedPlayer(newName);
         }
-        
+
         return true;
       }
       return false;
@@ -431,7 +431,7 @@ function HomePage() {
           return next;
         });
         removePlayerFromCourt(res.data);
-        setServiceToPlayer(res.data.playerName, RENT_BY_TIME_PREFIX+res.data.courtName ,res.data.fee, formatVND(res.data.fee));
+        setServiceToPlayer(res.data.playerName, RENT_BY_TIME_PREFIX + res.data.courtName, res.data.fee, formatVND(res.data.fee));
       }
     } catch (error) {
       console.error("Error finishing rent:", error);
@@ -733,7 +733,7 @@ function HomePage() {
   const [showDialog, setShowDialog] = useState(false);
 
   // set a service to player, no api call
-  const setServiceToPlayer= (playerName, serviceName, cost, costFormat) => {
+  const setServiceToPlayer = (playerName, serviceName, cost, costFormat) => {
     if (!playerName) return;
     setPlayerServiceMap((prev) => {
       const existing = prev[playerName] || [];
@@ -865,7 +865,7 @@ function HomePage() {
         const resCourtMana = await api.get(`/court-mana/getCourtManagement`);
         if (resCourtMana.status === 200 && resCourtMana.data !== "") {
           const resGames = resCourtMana.data.gameDTOs;
-          
+
           // set rental info map
           setRentalInfoMap((prev) => {
             const currInfo = { ...prev };
@@ -996,7 +996,8 @@ function HomePage() {
     // Subtract advance payment from total expense
     const advanceService = data.services.find(s => s.serviceName === ADVANCE_SERVICE_NAME);
     const advanceAmount = advanceService ? advanceService.cost : 0;
-    const amountToPay = totalExpense - advanceAmount;
+    const debitAmount = data.debitAmount || 0;
+    const amountToPay = totalExpense - advanceAmount - debitAmount;
 
     // Calculate return amount if advance > total
     const returnAmount = advanceAmount > totalExpense ? advanceAmount - totalExpense : 0;
@@ -1010,6 +1011,17 @@ function HomePage() {
       returnAmount: returnAmount > 0 ? returnAmount : 0, // Amount to return to customer
       payType: data.type,
     });
+
+    // Record the unpaid part as a new debit for this player
+    if (debitAmount > 0) {
+      api.post(`/api/v1/debit/create`, {
+        playerName: data.playerName,
+        debitAmount: debitAmount,
+        note: "Ghi nợ",
+        // createdTime is parsed as LocalDateTime in UTC+7 (no timezone suffix)
+        createdTime: new Date().toLocaleString("sv-SE", { timeZone: "Asia/Ho_Chi_Minh" }).replace(" ", "T"),
+      });
+    }
     setShowPayConfirmDialog(false);
     setShowDialog(false);
     setAvailablePlayers((prev) => prev.filter((p) => p !== data.playerName));
