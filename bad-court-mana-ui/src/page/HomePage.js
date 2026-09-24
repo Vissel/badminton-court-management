@@ -13,6 +13,7 @@ import Tab from "@mui/material/Tab";
 
 import "../App.css";
 import api from "../api/index";
+import { emitApiError } from "../api/errorBus";
 
 import DraggableService from "./dragNdrop/DraggableService";
 import Court from "./dragNdrop/Court";
@@ -119,7 +120,7 @@ function HomePage() {
       shuttleName: ballChangeOption.shuttleName,
       shuttleCost: ballChangeOption.cost,
       selected: true,
-    });
+    }).catch(() => { });
     setSelectedBall(index);
     setSelectedBallVO(ballChangeOption);
   };
@@ -136,15 +137,9 @@ function HomePage() {
         },
       ],
     };
-    api.post(`/court-mana/removePlayerFromCourt`, courtPayload);
-    // .then((res) => {
-    //   if (responseSuccess(res)) {
-
-    //   }
-    // })
-    // .catch((error) => {
-    //   console.error(`Error while onDropPlayerBack - ${playerName}, ${courtId}, ${areaKey}, ${error} `);
-    // });
+    api.post(`/court-mana/removePlayerFromCourt`, courtPayload).catch((error) => {
+      console.error(`Error while onDropPlayerBack - ${playerName}, ${courtId}, ${areaKey}, ${error} `);
+    });
     setCourts((prev) => {
       const updated = { ...prev };
       for (const id in updated) {
@@ -196,7 +191,9 @@ function HomePage() {
         ],
       };
 
-      api.post(`/court-mana/addPlayerToCourt`, gameDTO);
+      api.post(`/court-mana/addPlayerToCourt`, gameDTO).catch((error) => {
+        console.error(`Error adding player ${playerName} to court ${courtId}-${areaKey}`, error);
+      });
       setCourts((prev) => {
         const updated = { ...prev };
         for (const id in updated) {
@@ -267,7 +264,7 @@ function HomePage() {
       }
     } catch (error) {
       console.error("Error while adding player to available session.");
-      alert("Có lỗi khi thêm người chơi. Refresh lại trang này!");
+      emitApiError("Có lỗi khi thêm người chơi. Refresh lại trang này!");
     }
   };
 
@@ -284,7 +281,7 @@ function HomePage() {
       handleDropService(playerName, VN_COST_IN_PERSON, costInPerson, formatVND(costInPerson));
     } catch (error) {
       console.error("Error while adding player to available session.");
-      alert("Có lỗi khi thêm người chơi. Refresh lại trang này!");
+      emitApiError("Có lỗi khi thêm người chơi. Refresh lại trang này!");
     }
   };
 
@@ -334,7 +331,7 @@ function HomePage() {
       return false;
     } catch (error) {
       console.error("Error updating player name:", error);
-      alert("Có lỗi khi đổi tên người chơi. Vui lòng thử lại!");
+      emitApiError("Có lỗi khi đổi tên người chơi. Vui lòng thử lại!");
       return false;
     }
   };
@@ -394,7 +391,7 @@ function HomePage() {
       }
     } catch (error) {
       console.error("Error applying rent by time:", error);
-      alert("Có lỗi khi thuê sân theo giờ. Vui lòng thử lại!");
+      emitApiError("Có lỗi khi thuê sân theo giờ. Vui lòng thử lại!");
     }
   };
   // drop player back to available players area
@@ -435,7 +432,7 @@ function HomePage() {
       }
     } catch (error) {
       console.error("Error finishing rent:", error);
-      alert("Có lỗi khi kết thúc thuê sân. Vui lòng thử lại!");
+      emitApiError("Có lỗi khi kết thúc thuê sân. Vui lòng thử lại!");
     } finally {
       setShowFinishConfirm(false);
       setFinishRentCourtId(null);
@@ -461,7 +458,7 @@ function HomePage() {
       }
     } catch (error) {
       console.error("Error cancelling rent:", error);
-      alert("Có lỗi khi huỷ thuê sân. Vui lòng thử lại!");
+      emitApiError("Có lỗi khi huỷ thuê sân. Vui lòng thử lại!");
     }
   };
 
@@ -532,10 +529,11 @@ function HomePage() {
           if (response.data === true) {
             setLockedCourts((prev) => ({ ...prev, [courtId]: true }));
           } else {
-            alert(" Không thể bắt đầu. Số lượng người chơi mới không hợp lệ .");
+            emitApiError(" Không thể bắt đầu. Số lượng người chơi mới không hợp lệ .");
           }
         }
-      });
+      })
+      .catch(() => { });
   };
   const courtAreaPayload = (area, playerName, expense, isWin) => {
     return {
@@ -619,9 +617,9 @@ function HomePage() {
 
   /** On Finish */
   const onFinish = async (courtId) => {
-    const gameRes = await api.get(
-      `/gameResult/getGameResult?courtId=${courtId}`
-    );
+    const gameRes = await api
+      .get(`/gameResult/getGameResult?courtId=${courtId}`)
+      .catch(() => null);
     if (responseSuccess(gameRes)) {
       setGameDialogData(gameRes.data);
       setShowGameDialog(true);
@@ -648,7 +646,7 @@ function HomePage() {
       await api.post(`/gameResult/confirmGameResult`, payload);
     } catch (error) {
       console.error(error);
-      alert("Hành động thất bại. Load lại trang và thử lại. ");
+      emitApiError("Hành động thất bại. Load lại trang và thử lại. ");
       setShowGameDialog(false);
       return;
     }
@@ -711,15 +709,17 @@ function HomePage() {
     setCancelCourtId(courtId);
   };
   const cancelGameRes = async (courtId) => {
-    const res = await api.post(`/gameResult/rejectGameResult`, {
-      court: {
-        courtId: courtId,
-      },
-      gameState: "Cancel",
-    });
+    const res = await api
+      .post(`/gameResult/rejectGameResult`, {
+        court: {
+          courtId: courtId,
+        },
+        gameState: "Cancel",
+      })
+      .catch(() => null);
 
-    if (res.status !== 200 && res.data === false) {
-      alert("Hành động thất bại. Load lại trang và thử lại. ");
+    if (!res || res.status !== 200 || res.data === false) {
+      emitApiError("Hành động thất bại. Load lại trang và thử lại. ");
       return;
     }
 
@@ -955,10 +955,9 @@ function HomePage() {
         cost: s.cost,
       };
     });
-    const response = await api.post(
-      `/court-mana/updateServiceToPlayer?playerName=${playerName}`,
-      payload
-    );
+    const response = await api
+      .post(`/court-mana/updateServiceToPlayer?playerName=${playerName}`, payload)
+      .catch(() => null);
     if (responseDataTrue(response)) {
       setPlayerServiceMap((prev) => ({
         ...prev,
@@ -966,7 +965,7 @@ function HomePage() {
       }));
       return;
     }
-    alert(`Thay đổi dich vu không thành công.`);
+    emitApiError(`Thay đổi dich vu không thành công.`);
     console.log(`Thay đổi dich vu không thành công.`);
   };
 
@@ -996,35 +995,44 @@ function HomePage() {
     // Subtract advance payment from total expense
     const advanceService = data.services.find(s => s.serviceName === ADVANCE_SERVICE_NAME);
     const advanceAmount = advanceService ? advanceService.cost : 0;
-    const debitAmount = data.debitAmount || 0;
-    const amountToPay = totalExpense - advanceAmount - debitAmount;
-
-    // Calculate return amount if advance > total
-    const returnAmount = advanceAmount > totalExpense ? advanceAmount - totalExpense : 0;
+    const amountToPay = Math.max(totalExpense - advanceAmount, 0);
+    const recordedDebt = data.debitAmount || 0;
+    // The backend currently requires a positive debit amount in PayRequest.debitRequest.
+    // Fall back to the unpaid amount when the admin has not explicitly recorded a debt.
+    const debitAmount = recordedDebt > 0 ? recordedDebt : amountToPay;
 
     // send api pay
-    api.post(`/api/v1/pay/payToPlayer`, {
-      playerName: data.playerName,
-      serviceRequests: data.services,
-      totalExpense: totalExpense, // Total cost of services
-      amountToPay: amountToPay > 0 ? amountToPay : 0, // Amount to pay now (0 if advance covers cost)
-      returnAmount: returnAmount > 0 ? returnAmount : 0, // Amount to return to customer
-      payType: data.type,
-    });
-
-    // Record the unpaid part as a new debit for this player
-    if (debitAmount > 0) {
-      api.post(`/api/v1/debit/create`, {
+    api
+      .post(`/api/v1/pay/payToPlayer`, {
         playerName: data.playerName,
-        debitAmount: debitAmount,
-        note: "Ghi nợ",
-        // createdTime is parsed as LocalDateTime in UTC+7 (no timezone suffix)
-        createdTime: new Date().toLocaleString("sv-SE", { timeZone: "Asia/Ho_Chi_Minh" }).replace(" ", "T"),
+        serviceRequests: data.services,
+        totalExpense: String(totalExpense),
+        // payment method picked in PayConfirm (CASH/TRANSFER); cancel keeps "CANCEL"
+        payType: data.paymentMethod || data.type,
+        debitRequest: {
+          playerName: data.playerName,
+          debitAmount: debitAmount,
+          currency: VN_CURRENCY,
+          note: data.debitNote || "Ghi nợ",
+          // createdTime is parsed as LocalDateTime in UTC+7 (no timezone suffix)
+          createdTime: new Date().toLocaleString("sv-SE", { timeZone: "Asia/Ho_Chi_Minh" }).replace(" ", "T"),
+        },
+      })
+      .then((res) => {
+        const result = res?.data;
+        if (result && result.success) {
+          setShowPayConfirmDialog(false);
+          setShowDialog(false);
+          setAvailablePlayers((prev) => prev.filter((p) => p !== data.playerName));
+        } else if (result) {
+          // HTTP 200 but business error, e.g. invalid debit request, player not found
+          emitApiError(result.errorMessage || "Thanh toán không thành công. Vui lòng thử lại.");
+        }
+        // res === null: the interceptor already alerted on 5xx errors
+      })
+      .catch(() => {
+        // The interceptor already alerted on 4xx/network errors; keep the dialog open for retry
       });
-    }
-    setShowPayConfirmDialog(false);
-    setShowDialog(false);
-    setAvailablePlayers((prev) => prev.filter((p) => p !== data.playerName));
   };
 
   // find player name from court

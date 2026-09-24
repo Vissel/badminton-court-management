@@ -5,7 +5,6 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import IconButton from "@mui/material/IconButton";
 import CloseIcon from "@mui/icons-material/Close";
-import DriveFileRenameOutlineIcon from "@mui/icons-material/DriveFileRenameOutline";
 import ModeEditIcon from '@mui/icons-material/ModeEdit';
 import TextField from "@mui/material/TextField";
 import Button from "@mui/material/Button";
@@ -17,6 +16,9 @@ import List from "@mui/material/List";
 import ListItem from "@mui/material/ListItem";
 import ListItemText from "@mui/material/ListItemText";
 import Chip from "@mui/material/Chip";
+import PlayerDebtSection from "./PlayerDebtSection";
+import { createDebit } from "../../api/debtApi";
+import { emitApiError } from "../../api/errorBus";
 import { TYPE, ADVANCE_SERVICE_NAME } from "../HomePage";
 import { VN_CURRENCY, formatVND } from "./../MoneyUtils";
 
@@ -99,6 +101,31 @@ const ServiceDialog = ({
     onPay(playerName, TYPE.PAY, services, Number(totalCost));
   };
 
+  // "+ Ghi nợ" creates the debt immediately — it is not tied to this bill's payment.
+  const handleRecordDebt = useCallback(
+    async (amount, note) => {
+      try {
+        const res = await createDebit({
+          playerName,
+          debitAmount: amount,
+          currency: VN_CURRENCY,
+          note: note || "Ghi nợ",
+          // createdTime is parsed as LocalDateTime in UTC+7 (no timezone suffix)
+          createdTime: new Date()
+            .toLocaleString("sv-SE", { timeZone: "Asia/Ho_Chi_Minh" })
+            .replace(" ", "T"),
+        });
+        if (res?.data === true) return true;
+        emitApiError("Ghi nợ thất bại. Vui lòng thử lại.");
+        return false;
+      } catch {
+        // The api interceptor already alerted on transport/server errors
+        return false;
+      }
+    },
+    [playerName]
+  );
+
   const handleRemoveService = (index) => {
     const updated = services.filter((_, i) => i !== index);
     onUpdateServices(playerName, updated);
@@ -177,222 +204,248 @@ const ServiceDialog = ({
   }, [playerName]);
 
   return (
-    <Dialog
-      open
-      fullWidth
-      maxWidth="sm"
-      onClose={(event, reason) => {
-        if (reason === "backdropClick") return;
-        onClose(false);
-      }}
-    >
-      <DialogTitle sx={{ pr: 6 }}>
-        <IconButton
-          aria-label="close"
-          onClick={() => onClose(false)}
-          sx={{ position: "absolute", right: 8, top: 8 }}
-        >
-          <CloseIcon />
-        </IconButton>
-        <Typography variant="h6" align="center" component="span" display="block">
-          Bảng chi phí của:
-        </Typography>
-        {canEditPlayerName && !hideActions && isEditingName ? (
-          <Box sx={{ width: "100%", maxWidth: 360, mt: 1 }}>
-            <Stack direction="row" spacing={1} alignItems="center" justifyContent="center">
+    <>
+      <Dialog
+        open
+        fullWidth
+        maxWidth="sm"
+        onClose={(event, reason) => {
+          if (reason === "backdropClick") return;
+          onClose(false);
+        }}
+      >
+        <DialogTitle sx={{ px: 6 }}>
+          <IconButton
+            aria-label="close"
+            onClick={() => onClose(false)}
+            sx={{ position: "absolute", right: 8, top: 8 }}
+          >
+            <CloseIcon />
+          </IconButton>
+          <Typography
+            variant="h6"
+            component="div"
+            sx={{ textAlign: "center", width: "100%" }}
+          >
+            Bảng chi phí của:
+          </Typography>
+          <PlayerDebtSection
+            playerName={playerName}
+            allowRecord={!hideActions}
+            onRecordDebt={handleRecordDebt}
+            leadingFill={isEditingName}
+            chipRowSx={{ mb: 0 }}
+            leading={
+              canEditPlayerName && !hideActions && isEditingName ? (
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Stack direction="row" spacing={0.5} alignItems="center">
+                    <TextField
+                      autoFocus
+                      size="small"
+                      label="Tên người chơi"
+                      value={editPlayerName}
+                      error={Boolean(editError)}
+                      onChange={(e) => {
+                        setEditPlayerName(e.target.value);
+                        setEditError("");
+                      }}
+                      onKeyDown={(e) => {
+                        e.stopPropagation();
+                        if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                          e.preventDefault();
+                          handleSaveEditName();
+                        }
+                        if (e.key === "Escape") {
+                          e.preventDefault();
+                          handleCancelEditName();
+                        }
+                      }}
+                      sx={{ flex: 1, minWidth: 0 }}
+                    />
+                    <Button
+                      size="small"
+                      variant="contained"
+                      onClick={handleSaveEditName}
+                      sx={{ minWidth: 0, px: 0.5, py: 0.25, fontSize: "0.75rem", lineHeight: 1 }}
+                    >
+                      Lưu
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="error"
+                      onClick={handleCancelEditName}
+                      sx={{ minWidth: 0, px: 0.5, py: 0.25, fontSize: "0.75rem", lineHeight: 1 }}
+                    >
+                      Huỷ
+                    </Button>
+                  </Stack>
+                  {editError && (
+                    <Typography variant="caption" color="error" sx={{ display: "block", mt: 0.5 }}>
+                      {editError}
+                    </Typography>
+                  )}
+                </Box>
+              ) : (
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, minWidth: 0 }}>
+                  <Typography variant="subtitle1" fontWeight={600} noWrap>
+                    {playerName}
+                  </Typography>
+                  {canEditPlayerName && !hideActions && (
+                    <IconButton
+                      size="small"
+                      sx={{ color: "primary.main", p: 0.5 }}
+                      onClick={() => setIsEditingName(true)}
+                    >
+                      <ModeEditIcon fontSize="small" />
+                    </IconButton>
+                  )}
+                </Box>
+              )
+            }
+          />
+        </DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="subtitle2" color="primary" gutterBottom>
+            Tổng cộng: {formatVND(totalCost)} {VN_CURRENCY}
+          </Typography>
+
+          <Box sx={{ position: "relative", mb: 2 }}>
+            <Stack direction="row" spacing={1}>
               <TextField
-                autoFocus
                 size="small"
-                label="Tên người chơi"
-                value={editPlayerName}
-                error={Boolean(editError)}
-                onChange={(e) => {
-                  setEditPlayerName(e.target.value);
-                  setEditError("");
-                }}
-                onKeyDown={(e) => {
-                  e.stopPropagation();
-                  if (e.key === "Enter" && !e.nativeEvent.isComposing) {
-                    e.preventDefault();
-                    handleSaveEditName();
-                  }
-                  if (e.key === "Escape") {
-                    e.preventDefault();
-                    handleCancelEditName();
-                  }
-                }}
+                label="Tên dịch vụ"
+                placeholder="Tên dịch vụ"
+                value={serviceName}
+                onChange={(e) => setServiceName(e.target.value)}
+                sx={{ flex: 2 }}
+              />
+              <TextField
+                size="small"
+                label="Giá"
+                placeholder="Giá"
+                value={serviceCost}
+                onChange={(e) => setServiceCost(e.target.value)}
                 sx={{ flex: 1 }}
               />
-              <Button size="small" variant="contained" onClick={handleSaveEditName}>
-                Lưu
-              </Button>
-              <Button size="small" variant="outlined" color="error" onClick={handleCancelEditName}>
-                Huỷ
+              <Button variant="contained" color="success" onClick={handleAddService} sx={{ flexShrink: 0 }}>
+                +
               </Button>
             </Stack>
-            {editError && (
-              <Typography variant="caption" color="error" sx={{ display: "block", mt: 0.5, textAlign: "center" }}>
-                {editError}
-              </Typography>
-            )}
-          </Box>
-        ) : (
-          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0.5, mt: 0.5 }}>
-            <Typography variant="subtitle1" fontWeight={600}>
-              {playerName}
-            </Typography>
-            {canEditPlayerName && !hideActions && (
-              <IconButton
-                size="small"
-                sx={{ color: "primary.main", p: 0.5 }}
-                onClick={() => setIsEditingName(true)}
+
+            {/* Dropdown of matching service options */}
+            {filteredServiceOptions.length > 0 && (
+              <Paper
+                sx={{
+                  position: "absolute",
+                  top: "100%",
+                  left: 0,
+                  right: 0,
+                  zIndex: 20,
+                  maxHeight: 180,
+                  overflow: "auto",
+                  mt: 0.25,
+                }}
               >
-                <ModeEditIcon fontSize="small" />
-              </IconButton>
+                {filteredServiceOptions.map((opt, idx) => (
+                  <Box
+                    key={idx}
+                    onClick={() => handleSelectOption(opt)}
+                    sx={{
+                      px: 1.5,
+                      py: 0.75,
+                      cursor: "pointer",
+                      fontSize: "0.85rem",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      "&:hover": { bgcolor: "action.hover" },
+                    }}
+                  >
+                    <span>{opt.serviceName}</span>
+                    <span style={{ color: "text.secondary" }}>
+                      {opt.costFormat} {opt.currency}
+                    </span>
+                  </Box>
+                ))}
+              </Paper>
             )}
           </Box>
-        )}
-      </DialogTitle>
-      <DialogContent dividers>
-        <Typography variant="subtitle2" color="primary" gutterBottom>
-          Tổng cộng: {formatVND(totalCost)} {VN_CURRENCY}
-        </Typography>
 
-        <Box sx={{ position: "relative", mb: 2 }}>
-          <Stack direction="row" spacing={1}>
-            <TextField
-              size="small"
-              label="Tên dịch vụ"
-              placeholder="Tên dịch vụ"
-              value={serviceName}
-              onChange={(e) => setServiceName(e.target.value)}
-              sx={{ flex: 2 }}
-            />
-            <TextField
-              size="small"
-              label="Giá"
-              placeholder="Giá"
-              value={serviceCost}
-              onChange={(e) => setServiceCost(e.target.value)}
-              sx={{ flex: 1 }}
-            />
-            <Button variant="contained" color="success" onClick={handleAddService} sx={{ flexShrink: 0 }}>
-              +
-            </Button>
-          </Stack>
-
-          {/* Dropdown of matching service options */}
-          {filteredServiceOptions.length > 0 && (
-            <Paper
-              sx={{
-                position: "absolute",
-                top: "100%",
-                left: 0,
-                right: 0,
-                zIndex: 20,
-                maxHeight: 180,
-                overflow: "auto",
-                mt: 0.25,
-              }}
-            >
-              {filteredServiceOptions.map((opt, idx) => (
-                <Box
-                  key={idx}
-                  onClick={() => handleSelectOption(opt)}
-                  sx={{
-                    px: 1.5,
-                    py: 0.75,
-                    cursor: "pointer",
-                    fontSize: "0.85rem",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    "&:hover": { bgcolor: "action.hover" },
-                  }}
-                >
-                  <span>{opt.serviceName}</span>
-                  <span style={{ color: "text.secondary" }}>
-                    {opt.costFormat} {opt.currency}
-                  </span>
-                </Box>
-              ))}
-            </Paper>
-          )}
-        </Box>
-
-        {services.length > 0 ? (
-          <List dense disablePadding>
-            {services.map((service, idx) => {
-              const isAdvance = service.serviceName === ADVANCE_SERVICE_NAME;
-              return (
-                <ListItem
-                  key={idx}
-                  secondaryAction={
-                    <Button size="small" color="error" variant="outlined" onClick={() => handleRemoveService(idx)}>
-                      ✕
-                    </Button>
-                  }
-                  sx={{
-                    borderBottom: 1,
-                    borderColor: "divider",
-                    py: 1,
-                    pl: isAdvance ? 2 : 1,
-                    borderLeft: isAdvance ? 4 : 0,
-                    borderLeftColor: isAdvance ? "success.main" : "transparent",
-                    bgcolor: isAdvance ? "success.50" : "transparent",
-                  }}
-                >
-                  <ListItemText
-                    primary={
-                      <Stack direction="row" alignItems="center" spacing={1}>
-                        {isAdvance && (
-                          <Chip
-                            label="Đã trả"
-                            size="small"
-                            color="success"
-                            variant="outlined"
-                            sx={{ fontSize: "0.65rem", height: 20, fontWeight: 500 }}
-                          />
-                        )}
-                        <Typography variant="body2" sx={{ fontWeight: isAdvance ? 600 : 400 }}>
-                          {displayServiceName(service.serviceName)}
+          {services.length > 0 ? (
+            <List dense disablePadding>
+              {services.map((service, idx) => {
+                const isAdvance = service.serviceName === ADVANCE_SERVICE_NAME;
+                return (
+                  <ListItem
+                    key={idx}
+                    secondaryAction={
+                      <Button size="small" color="error" variant="outlined" onClick={() => handleRemoveService(idx)}>
+                        ✕
+                      </Button>
+                    }
+                    sx={{
+                      borderBottom: 1,
+                      borderColor: "divider",
+                      py: 1,
+                      pl: isAdvance ? 2 : 1,
+                      borderLeft: isAdvance ? 4 : 0,
+                      borderLeftColor: isAdvance ? "success.main" : "transparent",
+                      bgcolor: isAdvance ? "success.50" : "transparent",
+                    }}
+                  >
+                    <ListItemText
+                      primary={
+                        <Stack direction="row" alignItems="center" spacing={1}>
+                          {isAdvance && (
+                            <Chip
+                              label="Đã trả"
+                              size="small"
+                              color="success"
+                              variant="outlined"
+                              sx={{ fontSize: "0.65rem", height: 20, fontWeight: 500 }}
+                            />
+                          )}
+                          <Typography variant="body2" sx={{ fontWeight: isAdvance ? 600 : 400 }}>
+                            {displayServiceName(service.serviceName)}
+                          </Typography>
+                        </Stack>
+                      }
+                      secondary={
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            color: isAdvance ? "success.dark" : "text.secondary",
+                            fontWeight: isAdvance ? 600 : 400
+                          }}
+                        >
+                          {isAdvance
+                            ? `${formatVND(Math.abs(service.cost))} ${VN_CURRENCY}`
+                            : `${service.costFormat} ${VN_CURRENCY}`}
                         </Typography>
-                      </Stack>
-                    }
-                    secondary={
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          color: isAdvance ? "success.dark" : "text.secondary",
-                          fontWeight: isAdvance ? 600 : 400
-                        }}
-                      >
-                        {isAdvance
-                          ? `${formatVND(Math.abs(service.cost))} ${VN_CURRENCY}`
-                          : `${service.costFormat} ${VN_CURRENCY}`}
-                      </Typography>
-                    }
-                  />
-                </ListItem>
-              );
-            })}
-          </List>
-        ) : (
-          <Typography variant="body2" color="text.secondary">
-            Không có dịch vụ nào.
-          </Typography>
+                      }
+                    />
+                  </ListItem>
+                );
+              })}
+            </List>
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              Không có dịch vụ nào.
+            </Typography>
+          )}
+        </DialogContent>
+        {!hideActions && (
+          <DialogActions sx={{ px: 3, py: 2, gap: 1, flexWrap: "wrap" }}>
+            <Button variant="contained" onClick={onPrePay}>
+              Thanh toán
+            </Button>
+            <Button variant="outlined" color="error" onClick={onPreDelete}>
+              Xoá + không thanh toán
+            </Button>
+          </DialogActions>
         )}
-      </DialogContent>
-      {!hideActions && (
-        <DialogActions sx={{ px: 3, py: 2, gap: 1, flexWrap: "wrap" }}>
-          <Button variant="contained" onClick={onPrePay}>
-            Thanh toán
-          </Button>
-          <Button variant="outlined" color="error" onClick={onPreDelete}>
-            Xoá + không thanh toán
-          </Button>
-        </DialogActions>
-      )}
-    </Dialog>
+      </Dialog>
+    </>
   );
 };
 

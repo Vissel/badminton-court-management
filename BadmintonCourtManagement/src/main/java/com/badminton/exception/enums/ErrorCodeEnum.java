@@ -17,7 +17,8 @@ public enum ErrorCodeEnum {
     DEBIT_NOT_FOUND("511", "DEBIT_NOT_FOUND", "Debit is not found"),
     INVALID_PAYMENT_AMOUNT("512", "INVALID_PAYMENT_AMOUNT", "Invalid payment amount"),
     CURRENT_SESSION_NOT_FOUND("513", "CURRENT_SESSION_NOT_FOUND", "Current session not found"),
-    DEBTS_NOT_FOUND("514", "DEBTS_NOT_FOUND", "There no debts found");
+    DEBTS_NOT_FOUND("514", "DEBTS_NOT_FOUND", "There no debts found"),
+    DEBTS_CREATION_FAILURE("515", "DEBTS_CREATION_FAILURE", "Create new debt got failure");
 
     private String code;
     private String name;

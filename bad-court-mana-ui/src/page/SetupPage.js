@@ -16,6 +16,7 @@ import InputAdornment from "@mui/material/InputAdornment";
 import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
 import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
 import api from "../api/index";
+import { emitApiError } from "../api/errorBus";
 import { VN_CURRENCY, formatVND } from "./MoneyUtils";
 
 function SetupPage() {
@@ -191,7 +192,7 @@ function SetupPage() {
     }
     if (isDuplicated) {
       setErrorMess(mess);
-      alert("Không thể lưu thiết lập. Kiểm tra lỗi trùng lặp.");
+      emitApiError("Không thể lưu thiết lập. Kiểm tra lỗi trùng lặp.");
       return;
     }
     const rawNumber = Number(costInPerson.toString().replace(/\D/g, ""));
@@ -242,7 +243,7 @@ function SetupPage() {
         setErrorMess(`${response.data.message}`);
       }
     } catch (error) {
-      alert("Có lỗi khi lưu thiết lập. Kiểm tra lỗi màu đỏ bên dưới.");
+      emitApiError("Có lỗi khi lưu thiết lập. Kiểm tra lỗi màu đỏ bên dưới.");
     }
   };
 

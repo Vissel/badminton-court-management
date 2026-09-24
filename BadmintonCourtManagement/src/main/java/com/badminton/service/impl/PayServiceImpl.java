@@ -1,27 +1,27 @@
 package com.badminton.service.impl;
 
-import com.badminton.entity.AvailablePlayer;
+import com.badminton.core.payment.CorePaymentService;
 import com.badminton.exception.BusinessException;
-import com.badminton.exception.enums.ErrorCodeEnum;
+import com.badminton.model.dto.CreateDebitDTO;
+import com.badminton.model.dto.PaymentDTO;
 import com.badminton.model.dto.ServiceDTO;
-import com.badminton.repository.AvailablePlayerRepository;
+import com.badminton.model.payment.PaymentModel;
 import com.badminton.requestmodel.PayRequest;
-import com.badminton.requestmodel.debit.DebitRequest;
 import com.badminton.response.PayResponse;
 import com.badminton.response.result.Result;
-import com.badminton.service.*;
+import com.badminton.service.PayService;
+import com.badminton.service.ProcessCallback;
+import com.badminton.service.ServiceTemplate;
 import com.badminton.util.ServiceConverter;
-import com.badminton.util.ServiceUtil;
+import com.badminton.util.TimeUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import org.springframework.util.Assert;
 
-import java.util.Arrays;
+import java.math.BigDecimal;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -29,11 +29,7 @@ public class PayServiceImpl implements PayService {
     @Autowired
     ServiceTemplate serviceTemple;
     @Autowired
-    AvailablePlayerRepository availablePlayerRepository;
-    @Autowired
-    SessionServiceImpl sessionService;
-    @Autowired
-    DebitService debitService;
+    CorePaymentService corePaymentService;
 
     @Transactional
     @Override
@@ -56,47 +52,44 @@ public class PayServiceImpl implements PayService {
 
             @Override
             public PayResponse process() throws BusinessException {
-                // create debit for debts contribution
-                DebitRequest debitRequest = payRequest.getDebitRequest();
-                debitRequest.setPlayerName(payRequest.getPlayerName());
-                Result<Boolean> debitResult = debitService.createDebit(debitRequest);
-                if (debitResult == null || !debitResult.isSuccess()) {
-                    TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
-                    throw new BusinessException(
-                            resolveErrorCode(debitResult != null ? debitResult.getErrorCode() : 0),
-                            debitResult != null ? debitResult.getErrorMessage() : "Debit creation failed");
-                }
-
-                Optional<AvailablePlayer> optPlayer = availablePlayerRepository.findAvailablePlayerInSessionByNameAndLeaveTimeNull(
-                        sessionService.findListCurrentSession().getFirst(), payRequest.getPlayerName());
-                if (!optPlayer.isPresent()) {
-                    throw new BusinessException(ErrorCodeEnum.PLAYER_NOT_FOUND, "Available player is not found.");
-                }
-                AvailablePlayer availablePlayer = optPlayer.get();
-                List<ServiceDTO> dtos = payRequest.getServiceRequests().stream()
-                        .map(req -> ServiceConverter.convertRequestToDTO(req))
-                        .collect(Collectors.toList());
-                availablePlayer.setServices(
-                        ServiceUtil.buildJsonArrayStr(dtos));
-                availablePlayer.setLeaveTime(sessionService.getUTCPlus7Instant());
-                availablePlayer.setPayType(payRequest.getPayType());
-                availablePlayer.setPayAmount(Float.valueOf(payRequest.getTotalExpense()));
-                return convertToPayResult(availablePlayerRepository.save(availablePlayer), debitRequest.getDebitAmount());
+                PaymentDTO paymentDTO = convertToPaymentDTO(getRequest());
+                PaymentModel paymentModel = corePaymentService.payForPlayerAndCreateDebt(paymentDTO);
+                return convertToPayResponse(paymentModel);
             }
         });
     }
 
-
-    private PayResponse convertToPayResult(AvailablePlayer availablePlayer, float debitAmount) {
-        return new PayResponse(availablePlayer.getPlayer().getPlayerName(), availablePlayer.getCurrentServices(),
-                availablePlayer.getPayType(), availablePlayer.getPayAmount(), availablePlayer.getLeaveTime().toString(),
-                debitAmount);
+    private PaymentDTO convertToPaymentDTO(PayRequest request) {
+        PaymentDTO dto = new PaymentDTO();
+        dto.setPlayerName(request.getPlayerName());
+        dto.setServices(request.getServiceRequests() != null
+                ? request.getServiceRequests().stream()
+                        .map(ServiceConverter::convertRequestToDTO)
+                        .collect(Collectors.toList())
+                : null);
+        dto.setTotalPay(request.getTotalExpense());
+        dto.setPayType(request.getPayType());
+        dto.setDebit(request.getDebitRequest() != null ? convertToCreateDebitDTO(request.getDebitRequest()) : null);
+        return dto;
     }
 
-    private ErrorCodeEnum resolveErrorCode(int errorCode) {
-        return Arrays.stream(ErrorCodeEnum.values())
-                .filter(code -> Integer.parseInt(code.getCode()) == errorCode)
-                .findFirst()
-                .orElse(ErrorCodeEnum.INTERNAL_SERVER_ERROR);
+    private CreateDebitDTO convertToCreateDebitDTO(com.badminton.requestmodel.debit.DebitRequest request) {
+        CreateDebitDTO dto = new CreateDebitDTO();
+        dto.setDebitAmount(BigDecimal.valueOf(request.getDebitAmount()));
+        dto.setCurrency(request.getCurrency());
+        dto.setNote(request.getNote());
+        dto.setPlayerName(request.getPlayerName());
+        dto.setCreatedTime(TimeUtils.convertToInstant(request.getCreatedTime()));
+        return dto;
+    }
+
+    private PayResponse convertToPayResponse(PaymentModel paymentModel) {
+        return new PayResponse(
+                paymentModel.getPayFor(),
+                paymentModel.getServices(),
+                paymentModel.getPayType(),
+                paymentModel.getPayAmount() != null ? paymentModel.getPayAmount().floatValue() : 0f,
+                paymentModel.getPayTime() != null ? paymentModel.getPayTime().toString() : null,
+                paymentModel.getDebitAmount() != null ? paymentModel.getDebitAmount().floatValue() : 0f);
     }
 }

@@ -11,10 +11,14 @@ import ListItem from "@mui/material/ListItem";
 import ListItemText from "@mui/material/ListItemText";
 import TextField from "@mui/material/TextField";
 import Checkbox from "@mui/material/Checkbox";
+import Select from "@mui/material/Select";
+import MenuItem from "@mui/material/MenuItem";
+import InputAdornment from "@mui/material/InputAdornment";
 import Snackbar from "@mui/material/Snackbar";
 import Alert from "@mui/material/Alert";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import api from "../../api/index";
+import { emitApiError } from "../../api/errorBus";
 import { VN_CURRENCY, formatVND } from "../MoneyUtils";
 import { formatVNDateTime, parseServerDateTime, toServerDateTimeString } from "../DateTimeUtils";
 
@@ -31,12 +35,14 @@ const DEFAULT_PAGINATION = {
   totalPage: 0,
 };
 
-const DebitListDialog = ({ show, playerName, onClose, onPaid }) => {
+const DebitListDialog = ({ show, playerName, onClose, onPaid, preselectedDebits }) => {
   const [debtData, setDebtData] = useState({
     remainingDebits: [],
     debitSummary: null,
   });
   const [payAmount, setPayAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("CASH");
+  const [note, setNote] = useState("");
   const [selected, setSelected] = useState(new Set());
   const [partialSelected, setPartialSelected] = useState(new Set());
   const [partialAmounts, setPartialAmounts] = useState(new Map());
@@ -62,6 +68,8 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid }) => {
     if (!show || !playerName) {
       setDebtData({ remainingDebits: [], debitSummary: null });
       setPayAmount("");
+      setPaymentMethod("CASH");
+      setNote("");
       setSelected(new Set());
       setPartialSelected(new Set());
       setPartialAmounts(new Map());
@@ -74,6 +82,31 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid }) => {
       }
       return;
     }
+    // Debts checked on the caller's page are pre-ticked here, matched by
+    // dateTime|note|amount — the same identity the prePay mapping uses.
+    const applyPreselected = (debts) => {
+      if (!preselectedDebits?.length) return;
+      const keyOf = (d) =>
+        `${normalizeDateTime(d?.dateTime)}|${d?.note}|${d?.money?.amount}`;
+      const queues = new Map();
+      debts.forEach((d, idx) => {
+        const q = queues.get(keyOf(d)) || [];
+        q.push(idx);
+        queues.set(keyOf(d), q);
+      });
+      const sel = new Set();
+      preselectedDebits.forEach((d) => {
+        const q = queues.get(keyOf(d));
+        if (q?.length) sel.add(q.shift());
+      });
+      if (sel.size === 0) return;
+      skipPrePayRef.current = true; // keep the amount-driven prePay from overwriting it
+      setSelected(sel);
+      setPayAmount(
+        String([...sel].reduce((s, i) => s + (debts[i]?.money?.amount || 0), 0))
+      );
+    };
+
     api
       .post("/api/v1/debit/listRemainingDebts", {
         playerNames: [playerName],
@@ -81,10 +114,13 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid }) => {
         filter: DEFAULT_FILTER,
       })
       .then((res) => {
-        if (res?.data) setDebtData(res.data);
+        if (res?.data) {
+          setDebtData(res.data);
+          applyPreselected(res.data.remainingDebits || []);
+        }
       })
       .catch(() => setDebtData({ remainingDebits: [], debitSummary: null }));
-  }, [show, playerName]);
+  }, [show, playerName, preselectedDebits]);
 
   const numericPay = payAmount ? Number(payAmount) : 0;
   const { remainingDebits = [], debitSummary } = debtData;
@@ -118,8 +154,8 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid }) => {
         .post("/api/v1/debit/prePay", {
           playerName,
           totalPayAmount: numericPay,
-          paymentMethod: "CASH",
-          note: "",
+          paymentMethod: paymentMethod,
+          note: note,
         })
         .then((res) => {
           if (res?.data) setPrePayResponse(res.data);
@@ -132,7 +168,7 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid }) => {
         clearTimeout(prePayTimerRef.current);
       }
     };
-  }, [numericPay, playerName]);
+  }, [numericPay, playerName, paymentMethod, note]);
 
   const handlePayAmountChange = (e) => {
     const val = e.target.value;
@@ -195,8 +231,8 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid }) => {
       .post("/api/v1/debit/pay", {
         playerName,
         totalPayAmount,
-        paymentMethod: "CASH",
-        note: "",
+        paymentMethod: paymentMethod,
+        note: note,
         listDebitPay,
       })
       .then((res) => {
@@ -214,21 +250,11 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid }) => {
             onClose();
           }, 2000);
         } else {
-          setSnackbar({
-            open: true,
-            severity: "error",
-            message: data?.message || "Thanh toán thất bại",
-            autoHideDuration: null,
-          });
+          emitApiError(data?.message || "Thanh toán thất bại");
         }
       })
       .catch(() => {
-        setSnackbar({
-          open: true,
-          severity: "error",
-          message: "Thanh toán thất bại. Vui lòng thử lại.",
-          autoHideDuration: null,
-        });
+        // The api interceptor already shows the standard error popup
       })
       .finally(() => setPaying(false));
   };
@@ -365,13 +391,39 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid }) => {
                 </Typography>
               </Box>
 
+              <Box sx={{ display: "flex", gap: 1, mb: 1.5 }}>
+                <TextField
+                  size="small"
+                  label="Số tiền thanh toán"
+                  placeholder="0"
+                  value={payAmount}
+                  onChange={handlePayAmountChange}
+                  sx={{ flex: 1 }}
+                  InputProps={{
+                    endAdornment: (
+                      <InputAdornment position="end">{VN_CURRENCY}</InputAdornment>
+                    ),
+                  }}
+                />
+                <Select
+                  size="small"
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                  aria-label="Phương thức thanh toán"
+                  sx={{ minWidth: 130 }}
+                >
+                  <MenuItem value="CASH">Tiền mặt</MenuItem>
+                  <MenuItem value="TRANSFER">Chuyển khoản</MenuItem>
+                </Select>
+              </Box>
+
               <TextField
                 fullWidth
                 size="small"
-                label="Số tiền thanh toán"
-                placeholder="0"
-                value={payAmount}
-                onChange={handlePayAmountChange}
+                label="Ghi chú"
+                placeholder="Ghi chú thanh toán"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
                 sx={{ mb: 1.5 }}
               />
 

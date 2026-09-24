@@ -7,6 +7,7 @@ import Stack from "@mui/material/Stack";
 import { useNavigate } from "react-router";
 import { AuthContext } from "../context/AuthContext";
 import api from "../api";
+import { emitApiError } from "../api/errorBus";
 
 function LoginPage() {
   const { setAuthenticated, setLoading } = useContext(AuthContext);
@@ -16,19 +17,35 @@ function LoginPage() {
 
   const navigate = useNavigate();
 
+  const encryptPassword = async (plainPassword) => {
+    const res = await fetch(`${process.env.PUBLIC_URL}/public_key.pem`);
+    const pem = await res.text();
+    const der = Uint8Array.from(
+      atob(pem.replace(/-----[^-]+-----/g, "").replace(/\s/g, "")),
+      (c) => c.charCodeAt(0)
+    );
+    const key = await crypto.subtle.importKey(
+      "spki",
+      der.buffer,
+      { name: "RSA-OAEP", hash: "SHA-256" },
+      false,
+      ["encrypt"]
+    );
+    const ciphertext = await crypto.subtle.encrypt(
+      { name: "RSA-OAEP" },
+      key,
+      new TextEncoder().encode(plainPassword)
+    );
+    return btoa(String.fromCharCode(...new Uint8Array(ciphertext)));
+  };
+
   const handleLogin = async () => {
     try {
-      const res = await api.post(
-        `/login?${new URLSearchParams({
-          username,
-          password,
-        })}`,
-        {
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-        }
-      );
+      const inputPassword = await encryptPassword(password);
+      const res = await api.post("/login", {
+        inputUsername: username,
+        inputPassword,
+      });
 
       if (res.status === 200) {
         sessionStorage.setItem("csrfToken", res.data.csrfToken);
@@ -38,7 +55,7 @@ function LoginPage() {
       }
     } catch (err) {
       setError("Invalid credentials");
-      alert("Đăng nhập thất bại");
+      emitApiError("Đăng nhập thất bại");
     } finally {
       setLoading(false);
     }

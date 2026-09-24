@@ -16,6 +16,7 @@ import HomePage2 from "./page/HomePage_mess";
 import HomePageError from "./page/HomePage_error";
 
 import DateTimeBar from "./DateTimeBar";
+import ErrorPopup from "./ErrorPopup";
 import SuperAdminPage from "./page/SuperAdminPage";
 
 function App() {
@@ -31,6 +32,7 @@ function App() {
           }}
         >
           <Header />
+          <ErrorPopup />
           <Box
             component="main"
             sx={{

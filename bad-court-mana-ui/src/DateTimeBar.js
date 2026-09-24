@@ -4,6 +4,7 @@ import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Typography from "@mui/material/Typography";
 import api from "./api/index";
+import { emitApiError } from "./api/errorBus";
 import PayConfirm from "./page/dialog/PayConfirm";
 import { AuthContext } from "./context/AuthContext";
 import { formatVNDateTime } from "./page/DateTimeUtils";
@@ -39,9 +40,8 @@ function DateTimeBar() {
     setEnding(true);
     try {
       const closedSessionResp = await api.post(`/session/deleteSession`);
-      if (closedSessionResp.status !== 200) {
-        const errorMessage = `Có lỗi khi kết thúc phiên làm việc. ${closedSessionResp.data.message}.\n Thử lại.`;
-        alert(errorMessage);
+      if (!closedSessionResp || closedSessionResp.status !== 200) {
+        emitApiError(`Có lỗi khi kết thúc phiên làm việc. ${closedSessionResp?.data?.message || ""} Thử lại.`);
         return;
       }
       alert("Kết thúc phiên làm việc thành công.");

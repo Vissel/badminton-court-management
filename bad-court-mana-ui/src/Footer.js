@@ -35,6 +35,9 @@ const Footer = () => {
           >
             MIT License
           </Link>
+          <Typography variant="caption" component="span" sx={{ ml: 1 }}>
+            v1.3.0
+          </Typography>
         </Typography>
       </Container>
     </Box>

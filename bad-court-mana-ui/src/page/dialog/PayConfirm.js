@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import Dialog from "@mui/material/Dialog";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
@@ -9,53 +9,42 @@ import Divider from "@mui/material/Divider";
 import List from "@mui/material/List";
 import ListItem from "@mui/material/ListItem";
 import ListItemText from "@mui/material/ListItemText";
-import TextField from "@mui/material/TextField";
 import IconButton from "@mui/material/IconButton";
 import Chip from "@mui/material/Chip";
 import Stack from "@mui/material/Stack";
+import Select from "@mui/material/Select";
+import MenuItem from "@mui/material/MenuItem";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelOutlinedIcon from "@mui/icons-material/CancelOutlined";
 import PersonOutlinedIcon from "@mui/icons-material/PersonOutlined";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
+import PaymentOutlinedIcon from "@mui/icons-material/PaymentOutlined";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import CloseIcon from "@mui/icons-material/Close";
-import api from "../../api/index";
 import { TYPE, ADVANCE_SERVICE_NAME } from "../HomePage";
 import { VN_CURRENCY, formatVND } from "../MoneyUtils";
-import DebitListDialog from "./DebitListDialog";
+import PlayerDebtSection from "./PlayerDebtSection";
+
+const EMPTY_DEBT_STATE = {
+  debtList: [],
+  debtNote: "",
+  totalRecordedDebt: 0,
+  pendingDebt: 0,
+  totalDebitAmount: 0,
+};
 
 const PayConfirm = ({ show, data, onConfirm, onExit }) => {
-  const [debitSummary, setDebitSummary] = useState(null);
-  const [showDebitDialog, setShowDebitDialog] = useState(false);
-  const [debtInput, setDebtInput] = useState(null);
-  const [debtList, setDebtList] = useState([]);
-  const [showDebtInput, setShowDebtInput] = useState(false);
+  // Debt flow (summary / list / record / pay) lives in PlayerDebtSection;
+  // it reports recorded debts up so the payable amounts stay in sync.
+  const [debtInfo, setDebtInfo] = useState(EMPTY_DEBT_STATE);
+  const [paymentMethod, setPaymentMethod] = useState("CASH");
 
   useEffect(() => {
     if (show) {
-      setDebtInput(null);
-      setDebtList([]);
-      setShowDebtInput(false);
+      setDebtInfo(EMPTY_DEBT_STATE);
+      setPaymentMethod("CASH");
     }
   }, [show]);
-
-  const fetchDebitSummary = useCallback(() => {
-    api
-      .get(`/api/v1/debit/summary?playerName=${encodeURIComponent(data?.playerName)}`)
-      .then((res) => {
-        if (res?.data) setDebitSummary(res.data);
-      })
-      .catch(() => setDebitSummary(null));
-  }, [data?.playerName]);
-
-  useEffect(() => {
-    if (!show || !data?.playerName) {
-      setDebitSummary(null);
-      return;
-    }
-    fetchDebitSummary();
-  }, [show, data?.playerName, fetchDebitSummary]);
 
   if (!show || !data) return null;
 
@@ -88,43 +77,11 @@ const PayConfirm = ({ show, data, onConfirm, onExit }) => {
   // Amount payable before recording any debt
   const payableAmount = remainingAmount > 0 ? remainingAmount : 0;
 
-  const totalRecordedDebt = debtList.reduce((sum, d) => sum + d, 0);
-  const remainingPayable = Math.max(payableAmount - totalRecordedDebt, 0);
-
-  const debtInputVal = debtInput === null ? String(remainingPayable) : debtInput;
-  const debtNum = /^\d+$/.test(debtInputVal) ? Number(debtInputVal) : 0;
-  const canRecordDebt = debtNum > 0 && debtNum <= remainingPayable;
-
-  // A debt being typed previews below the total until committed or cancelled
-  const pendingDebt = showDebtInput && debtInput !== null && canRecordDebt ? debtNum : 0;
-  const totalDebitAmount = totalRecordedDebt + pendingDebt;
-
   // Amount to pay now (reduced by recorded and pending debts)
-  const amountToPay = Math.max(remainingPayable - pendingDebt, 0);
-
-  const handleDebtInputChange = (e) => {
-    const val = e.target.value;
-    if (val === "" || /^\d+$/.test(val)) {
-      setDebtInput(val);
-    }
-  };
-
-  const handleRecordDebt = () => {
-    if (canRecordDebt) {
-      setDebtList([...debtList, debtNum]);
-      setDebtInput(null);
-      setShowDebtInput(false);
-    }
-  };
-
-  const handleCloseDebtInput = () => {
-    setDebtInput(null);
-    setShowDebtInput(false);
-  };
-
-  const removeDebtAt = (idx) => {
-    setDebtList(debtList.filter((_, i) => i !== idx));
-  };
+  const amountToPay = Math.max(
+    payableAmount - debtInfo.totalRecordedDebt - debtInfo.pendingDebt,
+    0
+  );
 
   // Total cost (this is what the player has to pay in total)
   const totalCost = regularTotal;
@@ -221,86 +178,44 @@ const PayConfirm = ({ show, data, onConfirm, onExit }) => {
         <Divider />
 
         {/* ── Details ── */}
-        <DialogContent sx={{ px: 3, py: 2 }}>
-          {/* Player name */}
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: 1,
-              mb: 1.5,
-              justifyContent: "space-between",
-            }}
-          >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <PersonOutlinedIcon fontSize="small" color="action" />
-              <Typography variant="body2" color="text.secondary" sx={{ minWidth: 60 }}>
-                Người chơi
-              </Typography>
-              <Typography variant="subtitle1" fontWeight={700} color="primary.main">
-                {data.playerName}
-              </Typography>
-            </Box>
-
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              {isPayment && remainingPayable > 0 && !showDebtInput && (
-                <Chip
-                  label="+ Ghi nợ"
-                  size="small"
-                  color="warning"
-                  onClick={() => setShowDebtInput(true)}
-                  sx={{ cursor: "pointer", fontWeight: 600 }}
-                />
-              )}
-              {debitSummary && (debitSummary.numberDebit || 0) > 0 ? (
-                <Chip
-                  icon={<WarningAmberIcon fontSize="small" />}
-                  label={`Nợ: ${formatVND(debitSummary.totalDebts?.amount)} ${debitSummary.totalDebts?.currency || VN_CURRENCY} (${debitSummary.numberDebit})`}
-                  size="small"
-                  color="warning"
-                  onClick={() => setShowDebitDialog(true)}
-                  sx={{ cursor: "pointer", fontWeight: 600 }}
-                />
-              ) : (
-                <Typography variant="caption" color="text.disabled">
-                  Không có nợ
+        <DialogContent sx={{ px: 3, py: 2, overflowX: "hidden" }}>
+          {/* Player name + debt summary / list / record / pay flow on one row */}
+          <PlayerDebtSection
+            playerName={data.playerName}
+            active={show}
+            allowRecord={isPayment && data?.allowRecordDebt !== false}
+            payableAmount={payableAmount}
+            onDebtsChange={setDebtInfo}
+            leading={
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
+                <PersonOutlinedIcon fontSize="small" color="action" />
+                <Typography variant="body2" color="text.secondary" sx={{ minWidth: 60 }}>
+                  Người chơi
                 </Typography>
-              )}
-            </Box>
-          </Box>
+                <Typography variant="subtitle1" fontWeight={700} color="primary.main" noWrap>
+                  {data.playerName}
+                </Typography>
+              </Box>
+            }
+          />
 
-          {/* Record debt input row */}
-          {isPayment && remainingPayable > 0 && showDebtInput && (
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1.5 }}>
-              <Typography variant="body2" color="text.secondary" sx={{ minWidth: 60 }}>
-                Ghi nợ
+          {/* Payment method (pay only — cancel collects nothing) */}
+          {isPayment && (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 1.5 }}>
+              <PaymentOutlinedIcon fontSize="small" color="action" />
+              <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
+                Phương thức thanh toán
               </Typography>
-              <TextField
-                fullWidth
+              <Select
                 size="small"
-                placeholder="0"
-                value={debtInputVal}
-                onChange={handleDebtInputChange}
-                autoFocus
-              />
-              <Button
-                variant="contained"
-                color="warning"
-                size="small"
-                onClick={handleRecordDebt}
-                disabled={!canRecordDebt}
-                sx={{ whiteSpace: "nowrap" }}
-                disableElevation
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value)}
+                aria-label="Phương thức thanh toán"
+                sx={{ minWidth: 130 }}
               >
-                Ghi nợ
-              </Button>
-              <IconButton
-                size="small"
-                onClick={handleCloseDebtInput}
-                sx={{ p: 0.25 }}
-              >
-                <CloseIcon fontSize="small" />
-              </IconButton>
+                <MenuItem value="CASH">Tiền mặt</MenuItem>
+                <MenuItem value="TRANSFER">Chuyển khoản</MenuItem>
+              </Select>
             </Box>
           )}
 
@@ -417,66 +332,6 @@ const PayConfirm = ({ show, data, onConfirm, onExit }) => {
           </Typography>
         </Box>
 
-        {/* ── Recorded debt lines ── */}
-        {debtList.map((debt, i) => (
-          <Box
-            key={i}
-            sx={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              px: 3,
-              py: 1.5,
-              bgcolor: "warning.light",
-              borderTop: 1,
-              borderColor: "divider",
-            }}
-          >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
-              <WarningAmberIcon fontSize="small" color="warning.dark" />
-              <Typography variant="body2" color="warning.dark" fontWeight={600}>
-                Ghi nợ
-              </Typography>
-            </Box>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-              <Typography variant="body2" color="warning.dark" fontWeight={700}>
-                {formatVND(debt)} {VN_CURRENCY}
-              </Typography>
-              <IconButton
-                size="small"
-                onClick={() => removeDebtAt(i)}
-                sx={{ p: 0.25, color: "warning.dark" }}
-              >
-                <CloseIcon fontSize="small" />
-              </IconButton>
-            </Box>
-          </Box>
-        ))}
-        {pendingDebt > 0 && (
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              px: 3,
-              py: 1.5,
-              bgcolor: "warning.light",
-              borderTop: 1,
-              borderColor: "divider",
-            }}
-          >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
-              <WarningAmberIcon fontSize="small" color="warning.dark" />
-              <Typography variant="body2" color="warning.dark" fontWeight={600}>
-                Ghi nợ
-              </Typography>
-            </Box>
-            <Typography variant="body2" color="warning.dark" fontWeight={700}>
-              {formatVND(pendingDebt)} {VN_CURRENCY}
-            </Typography>
-          </Box>
-        )}
-
         {/* ── Return amount line (if advance > total) ── */}
         {returnAmount > 0 && (
           <Box
@@ -528,7 +383,9 @@ const PayConfirm = ({ show, data, onConfirm, onExit }) => {
               returnAmount: returnAmount,
               amountToPay: amountToPay,
               totalCost: totalCost,
-              debitAmount: totalDebitAmount
+              debitAmount: debtInfo.totalDebitAmount,
+              debitNote: debtInfo.debtNote,
+              paymentMethod: paymentMethod
             })}
             fullWidth
             size="large"
@@ -543,12 +400,6 @@ const PayConfirm = ({ show, data, onConfirm, onExit }) => {
           </Button>
         </DialogActions>
       </Dialog>
-      <DebitListDialog
-        show={showDebitDialog}
-        playerName={data.playerName}
-        onClose={() => setShowDebitDialog(false)}
-        onPaid={fetchDebitSummary}
-      />
     </>
   );
 };

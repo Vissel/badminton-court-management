@@ -1,13 +1,12 @@
 import axios from "axios";
 import config from './config'
 import { authRef } from '../context/authRef';
+import { emitApiError } from './errorBus';
 
 // import { useNavigate } from 'react-router';
 
 export const currentHost = `${window.location.protocol}//${window.location.hostname}:${window.location.port}/#/`;
 
-const localHost = "http://localhost:8080";
-const context = "bad-court-management-dev";
 export const backendHost = `${config.baseURL}`;
 
 const api = axios.create({
@@ -28,14 +27,18 @@ api.interceptors.response.use(
   (response) => response,
 
   async (error) => {
+    // Opt-out flag for callers that handle failures themselves (e.g. per-player
+    // fan-out requests where a business error is an expected outcome).
+    const silent = error.config?.skipErrorToast;
+
     // Network error (server down, CORS, timeout)
     if (!error.response) {
       console.error("Network error:", error);
-      alert("Không thể kết nối tới máy chủ. Vui lòng thử lại.");
+      if (!silent) emitApiError("Không thể kết nối tới máy chủ. Vui lòng thử lại.");
       return Promise.reject(error);
     }
 
-    const { status, config, data, headers } = error.response;
+    const { status, config, data } = error.response;
     const currentPath = window.location.pathname;
 
     /* ===============================
@@ -64,10 +67,10 @@ api.interceptors.response.use(
         const json = JSON.parse(text);
 
         console.error("Export error:", json);
-        alert(json.message || "Xuất báo cáo thất bại");
+        emitApiError(json.errorMessage || json.message || "Xuất báo cáo thất bại");
       } catch (e) {
         console.error("Failed to parse blob error", e);
-        alert("Xuất báo cáo thất bại");
+        emitApiError("Xuất báo cáo thất bại");
       }
 
       return Promise.reject(error);
@@ -78,7 +81,7 @@ api.interceptors.response.use(
     ================================ */
     if (status >= 500) {
       console.error("Server error:", error.response);
-      alert("Lỗi hệ thống. Vui lòng thử lại sau.");
+      if (!silent) emitApiError(data?.errorMessage || data?.message || "Lỗi hệ thống. Vui lòng thử lại sau.");
       return Promise.resolve(null);
     }
 
@@ -87,7 +90,7 @@ api.interceptors.response.use(
     ================================ */
     if (status === 400 || status > 403) {
       console.warn("Client error:", error.response);
-      alert("Yêu cầu không hợp lệ.");
+      if (!silent) emitApiError(data?.errorMessage || data?.message || "Yêu cầu không hợp lệ.");
     }
 
     return Promise.reject(error);

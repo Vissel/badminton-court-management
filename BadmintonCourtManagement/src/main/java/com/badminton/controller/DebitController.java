@@ -85,7 +85,7 @@ public class DebitController {
      * @return
      */
     @GetMapping("/summary")
-    public ResponseEntity<DebitSummaryResponse> getDebitSummary(@RequestParam String playerName) {
-        return ResponseConvertor.convertToResponseEntity(debitService.getDebitSummary(playerName));
+    public ResponseEntity<Result<DebitSummaryResponse>> getDebitSummary(@RequestParam String playerName) {
+        return ResponseConvertor.convert(debitService.getDebitSummary(playerName));
     }
 }

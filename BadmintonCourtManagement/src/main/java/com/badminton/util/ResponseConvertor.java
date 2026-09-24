@@ -16,7 +16,15 @@ public class ResponseConvertor {
         if (response.isSuccess()) {
             return ResponseEntity.ok(response);
         }
-        return ResponseEntity.status(response.getErrorCode()).body(response);
+        return ResponseEntity.status(resolveHttpStatus(response.getErrorCode())).body(response);
+    }
+
+    private static int resolveHttpStatus(int errorCode) {
+        // Application error codes (e.g. PLAYER_NOT_FOUND = 103) must not be used as raw HTTP statuses.
+        if (errorCode >= 500) {
+            return org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR.value();
+        }
+        return org.springframework.http.HttpStatus.BAD_REQUEST.value();
     }
 
     public static final <T> ResponseEntity<T> convertToResponseEntity(Result<T> response) {

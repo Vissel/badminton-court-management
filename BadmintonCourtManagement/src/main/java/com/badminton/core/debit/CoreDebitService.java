@@ -14,6 +14,7 @@ import com.badminton.model.debit.PayDebitModel;
 import com.badminton.model.debit.RemainingDebitModel;
 import com.badminton.model.dto.AllocateDebitPaymentRequest;
 import com.badminton.model.dto.AllocateDebitPaymentResponse;
+import com.badminton.model.dto.CreateDebitDTO;
 import com.badminton.model.dto.DebitPayDTO;
 import com.badminton.model.dto.PayDebitDTO;
 import com.badminton.model.dto.RemainingDebitDTO;
@@ -21,7 +22,6 @@ import com.badminton.repository.DebitRepository;
 import com.badminton.repository.DebitSummaryRepository;
 import com.badminton.repository.UserRepository;
 import com.badminton.requestmodel.Pagination;
-import com.badminton.requestmodel.debit.DebitRequest;
 import com.badminton.response.debit.*;
 import com.badminton.service.SessionServiceImpl;
 import com.badminton.util.MoneyUtils;
@@ -38,6 +38,7 @@ import org.springframework.transaction.interceptor.TransactionAspectSupport;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -60,16 +61,16 @@ public class CoreDebitService {
     private CorePayDebitService corePayDebitService;
 
     @Transactional
-    public Boolean createDebit(DebitRequest request) throws BusinessException {
-        Pair<Player, Session> playerAndSession = getPlayerAndSession(request.getPlayerName(), request.getCreatedTime());
+    public Boolean createDebit(CreateDebitDTO dto) throws BusinessException {
+        Pair<Player, Session> playerAndSession = getPlayerAndSession(dto.getPlayerName(), dto.getCreatedTime());
 
         Debit debit = new Debit();
-        BigDecimal debtAmount = new BigDecimal(request.getDebitAmount());
+        BigDecimal debtAmount = dto.getDebitAmount();
         debit.setDebtAmount(debtAmount);
         debit.setRemainingAmount(debtAmount);
-        debit.setCurrency(request.getCurrency() != null ? request.getCurrency() : MoneyUtils.CURRENCY_VN);
+        debit.setCurrency(dto.getCurrency() != null ? dto.getCurrency() : MoneyUtils.CURRENCY_VN);
         debit.setStatus(DebitStatus.PENDING);
-        debit.setNote(request.getNote());
+        debit.setNote(dto.getNote());
         debit.setPlayer(playerAndSession.getLeft());
         debit.setSession(playerAndSession.getRight());
 
@@ -409,8 +410,9 @@ public class CoreDebitService {
         debitSummaryRepository.save(summary);
     }
 
-    private Pair<Player, Session> getPlayerAndSession(String name, String createdTime) throws BusinessException {
-        Session session = sessionService.getSessionByDateTime(createdTime);
+    private Pair<Player, Session> getPlayerAndSession(String name, Instant createdTime) throws BusinessException {
+        String createdTimeStr = DateTimeFormatter.ISO_LOCAL_DATE_TIME.withZone(java.time.ZoneOffset.UTC).format(createdTime);
+        Session session = sessionService.getSessionByDateTime(createdTimeStr);
         if (session == null) {
             throw new BusinessException(ErrorCodeEnum.CURRENT_SESSION_NOT_FOUND);
         }

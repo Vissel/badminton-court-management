@@ -6,26 +6,34 @@ import com.badminton.entity.Game;
 import com.badminton.entity.Player;
 import com.badminton.entity.Session;
 import com.badminton.exception.BusinessException;
+import com.badminton.model.dto.ServiceDTO;
 import com.badminton.repository.AvailablePlayerRepository;
 import com.badminton.repository.SessionRepository;
 import com.badminton.repository.UserRepository;
 import com.badminton.repository.filter.SessionParam;
 import com.badminton.requestmodel.Pagination;
 import com.badminton.requestmodel.SessionRequest;
+import com.badminton.requestmodel.debit.DebitRequest;
 import com.badminton.response.result.Result;
 import com.badminton.response.result.SessionResult;
 import com.badminton.time.model.SessionScope;
 import com.badminton.util.Converter;
+import com.badminton.util.MoneyUtils;
+import com.badminton.util.ServiceUtil;
 import com.badminton.util.TimeUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.domain.Sort.Order;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.Assert;
 
 import java.time.*;
@@ -54,6 +62,13 @@ public class SessionServiceImpl {
     private AvailablePlayerRepository avaPlayerRepo;
     @Autowired
     UserRepository userRepo;
+
+    @Autowired
+    @Lazy
+    private DebitService debitService;
+
+    @Autowired
+    private TransactionTemplate transactionTemplate;
 
     /**
      * DB display the time data ...
@@ -189,7 +204,6 @@ public class SessionServiceImpl {
         return sessionRepo.findById(Integer.valueOf(sessionId)).orElse(null);
     }
 
-    @Transactional
     public Result<SessionResult> closeOutDateSession(SessionRequest sessionRequest) {
         return serviceTemple.execute(new ProcessCallback<SessionRequest, SessionResult>() {
             @Override
@@ -204,23 +218,28 @@ public class SessionServiceImpl {
 
             @Override
             public SessionResult process() throws BusinessException {
-                SessionResult result = new SessionResult();
-                result.setMessage("Closing out of date sessions.");
+                return transactionTemplate.execute(new TransactionCallback<SessionResult>() {
+                    @Override
+                    public SessionResult doInTransaction(TransactionStatus status) {
+                        SessionResult result = new SessionResult();
+                        result.setMessage("Closing out of date sessions.");
 
-                // 1. check current time is inTheSameDay and close the sessions.
-                List<Session> closedSessions = setInactiveForSession(getRequest().isScheduler());
+                        // 1. check current time is inTheSameDay and close the sessions.
+                        List<Session> closedSessions = setInactiveForSession(getRequest().isScheduler());
 
-                // 2. false => deactivateSessions, terminateGame
-                cancelInprogressGames();
+                        // 2. false => deactivateSessions, terminateGame
+                        cancelInprogressGames();
 
-                // 3. remove all available players out closed sessions.
-                for (Session closedSession : closedSessions) {
-                    List<AvailablePlayer> availablePlayerList = avaPlayerRepo
-                            .findAllForUpdateBySessionAndLeaveTimeIsNull(closedSession);
-                    removeListPlayerOutCurrentSession(availablePlayerList);
-                }
-                result.setMessage("Close session successfully!");
-                return result;
+                        // 3. remove all available players out closed sessions.
+                        for (Session closedSession : closedSessions) {
+                            List<AvailablePlayer> availablePlayerList = avaPlayerRepo
+                                    .findAllForUpdateBySessionAndLeaveTimeIsNull(closedSession);
+                            removeListPlayerOutCurrentSession(availablePlayerList);
+                        }
+                        result.setMessage("Close session successfully!");
+                        return result;
+                    }
+                });
             }
         });
     }
@@ -325,11 +344,43 @@ public class SessionServiceImpl {
      * @return
      * @throws IllegalArgumentException
      */
+    @Transactional(rollbackFor = Exception.class)
     public Boolean removeListPlayerOutCurrentSession(List<AvailablePlayer> availablePlayerList)
             throws IllegalArgumentException {
-        availablePlayerList.stream().forEach(a -> a.setLeaveTime(getUTCPlus7Instant()));
+        availablePlayerList.forEach(availablePlayer -> {
+            float remainingDebt = calculateRemainingDebt(availablePlayer);
+            if (remainingDebt > 0) {
+                Result<Boolean> debitResult = debitService.createDebit(buildDebitRequest(availablePlayer, remainingDebt));
+                if (!debitResult.isSuccess()) {
+                    throw new IllegalStateException("Failed to create debit for player "
+                            + availablePlayer.getPlayer().getPlayerName()
+                            + ": " + debitResult.getErrorMessage());
+                }
+            }
+            availablePlayer.setLeaveTime(getUTCPlus7Instant());
+        });
         avaPlayerRepo.saveAll(availablePlayerList);
         return Boolean.TRUE;
+    }
+
+    private float calculateRemainingDebt(AvailablePlayer availablePlayer) {
+        List<ServiceDTO> services = ServiceUtil.convertStringToListService(availablePlayer.getCurrentServices());
+        float totalCost = services.stream()
+                .map(ServiceDTO::getCost)
+                .reduce(0f, Float::sum);
+        float payAmount = availablePlayer.getPayAmount() != null ? availablePlayer.getPayAmount() : 0f;
+        float advancePayment = availablePlayer.getAdvancePayment() != null ? availablePlayer.getAdvancePayment() : 0f;
+        return Math.max(totalCost - payAmount - advancePayment, 0f);
+    }
+
+    private DebitRequest buildDebitRequest(AvailablePlayer availablePlayer, float remainingDebt) {
+        DebitRequest debitRequest = new DebitRequest();
+        debitRequest.setDebitAmount(remainingDebt);
+        debitRequest.setCurrency(MoneyUtils.CURRENCY_VN);
+        debitRequest.setNote(availablePlayer.getCurrentServices());
+        debitRequest.setPlayerName(availablePlayer.getPlayer().getPlayerName());
+        debitRequest.setCreatedTime(availablePlayer.getSession().getFromTime().toString());
+        return debitRequest;
     }
 
     /**

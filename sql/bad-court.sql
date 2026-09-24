@@ -1,6 +1,7 @@
 use `bad-court-management-db`;
 select * from service where is_active = true;
-SELECT * FROM player;
+SELECT * FROM player 
+	order by player_id desc;
 SELECT * FROM court;
 select * from available_player 
 order by ava_id desc;
@@ -41,7 +42,7 @@ values (current_time(),true);
 -- available players
 select a.ava_id, p.player_id, p. player_name, a.services
  from available_player a inner join player p on a.player_id = p.player_id
-where session_id = 85;
+where session_id = 130;
 
 select * from available_player a inner join player p on a.player_id = p.player_id;
 
@@ -164,10 +165,17 @@ select * from `user` where user_name = 'micro05'
 order by created_at desc;
 
 select * from `request` order by created_at desc;
+select * from sale_environment order by created_at desc;
 
 select * from picture order by pic_id desc;
 select * from product_picture_map ;
 
-select * from sale_environment order by created_at desc;
+select * from sale_environment 
+where env_id = "ced67821-dd04-433d-8d98-a8979bc78402"
+order by created_at desc;
+
 select * from product order by product_id desc;
 update product set amount = 0;
+
+
+select * from `order` order by order_id desc;

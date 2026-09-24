@@ -43,7 +43,14 @@ public class TimeUtils {
             // If it's not a full timestamp, move to the next check
         }
 
-        // 3. Try parsing as a simple Date (2026-01-01)
+        // 3. Try parsing as a local date-time without timezone (2026-01-01T10:00:00)
+        try {
+            return LocalDateTime.parse(input).toInstant(ZoneOffset.UTC);
+        } catch (DateTimeParseException e) {
+            // If it's not a local date-time, move to the next check
+        }
+
+        // 4. Try parsing as a simple Date (2026-01-01)
         try {
             return LocalDate.parse(input).atStartOfDay(ZoneOffset.UTC).toInstant();
         } catch (DateTimeParseException e) {

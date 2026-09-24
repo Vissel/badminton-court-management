@@ -7,6 +7,7 @@ import Stack from "@mui/material/Stack";
 import Divider from "@mui/material/Divider";
 import Grid from "@mui/material/Grid";
 import api from "../api/index";
+import { emitApiError } from "../api/errorBus";
 
 const RESET_TOKEN_TTL = 3 * 60 * 1000;
 
@@ -43,11 +44,11 @@ function SuperAdminPage() {
 
   const handleRegister = async () => {
     if (!reg.userName || !reg.password || !reg.repeatPassword) {
-      alert("Vui lòng điền đầy đủ thông tin.");
+      emitApiError("Vui lòng điền đầy đủ thông tin.");
       return;
     }
     if (reg.password !== reg.repeatPassword) {
-      alert("Mật khẩu không khớp.");
+      emitApiError("Mật khẩu không khớp.");
       return;
     }
     try {
@@ -66,11 +67,11 @@ function SuperAdminPage() {
 
   const handleResetPassword = async () => {
     if (!resetPass.newPass || !resetPass.repeatNewPass) {
-      alert("Vui lòng điền đầy đủ mật khẩu mới.");
+      emitApiError("Vui lòng điền đầy đủ mật khẩu mới.");
       return;
     }
     if (resetPass.newPass !== resetPass.repeatNewPass) {
-      alert("Mật khẩu không khớp.");
+      emitApiError("Mật khẩu không khớp.");
       return;
     }
     try {
@@ -92,7 +93,7 @@ function SuperAdminPage() {
 
   const handleForgotPassword = async () => {
     if (!forgot.userName) {
-      alert("Vui lòng nhập tên đăng nhập.");
+      emitApiError("Vui lòng nhập tên đăng nhập.");
       return;
     }
     try {

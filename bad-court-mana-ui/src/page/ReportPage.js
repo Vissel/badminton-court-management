@@ -17,6 +17,7 @@ import Paper from "@mui/material/Paper";
 import Pagination from "@mui/material/Pagination";
 import Stack from "@mui/material/Stack";
 import api, { backendHost } from "../api/index";
+import { emitApiError } from "../api/errorBus";
 
 export default function ReportPage() {
   const [reports, setReports] = useState([]);
@@ -134,7 +135,7 @@ export default function ReportPage() {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error("Failed to export report", error);
-      alert("Export failed. Please try again.");
+      emitApiError("Export failed. Please try again.");
     }
   };
 
@@ -149,7 +150,7 @@ export default function ReportPage() {
       window.location.href = `${backendHost}/api/v1/manager/stream/reportExportList/${response.data.reportToken}`;
     } catch (error) {
       console.error("Failed to export report", error);
-      alert("Export failed. Please try again.");
+      emitApiError("Export failed. Please try again.");
     }
   };
 

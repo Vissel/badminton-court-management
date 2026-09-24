@@ -7,6 +7,7 @@ import com.badminton.exception.enums.ErrorCodeEnum;
 import com.badminton.model.debit.RemainingDebitModel;
 import com.badminton.model.dto.AllocateDebitPaymentRequest;
 import com.badminton.model.dto.AllocateDebitPaymentResponse;
+import com.badminton.model.dto.CreateDebitDTO;
 import com.badminton.model.dto.DebitPayDTO;
 import com.badminton.model.dto.RemainingDebitDTO;
 import com.badminton.requestmodel.Pagination;
@@ -61,7 +62,7 @@ public class DebitServiceImpl implements DebitService {
             @Override
             public Boolean process() throws BusinessException {
                 log.info("Creating new debit.");
-                return coreDebitService.createDebit(getRequest());
+                return coreDebitService.createDebit(convertToCreateDebitDTO(getRequest()));
             }
         });
     }
@@ -223,6 +224,16 @@ public class DebitServiceImpl implements DebitService {
                 return coreDebitService.getDebitSummary(playerName);
             }
         });
+    }
+
+    private CreateDebitDTO convertToCreateDebitDTO(DebitRequest request) {
+        CreateDebitDTO dto = new CreateDebitDTO();
+        dto.setDebitAmount(BigDecimal.valueOf(request.getDebitAmount()));
+        dto.setCurrency(request.getCurrency());
+        dto.setNote(request.getNote());
+        dto.setPlayerName(request.getPlayerName());
+        dto.setCreatedTime(TimeUtils.convertToInstant(request.getCreatedTime()));
+        return dto;
     }
 
     private AllocateDebitPaymentRequest convertToAllocateDebitPaymentRequest(PayDebitRequest request) {

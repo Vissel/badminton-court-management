@@ -198,9 +198,9 @@ const GameDialog = ({ show, data, onConfirm, onExit }) => {
     const updatedBalls = formData.ballList.map((b, i) =>
       i === index
         ? {
-            ...b,
-            quantity: value,
-          }
+          ...b,
+          quantity: value,
+        }
         : b
     );
 
@@ -237,7 +237,7 @@ const GameDialog = ({ show, data, onConfirm, onExit }) => {
         api.post(
           `/court-mana/changeBallQuantity?courtId=${formData.courtResult.courtId}`,
           ballDTO
-        );
+        ).catch(() => { });
       }
       setFormData({
         ...formData,

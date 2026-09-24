@@ -13,11 +13,13 @@ import org.springframework.security.web.context.HttpSessionSecurityContextReposi
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.badminton.constant.ApiConstant;
 import com.badminton.requestmodel.AuthenDTO;
+import com.badminton.requestmodel.LoginDTO;
+import com.badminton.util.RsaKeyService;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -75,12 +77,21 @@ public class AuthenController {
 	@Autowired
 	private AuthenticationManager authenticationManager;
 
+	@Autowired
+	private RsaKeyService rsaKeyService;
+
+	@GetMapping("/public-key")
+	public ResponseEntity<String> publicKey() {
+		return ResponseEntity.ok(rsaKeyService.getPublicKeyPem());
+	}
+
 	@PostMapping("/login")
-	public ResponseEntity<AuthenDTO> login(@RequestParam String username, @RequestParam String password,
+	public ResponseEntity<AuthenDTO> login(@RequestBody LoginDTO loginDTO,
 			HttpServletRequest request, HttpServletResponse response) {
 		try {
+			String password = rsaKeyService.decrypt(loginDTO.getInputPassword());
 			Authentication authentication = authenticationManager
-					.authenticate(new UsernamePasswordAuthenticationToken(username, password));
+					.authenticate(new UsernamePasswordAuthenticationToken(loginDTO.getInputUsername(), password));
 
 			SecurityContextHolder.getContext().setAuthentication(authentication);
 
@@ -98,12 +109,12 @@ public class AuthenController {
 
 			AuthenDTO dto = new AuthenDTO();
 			dto.setMessage("Login successful");
-			dto.setUsername(username);
+			dto.setUsername(loginDTO.getInputUsername());
 			dto.setCsrfToken(token.getToken());
 
 			return ResponseEntity.ok(dto);
 
-		} catch (AuthenticationException e) {
+		} catch (AuthenticationException | IllegalArgumentException e) {
 			return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
 		}
 	}

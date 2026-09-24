@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import TextField from "@mui/material/TextField";
@@ -26,75 +26,87 @@ import SearchIcon from "@mui/icons-material/Search";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import {
-  listDebtPlayers,
+  listAllPlayers,
   getDebitSummary,
   listRemainingDebts,
-  payDebits,
   REMAINING_DEBTS_PAGE,
   REMAINING_DEBTS_FILTER,
 } from "../api/debtApi";
+import DebitListDialog from "./dialog/DebitListDialog";
 import { VN_CURRENCY, formatVND } from "./MoneyUtils";
-import { formatVNDateTime, toServerDateTimeString } from "./DateTimeUtils";
+import { formatVNDateTime } from "./DateTimeUtils";
 
 const DEFAULT_QUERY = {
   page: 1,
   pageSize: 10,
   playerName: "",
-  sortField: "playerName",
+  sortField: "playerName", // playerName | totalDebt
   sortDir: "asc",
 };
 
-const COL_COUNT = 7; // expand + STT + 4 data + action
+const COL_COUNT = 6; // expand + STT + 3 data + action
 
 export default function DebtPage() {
   const [query, setQuery] = useState(DEFAULT_QUERY);
   const [searchInput, setSearchInput] = useState("");
   const [players, setPlayers] = useState([]);
-  const [totalRows, setTotalRows] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // playerName -> DebitSummaryResponse | null(error); absent = still loading
+  // playerName -> DebitSummaryResponse | null(failed / no data)
   const [summaries, setSummaries] = useState({});
-  const requestedSummaries = useRef(new Set());
   // playerName -> { loading, error, data: GetRemainingDebtResponse }
   const [details, setDetails] = useState({});
   const [expandedRows, setExpandedRows] = useState(() => new Set());
   // playerName -> Set<index> of checked rows in the expanded detail table
   const [selections, setSelections] = useState({});
-  const [paying, setPaying] = useState({});
+  const [debitDialog, setDebitDialog] = useState({
+    show: false,
+    playerName: "",
+    preselected: [],
+  });
 
-  const fetchPlayers = useCallback(async (q) => {
+  // 1) all players, then 2) a debit summary per player. The displayed list is
+  // derived below: only players whose summary succeeds with numberDebit != 0.
+  const loadDebtors = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await listDebtPlayers({
-        pagination: { current: q.page, pageSize: q.pageSize },
-        filter: { playerName: q.playerName || null },
-        sort: { field: q.sortField, direction: q.sortDir.toUpperCase() },
+      const res = await listAllPlayers();
+      const body = res?.data;
+      if (!body?.success || !Array.isArray(body?.data)) {
+        throw new Error(body?.errorMessage || "Failed to load players");
+      }
+      const list = body.data;
+      const results = await Promise.allSettled(
+        list.map((p) => getDebitSummary(p.playerName))
+      );
+      const map = {};
+      results.forEach((r, i) => {
+        const b = r.status === "fulfilled" ? r.value?.data : null;
+        map[list[i].playerName] = b?.success && b.data ? b.data : null;
       });
-      const page = res?.data?.data;
-      setPlayers(page?.list || []);
-      setTotalRows(page?.total || 0);
-      setTotalPages(page?.pagination?.totalPage || 0);
+      setPlayers(list);
+      setSummaries(map);
     } catch (e) {
       console.error("Failed to fetch debtor list", e);
       setPlayers([]);
-      setTotalRows(0);
-      setTotalPages(0);
+      setSummaries({});
       setError("Không tải được danh sách nợ. Vui lòng thử lại.");
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const fetchSummary = useCallback((playerName) => {
-    requestedSummaries.current.add(playerName);
+  const refreshSummary = useCallback((playerName) => {
     getDebitSummary(playerName)
-      .then((res) =>
-        setSummaries((s) => ({ ...s, [playerName]: res?.data || null }))
-      )
+      .then((res) => {
+        const b = res?.data;
+        setSummaries((s) => ({
+          ...s,
+          [playerName]: b?.success && b.data ? b.data : null,
+        }));
+      })
       .catch(() => setSummaries((s) => ({ ...s, [playerName]: null })));
   }, []);
 
@@ -125,17 +137,36 @@ export default function DebtPage() {
   }, [searchInput]);
 
   useEffect(() => {
-    fetchPlayers(query);
-  }, [query, fetchPlayers]);
+    loadDebtors();
+  }, [loadDebtors]);
 
-  // Fetch per-player summaries for the visible rows only.
-  useEffect(() => {
-    players.forEach((p) => {
-      if (!requestedSummaries.current.has(p.playerName)) {
-        fetchSummary(p.playerName);
-      }
+  // Only players with a successful summary and numberDebit != 0 are listed.
+  // Search / sort / pagination are all client-side over that filtered set.
+  const debtors = useMemo(() => {
+    const name = query.playerName.trim().toLowerCase();
+    const list = players.filter((p) => {
+      const s = summaries[p.playerName];
+      if (!s || (s.numberDebit || 0) === 0) return false;
+      return !name || p.playerName.toLowerCase().includes(name);
     });
-  }, [players, fetchSummary]);
+    const dir = query.sortDir === "desc" ? -1 : 1;
+    return [...list].sort((a, b) => {
+      if (query.sortField === "totalDebt") {
+        const da = summaries[a.playerName]?.totalDebts?.amount || 0;
+        const db = summaries[b.playerName]?.totalDebts?.amount || 0;
+        return (da - db) * dir || a.playerName.localeCompare(b.playerName, "vi");
+      }
+      return a.playerName.localeCompare(b.playerName, "vi") * dir;
+    });
+  }, [players, summaries, query]);
+
+  const totalRows = debtors.length;
+  const totalPages = Math.ceil(totalRows / query.pageSize);
+  const page = Math.min(query.page, Math.max(totalPages, 1));
+  const pageRows = debtors.slice(
+    (page - 1) * query.pageSize,
+    page * query.pageSize
+  );
 
   const updateQuery = (patch) => setQuery((q) => ({ ...q, ...patch, page: 1 }));
 
@@ -159,74 +190,21 @@ export default function DebtPage() {
     }
   };
 
-  const refresh = () => fetchPlayers(query);
+  const refresh = () => loadDebtors();
 
   const refreshPlayer = (playerName) => {
-    requestedSummaries.current.delete(playerName);
-    fetchSummary(playerName);
+    refreshSummary(playerName);
     if (expandedRows.has(playerName)) fetchDetails(playerName);
-    refresh();
   };
 
-  // Case 1 — no listDebitPay: backend pays all debts up to totalPayAmount.
-  // Case 2 — listDebitPay provided: backend pays exactly the selected debts.
-  const payForPlayer = async (playerName, totalPayAmount, listDebitPay) => {
-    const label = listDebitPay?.length
-      ? `${listDebitPay.length} khoản đã chọn`
-      : "toàn bộ nợ";
-    if (
-      !window.confirm(
-        `Xác nhận thu ${formatVND(totalPayAmount)} ${VN_CURRENCY} (${label}) từ ${playerName}?`
-      )
-    ) {
-      return;
-    }
-    setPaying((p) => ({ ...p, [playerName]: true }));
-    try {
-      const res = await payDebits({
-        playerName,
-        totalPayAmount,
-        paymentMethod: "CASH",
-        note: "",
-        listDebitPay,
-      });
-      const data = res?.data;
-      if (data && data.status !== "FAIL") {
-        setSelections((s) => ({ ...s, [playerName]: new Set() }));
-        refreshPlayer(playerName);
-      } else {
-        alert(data?.message || "Thanh toán thất bại");
-      }
-    } catch (e) {
-      // api interceptor already alerts on transport/server errors
-    } finally {
-      setPaying((p) => ({ ...p, [playerName]: false }));
-    }
-  };
-
-  // Row-level "Thu nợ" — pay everything the player owes.
-  const payAll = (playerName) => {
-    const total = summaries[playerName]?.totalDebts?.amount || 0;
-    if (total <= 0) return;
-    payForPlayer(playerName, total, null);
-  };
-
-  // Expanded-panel "Thu nợ đã chọn" — pay only the checked debts.
-  const paySelected = (playerName) => {
+  // "Thu nợ" opens DebitListDialog for the player; debts checked in the
+  // expanded list are carried over and pre-ticked inside the dialog.
+  const openDebitDialog = (playerName) => {
     const debits = details[playerName]?.data?.remainingDebits || [];
-    const listDebitPay = [...(selections[playerName] || [])]
+    const preselected = [...(selections[playerName] || [])]
       .map((idx) => debits[idx])
-      .filter((d) => d?.dateTime && (d?.money?.amount || 0) > 0)
-      .map((d) => ({
-        dateTime: toServerDateTimeString(d.dateTime),
-        payAmount: d.money.amount,
-      }));
-    if (listDebitPay.length === 0) return;
-    payForPlayer(
-      playerName,
-      listDebitPay.reduce((sum, i) => sum + i.payAmount, 0),
-      listDebitPay
-    );
+      .filter((d) => (d?.money?.amount || 0) > 0 && d?.dateTime);
+    setDebitDialog({ show: true, playerName, preselected });
   };
 
   const payableIndexes = (playerName) =>
@@ -330,20 +308,6 @@ export default function DebtPage() {
               </strong>
             </Typography>
           )}
-          <Button
-            size="small"
-            variant="contained"
-            color="warning"
-            disableElevation
-            disabled={selected.size === 0 || paying[playerName]}
-            onClick={() => paySelected(playerName)}
-          >
-            {paying[playerName] ? (
-              <CircularProgress size={16} color="inherit" />
-            ) : (
-              "Thu nợ đã chọn"
-            )}
-          </Button>
         </Stack>
         <Table size="small">
           <TableHead>
@@ -454,16 +418,15 @@ export default function DebtPage() {
                   Người chơi
                 </TableSortLabel>
               </TableCell>
-              <TableCell>
+              <TableCell align="right">
                 <TableSortLabel
-                  active={query.sortField === "lastDebitDate"}
-                  direction={query.sortField === "lastDebitDate" ? query.sortDir : "asc"}
-                  onClick={() => handleSort("lastDebitDate")}
+                  active={query.sortField === "totalDebt"}
+                  direction={query.sortField === "totalDebt" ? query.sortDir : "asc"}
+                  onClick={() => handleSort("totalDebt")}
                 >
-                  Ghi nợ gần nhất
+                  Tổng nợ còn lại
                 </TableSortLabel>
               </TableCell>
-              <TableCell align="right">Tổng nợ còn lại</TableCell>
               <TableCell align="center" sx={{ width: 90 }}>Số khoản</TableCell>
               <TableCell align="center" sx={{ width: 110 }}>Hành động</TableCell>
             </TableRow>
@@ -488,7 +451,7 @@ export default function DebtPage() {
                 </TableCell>
               </TableRow>
             )}
-            {!loading && !error && players.length === 0 && (
+            {!loading && !error && pageRows.length === 0 && (
               <TableRow>
                 <TableCell
                   colSpan={COL_COUNT}
@@ -501,10 +464,11 @@ export default function DebtPage() {
             )}
             {!loading &&
               !error &&
-              players.map((row, index) => {
+              pageRows.map((row, index) => {
                 const open = expandedRows.has(row.playerName);
                 const summary = summaries[row.playerName];
                 const canPayAll = (summary?.totalDebts?.amount || 0) > 0;
+                const selectedCount = (selections[row.playerName] || new Set()).size;
                 return (
                   <React.Fragment key={row.playerName}>
                     <TableRow
@@ -518,10 +482,9 @@ export default function DebtPage() {
                         </IconButton>
                       </TableCell>
                       <TableCell>
-                        {(query.page - 1) * query.pageSize + index + 1}
+                        {(page - 1) * query.pageSize + index + 1}
                       </TableCell>
                       <TableCell sx={{ fontWeight: 600 }}>{row.playerName}</TableCell>
-                      <TableCell>{formatVNDateTime(row.lastDebitDate)}</TableCell>
                       <TableCell
                         align="right"
                         sx={{ fontWeight: 600, color: "warning.dark" }}
@@ -536,17 +499,13 @@ export default function DebtPage() {
                           variant="contained"
                           color="warning"
                           size="small"
-                          disabled={!canPayAll || paying[row.playerName]}
+                          disabled={selectedCount === 0 && !canPayAll}
                           onClick={(e) => {
                             e.stopPropagation();
-                            payAll(row.playerName);
+                            openDebitDialog(row.playerName);
                           }}
                         >
-                          {paying[row.playerName] ? (
-                            <CircularProgress size={16} color="inherit" />
-                          ) : (
-                            "Thu nợ"
-                          )}
+                          {selectedCount > 0 ? `Thu nợ (${selectedCount})` : "Thu nợ"}
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -592,7 +551,7 @@ export default function DebtPage() {
         {totalPages > 0 && (
           <Pagination
             count={totalPages}
-            page={query.page}
+            page={page}
             onChange={(_, page) => setQuery((q) => ({ ...q, page }))}
             color="primary"
             showFirstButton
@@ -600,6 +559,17 @@ export default function DebtPage() {
           />
         )}
       </Stack>
+
+      <DebitListDialog
+        show={debitDialog.show}
+        playerName={debitDialog.playerName}
+        preselectedDebits={debitDialog.preselected}
+        onClose={() => setDebitDialog((d) => ({ ...d, show: false }))}
+        onPaid={() => {
+          setSelections((s) => ({ ...s, [debitDialog.playerName]: new Set() }));
+          refreshPlayer(debitDialog.playerName);
+        }}
+      />
     </Box>
   );
 }
