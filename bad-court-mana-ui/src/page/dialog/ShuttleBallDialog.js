@@ -10,6 +10,7 @@ import Typography from "@mui/material/Typography";
 import Stack from "@mui/material/Stack";
 import Box from "@mui/material/Box";
 import api from "../../api/index";
+import DraggableResizablePaper, { DIALOG_DRAG_HANDLE } from "./DraggableResizablePaper";
 
 const ShuttleBallDialog = ({
   courtProcessing,
@@ -110,8 +111,8 @@ const ShuttleBallDialog = ({
   if (!show) return null;
 
   return (
-    <Dialog open={show} onClose={onCancel} maxWidth="sm" fullWidth scroll="paper">
-      <DialogTitle>Thêm cầu</DialogTitle>
+    <Dialog open={show} onClose={onCancel} maxWidth="sm" fullWidth scroll="paper" PaperComponent={DraggableResizablePaper}>
+      <DialogTitle className={DIALOG_DRAG_HANDLE} sx={{ cursor: "move" }}>Thêm cầu</DialogTitle>
       <DialogContent dividers>
         <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mb: 2 }}>
           <TextField

@@ -7,6 +7,7 @@ import Button from "@mui/material/Button";
 import Typography from "@mui/material/Typography";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
+import DraggableResizablePaper, { DIALOG_DRAG_HANDLE } from "./DraggableResizablePaper";
 
 const pad2 = (n) => String(n).padStart(2, "0");
 
@@ -66,8 +67,9 @@ const RentFinishConfirm = ({ show, rental, onConfirm, onExit }) => {
             }}
             maxWidth="sm"
             fullWidth
+            PaperComponent={DraggableResizablePaper}
         >
-            <DialogTitle align="center">Xác nhận kết thúc thuê theo giờ</DialogTitle>
+            <DialogTitle align="center" className={DIALOG_DRAG_HANDLE} sx={{ cursor: "move" }}>Xác nhận kết thúc thuê theo giờ</DialogTitle>
             {rental && (
                 <DialogContent dividers>
                     <Stack spacing={2}>

@@ -1,6 +1,7 @@
 package com.badminton.entity;
 
 import com.badminton.constant.CommonConstant;
+import com.badminton.constant.PayType;
 import com.badminton.util.CommonUtil;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -34,7 +35,11 @@ public class AvailablePlayer {
 
     private Float payAmount;
 
-    private String payType;
+    @Enumerated(EnumType.STRING)
+    private PayType payType;
+
+    @Column(name = "is_canceled")
+    private Boolean isCanceled;
 
     @Column(name = "advance_payment", nullable = true)
     private Float advancePayment;

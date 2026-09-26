@@ -1,5 +1,6 @@
 package com.badminton.model.dto;
 
+import com.badminton.constant.PayType;
 import lombok.Builder;
 import lombok.Data;
 
@@ -11,8 +12,7 @@ import java.util.List;
 public class AllocateDebitPaymentRequest {
     private String playerName;
     private BigDecimal payAmount;
-    private String payMethod;
+    private PayType payMethod;
     private String note;
     private List<DebitPayDTO> listDebitPay;
 }
-

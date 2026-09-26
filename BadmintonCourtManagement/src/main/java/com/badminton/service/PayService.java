@@ -8,4 +8,6 @@ public interface PayService {
 
     Result<PayResponse> payToPlayer(PayRequest payRequest);
 
+    Result<Boolean> cancel(PayRequest payRequest);
+
 }

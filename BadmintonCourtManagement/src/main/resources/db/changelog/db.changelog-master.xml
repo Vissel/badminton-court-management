@@ -31,4 +31,13 @@
     <changeSet id="019" author="thach">
         <sqlFile path="db/changelog/payment-debit-table.sql"/>
     </changeSet>
+    <changeSet id="020" author="thach">
+        <sqlFile path="db/changelog/available-player-cancel.sql"/>
+    </changeSet>
+    <changeSet id="021" author="thach">
+        <sqlFile path="db/changelog/payment-pay-type.sql"/>
+    </changeSet>
+    <changeSet id="022" author="thach">
+        <sqlFile path="db/changelog/migrate-available-player-pay-type.sql"/>
+    </changeSet>
 </databaseChangeLog>

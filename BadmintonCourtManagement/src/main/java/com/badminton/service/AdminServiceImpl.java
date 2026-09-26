@@ -2,7 +2,6 @@ package com.badminton.service;
 
 import com.badminton.config.SecurityConfig;
 import com.badminton.constant.ApiConstant;
-import com.badminton.constant.CommonConstant;
 import com.badminton.entity.Court;
 import com.badminton.entity.Service;
 import com.badminton.entity.ShuttleBall;
@@ -43,7 +42,7 @@ public class AdminServiceImpl implements AdminService {
     private static final String COURT_STR = "Sân ";
 
     AdminServiceImpl(GlobalExceptionHandler globalExceptionHandler,
-            UrlBasedCorsConfigurationSource corsConfigurationSource, SecurityConfig securityConfig) {
+                     UrlBasedCorsConfigurationSource corsConfigurationSource, SecurityConfig securityConfig) {
         this.globalExceptionHandler = globalExceptionHandler;
         this.corsConfigurationSource = corsConfigurationSource;
         this.securityConfig = securityConfig;

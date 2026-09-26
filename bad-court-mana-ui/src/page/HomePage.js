@@ -10,6 +10,8 @@ import Select from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
+import Snackbar from "@mui/material/Snackbar";
+import Alert from "@mui/material/Alert";
 
 import "../App.css";
 import api from "../api/index";
@@ -88,6 +90,8 @@ function HomePage() {
   const [cancelCourtId, setCancelCourtId] = useState("");
   const [showPayConfirmDialog, setShowPayConfirmDialog] = useState(false);
   const [payConfirmData, setPayConfirmData] = useState(null);
+  const [paySuccess, setPaySuccess] = useState(false);
+  const [paySuccessMsg, setPaySuccessMsg] = useState("");
   const [dialogHideActions, setDialogHideActions] = useState(false);
   const [showAdvanceDialog, setShowAdvanceDialog] = useState(false);
   const [pendingPlayerName, setPendingPlayerName] = useState(null);
@@ -969,7 +973,7 @@ function HomePage() {
     console.log(`Thay đổi dich vu không thành công.`);
   };
 
-  const onPayConfirm = (playerName, type, serviceList, expense) => {
+  const onPayCancel = (playerName, type, serviceList, expense) => {
     // show dialog type: pay, cancel.
     let title = `Xác nhận XOÁ người chơi [${playerName}] : [${expense} ${VN_CURRENCY}] ?`;
     if (TYPE.PAY === type) {
@@ -988,39 +992,66 @@ function HomePage() {
   const handlePayment = (data) => {
     console.log(`handle: ${data.title}`);
 
+    // Delete player without payment
+    if (data.type === TYPE.CANCEL) {
+      api
+        .post(`/api/v1/pay/cancel`, { playerName: data.playerName })
+        .then((res) => {
+          const result = res?.data;
+          if (result && result.success && result.data === true) {
+            setPaySuccessMsg("Đã xoá người chơi khỏi phiên.");
+            setPaySuccess(true);
+            setShowPayConfirmDialog(false);
+            setShowDialog(false);
+            setAvailablePlayers((prev) => prev.filter((p) => p !== data.playerName));
+          } else if (result) {
+            // HTTP 200 but business error
+            emitApiError(result.errorMessage || "Không thể xoá người chơi. Vui lòng thử lại.");
+          }
+          // res === null: the interceptor already alerted on 5xx errors
+        })
+        .catch(() => {
+          // The interceptor already alerted on 4xx/network errors; keep the dialog open for retry
+        });
+      return;
+    }
+
     // Calculate total expense of services (excluding advance service)
     const servicesWithoutAdvance = data.services.filter(s => s.serviceName !== ADVANCE_SERVICE_NAME);
     const totalExpense = servicesWithoutAdvance.reduce((sum, item) => sum + (item.cost || 0), 0);
 
-    // Subtract advance payment from total expense
-    const advanceService = data.services.find(s => s.serviceName === ADVANCE_SERVICE_NAME);
-    const advanceAmount = advanceService ? advanceService.cost : 0;
-    const amountToPay = Math.max(totalExpense - advanceAmount, 0);
     const recordedDebt = data.debitAmount || 0;
-    // The backend currently requires a positive debit amount in PayRequest.debitRequest.
-    // Fall back to the unpaid amount when the admin has not explicitly recorded a debt.
-    const debitAmount = recordedDebt > 0 ? recordedDebt : amountToPay;
+
+    // Everything settled by this payment: today's services + the old debts
+    // picked in the dialog, minus the amount converted into a NEW debt.
+    // (PayConfirm's SỐ TIỀN is only the cash collected now — the advance may
+    // have covered part of this.)
+    const totalPaid = totalExpense + (data.payDebits?.totalPayAmount || 0) - recordedDebt;
 
     // send api pay
     api
       .post(`/api/v1/pay/payToPlayer`, {
         playerName: data.playerName,
         serviceRequests: data.services,
-        totalExpense: String(totalExpense),
+        totalExpense: String(totalPaid),
         // payment method picked in PayConfirm (CASH/TRANSFER); cancel keeps "CANCEL"
         payType: data.paymentMethod || data.type,
-        debitRequest: {
+        debitRequest: recordedDebt > 0 ? {
           playerName: data.playerName,
-          debitAmount: debitAmount,
+          debitAmount: recordedDebt,
           currency: VN_CURRENCY,
           note: data.debitNote || "Ghi nợ",
           // createdTime is parsed as LocalDateTime in UTC+7 (no timezone suffix)
           createdTime: new Date().toLocaleString("sv-SE", { timeZone: "Asia/Ho_Chi_Minh" }).replace(" ", "T"),
-        },
+        } : null,
+        // existing debts selected in DebitListDialog, settled with this payment
+        payDebits: data.payDebits || null,
       })
       .then((res) => {
         const result = res?.data;
         if (result && result.success) {
+          setPaySuccessMsg("Thanh toán thành công");
+          setPaySuccess(true);
           setShowPayConfirmDialog(false);
           setShowDialog(false);
           setAvailablePlayers((prev) => prev.filter((p) => p !== data.playerName));
@@ -1142,8 +1173,8 @@ function HomePage() {
               playerName={selectedPlayer}
               services={playerServiceMap[selectedPlayer] || []}
               onClose={() => setShowDialog(false)}
-              onPay={onPayConfirm}
-              onDelete={onPayConfirm}
+              onPay={onPayCancel}
+              onDelete={onPayCancel}
               onUpdateServices={handleUpdateServices}
               onUpdatePlayerName={handleUpdatePlayerName}
               canEditPlayerName={true}
@@ -1287,6 +1318,24 @@ function HomePage() {
             onConfirm={handleConfirmFinishRent}
             onExit={handleExitFinishConfirm}
           />
+          <Snackbar
+            open={paySuccess}
+            autoHideDuration={2000}
+            anchorOrigin={{ vertical: "top", horizontal: "center" }}
+            onClose={(_, reason) => {
+              if (reason === "clickaway") return;
+              setPaySuccess(false);
+            }}
+          >
+            <Alert
+              severity="success"
+              variant="filled"
+              onClose={() => setPaySuccess(false)}
+              sx={{ width: "100%" }}
+            >
+              {paySuccessMsg}
+            </Alert>
+          </Snackbar>
         </Box>
       </Box>
     </DndProvider>

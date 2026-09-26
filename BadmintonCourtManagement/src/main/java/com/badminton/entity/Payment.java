@@ -8,6 +8,8 @@ import lombok.Setter;
 import java.math.BigDecimal;
 import java.time.Instant;
 
+import com.badminton.constant.PayType;
+
 @Entity
 @Table(name = "payment")
 @Getter
@@ -30,6 +32,10 @@ public class Payment {
     @Column(length = 250)
     private String note;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "pay_type", length = 20, nullable = false)
+    private PayType payType;
+
     @ManyToOne
     @JoinColumn(name = "player_id", nullable = false)
     private Player player;
@@ -39,9 +45,10 @@ public class Payment {
         this.player = player;
     }
 
-    public Payment(BigDecimal amount, String note, Player player) {
+    public Payment(BigDecimal amount, String note, Player player, PayType payType) {
         this.amount = amount;
         this.note = note;
         this.player = player;
+        this.payType = payType;
     }
 }

@@ -21,9 +21,11 @@ import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import PaymentOutlinedIcon from "@mui/icons-material/PaymentOutlined";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import CloseIcon from "@mui/icons-material/Close";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import { TYPE, ADVANCE_SERVICE_NAME } from "../HomePage";
 import { VN_CURRENCY, formatVND } from "../MoneyUtils";
 import PlayerDebtSection from "./PlayerDebtSection";
+import DraggableResizablePaper, { DIALOG_DRAG_HANDLE } from "./DraggableResizablePaper";
 
 const EMPTY_DEBT_STATE = {
   debtList: [],
@@ -38,11 +40,15 @@ const PayConfirm = ({ show, data, onConfirm, onExit }) => {
   // it reports recorded debts up so the payable amounts stay in sync.
   const [debtInfo, setDebtInfo] = useState(EMPTY_DEBT_STATE);
   const [paymentMethod, setPaymentMethod] = useState("CASH");
+  // Existing debts picked in DebitListDialog — settled together with this
+  // payment via PayRequest.payDebits (PayDebitRequest shape).
+  const [payDebits, setPayDebits] = useState(null);
 
   useEffect(() => {
     if (show) {
       setDebtInfo(EMPTY_DEBT_STATE);
       setPaymentMethod("CASH");
+      setPayDebits(null);
     }
   }, [show]);
 
@@ -71,23 +77,27 @@ const PayConfirm = ({ show, data, onConfirm, onExit }) => {
   // Calculate total of regular services
   const regularTotal = regularServices.reduce((sum, item) => sum + (item.cost || 0), 0);
 
-  // Calculate remaining amount to pay (can be negative if advance > total)
-  const remainingAmount = regularTotal - advanceAmount;
+  // Old debts settled together with this payment (picked in DebitListDialog)
+  const debtPayAmount = payDebits?.totalPayAmount || 0;
 
-  // Amount payable before recording any debt
-  const payableAmount = remainingAmount > 0 ? remainingAmount : 0;
+  // Everything owed in this transaction: today's services + debts being settled
+  const totalDue = regularTotal + debtPayAmount;
 
-  // Amount to pay now (reduced by recorded and pending debts)
+  // Today's share still payable before recording any debt — caps "Ghi nợ"
+  const payableAmount = Math.max(regularTotal - advanceAmount, 0);
+
+  // SỐ TIỀN: cash to collect now — the advance covers today's cost and the
+  // settled debts; newly recorded debts reduce it further
   const amountToPay = Math.max(
-    payableAmount - debtInfo.totalRecordedDebt - debtInfo.pendingDebt,
+    totalDue - advanceAmount - debtInfo.totalRecordedDebt - debtInfo.pendingDebt,
     0
   );
 
   // Total cost (this is what the player has to pay in total)
   const totalCost = regularTotal;
 
-  // Amount to return to customer (if advance > total)
-  const returnAmount = advanceAmount > regularTotal ? advanceAmount - regularTotal : 0;
+  // Amount to return to customer (advance left over after covering totalDue)
+  const returnAmount = Math.max(advanceAmount - totalDue, 0);
 
   return (
     <>
@@ -99,13 +109,16 @@ const PayConfirm = ({ show, data, onConfirm, onExit }) => {
         }}
         maxWidth="sm"
         fullWidth
+        PaperComponent={DraggableResizablePaper}
         PaperProps={{
           sx: { borderRadius: 3, overflow: "hidden" },
         }}
       >
         {/* ── Colored header banner ── */}
         <Box
+          className={DIALOG_DRAG_HANDLE}
           sx={{
+            cursor: "move",
             bgcolor: headerBg,
             display: "flex",
             flexDirection: "column",
@@ -186,18 +199,32 @@ const PayConfirm = ({ show, data, onConfirm, onExit }) => {
             allowRecord={isPayment && data?.allowRecordDebt !== false}
             payableAmount={payableAmount}
             onDebtsChange={setDebtInfo}
+            onAddToPayment={isPayment ? setPayDebits : undefined}
             leading={
               <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
                 <PersonOutlinedIcon fontSize="small" color="action" />
                 <Typography variant="body2" color="text.secondary" sx={{ minWidth: 60 }}>
                   Người chơi
                 </Typography>
-                <Typography variant="subtitle1" fontWeight={700} color="primary.main" noWrap>
+                <Typography variant="subtitle1" fontWeight={700} color="primary" noWrap>
                   {data.playerName}
                 </Typography>
               </Box>
             }
           />
+
+          {/* Debts selected in DebitListDialog, paid together with this bill */}
+          {payDebits && (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 1 }}>
+              <WarningAmberIcon fontSize="small" sx={{ color: "warning.dark" }} />
+              <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
+                Trả nợ ({payDebits.listDebitPay?.length || 0} khoản)
+              </Typography>
+              <Typography variant="body2" fontWeight={600} sx={{ color: "warning.dark" }}>
+                {formatVND(payDebits.totalPayAmount)} {VN_CURRENCY}
+              </Typography>
+            </Box>
+          )}
 
           {/* Payment method (pay only — cancel collects nothing) */}
           {isPayment && (
@@ -325,7 +352,7 @@ const PayConfirm = ({ show, data, onConfirm, onExit }) => {
           }}
         >
           <Typography variant="subtitle1" fontWeight={700}>
-            Tổng cộng
+            Tổng cộng chi phí hôm nay:
           </Typography>
           <Typography variant="subtitle1" fontWeight={700} color={headerColor}>
             {formatVND(totalCost)} {VN_CURRENCY}
@@ -347,12 +374,12 @@ const PayConfirm = ({ show, data, onConfirm, onExit }) => {
             }}
           >
             <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
-              <ArrowBackIcon fontSize="small" color="warning.dark" />
-              <Typography variant="body2" color="warning.dark" fontWeight={600}>
+              <ArrowBackIcon fontSize="small" sx={{ color: "common.black" }} />
+              <Typography variant="body2" sx={{ color: "common.black" }} fontWeight={600}>
                 Tiền trả lại
               </Typography>
             </Box>
-            <Typography variant="body2" color="warning.dark" fontWeight={700}>
+            <Typography variant="body2" sx={{ color: "common.black" }} fontWeight={700}>
               {formatVND(returnAmount)} {VN_CURRENCY}
             </Typography>
           </Box>
@@ -385,7 +412,8 @@ const PayConfirm = ({ show, data, onConfirm, onExit }) => {
               totalCost: totalCost,
               debitAmount: debtInfo.totalDebitAmount,
               debitNote: debtInfo.debtNote,
-              paymentMethod: paymentMethod
+              paymentMethod: paymentMethod,
+              payDebits: payDebits
             })}
             fullWidth
             size="large"

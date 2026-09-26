@@ -25,4 +25,9 @@ public class PaymentController {
     public ResponseEntity<Result<PayResponse>> payToPlayer(@RequestBody PayRequest payRequest) {
         return ResponseConvertor.convert(payService.payToPlayer(payRequest));
     }
+
+    @PostMapping("/cancel")
+    public ResponseEntity<Result<Boolean>> cancel(@RequestBody PayRequest payRequest) {
+        return ResponseConvertor.convert(payService.cancel(payRequest));
+    }
 }

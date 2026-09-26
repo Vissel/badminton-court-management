@@ -35,7 +35,7 @@ public class Debit {
     @Column(length = 20)
     private DebitStatus status = DebitStatus.PENDING;
 
-    @Column(updatable = false, insertable = false)
+    @Column(updatable = false)
     private Instant createdDate;
 
     @Column(length = 250)

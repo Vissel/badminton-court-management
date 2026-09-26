@@ -32,6 +32,28 @@ public interface DebitRepository extends JpaRepository<Debit, Integer> {
                                                      @Param("to") java.time.Instant to,
                                                      Pageable pageable);
 
+    @Query("SELECT d FROM Debit d WHERE d.player.playerId = :playerId " +
+            "AND (:from IS NULL OR d.createdDate >= :from) " +
+            "AND (:to IS NULL OR d.createdDate <= :to) " +
+            "AND (:amountFrom IS NULL OR d.debtAmount >= :amountFrom) " +
+            "AND (:amountTo IS NULL OR d.debtAmount <= :amountTo) " +
+            "ORDER BY d.createdDate DESC")
+    Page<Debit> findHistoryByPlayerId(@Param("playerId") Integer playerId,
+                                      @Param("from") java.time.Instant from,
+                                      @Param("to") java.time.Instant to,
+                                      @Param("amountFrom") java.math.BigDecimal amountFrom,
+                                      @Param("amountTo") java.math.BigDecimal amountTo,
+                                      Pageable pageable);
+
+    /**
+     * Aggregates over the full debit history: [0] total debt amount,
+     * [1] total remaining amount, [2] total debit count, [3] fully-paid count.
+     */
+    @Query("SELECT COALESCE(SUM(d.debtAmount), 0), COALESCE(SUM(d.remainingAmount), 0), " +
+            "COUNT(d), SUM(CASE WHEN d.remainingAmount = 0 THEN 1 ELSE 0 END) " +
+            "FROM Debit d WHERE d.player.playerId = :playerId")
+    Object[] summarizeHistoryByPlayerId(@Param("playerId") Integer playerId);
+
     @Query("SELECT SUM(d.debtAmount) FROM Debit d WHERE d.player.playerId = :playerId")
     java.math.BigDecimal sumDebtAmountByPlayerId(@Param("playerId") Integer playerId);
 

@@ -161,7 +161,7 @@ public class ServiceUtil {
                         map -> new ShuttleBallResponse(map.getShuttleBall().getShuttleName(),
                                 map.getShuttleBall().getCost(), map.getShuttleBall().isSelected()),
                         map -> Integer.valueOf(map.getShuttleNumber()), Integer::sum // merge function — sum counts if
-                                                                                     // duplicates exist
+                        // duplicates exist
                 ));
     }
 

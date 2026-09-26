@@ -1,6 +1,8 @@
 package com.badminton.requestmodel.debit;
 
+import com.badminton.constant.PayType;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.Data;
 
@@ -14,11 +16,11 @@ public class PayDebitRequest {
     @Positive(message = "Payment amount must be positive")
     private float totalPayAmount;
 
-    @NotBlank(message = "Payment method must not be blank")
-    private String paymentMethod;
+    @NotNull(message = "Payment method must not be null")
+    private PayType paymentMethod;
 
     private String note;
-
-    List<DebitPayRequest> listDebitPay;
+    
+    private List<DebitPayRequest> listDebitPay;
 
 }

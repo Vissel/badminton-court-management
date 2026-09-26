@@ -17,8 +17,7 @@ import ListItem from "@mui/material/ListItem";
 import ListItemText from "@mui/material/ListItemText";
 import Chip from "@mui/material/Chip";
 import PlayerDebtSection from "./PlayerDebtSection";
-import { createDebit } from "../../api/debtApi";
-import { emitApiError } from "../../api/errorBus";
+import DraggableResizablePaper, { DIALOG_DRAG_HANDLE } from "./DraggableResizablePaper";
 import { TYPE, ADVANCE_SERVICE_NAME } from "../HomePage";
 import { VN_CURRENCY, formatVND } from "./../MoneyUtils";
 
@@ -101,31 +100,6 @@ const ServiceDialog = ({
     onPay(playerName, TYPE.PAY, services, Number(totalCost));
   };
 
-  // "+ Ghi nợ" creates the debt immediately — it is not tied to this bill's payment.
-  const handleRecordDebt = useCallback(
-    async (amount, note) => {
-      try {
-        const res = await createDebit({
-          playerName,
-          debitAmount: amount,
-          currency: VN_CURRENCY,
-          note: note || "Ghi nợ",
-          // createdTime is parsed as LocalDateTime in UTC+7 (no timezone suffix)
-          createdTime: new Date()
-            .toLocaleString("sv-SE", { timeZone: "Asia/Ho_Chi_Minh" })
-            .replace(" ", "T"),
-        });
-        if (res?.data === true) return true;
-        emitApiError("Ghi nợ thất bại. Vui lòng thử lại.");
-        return false;
-      } catch {
-        // The api interceptor already alerted on transport/server errors
-        return false;
-      }
-    },
-    [playerName]
-  );
-
   const handleRemoveService = (index) => {
     const updated = services.filter((_, i) => i !== index);
     onUpdateServices(playerName, updated);
@@ -207,6 +181,7 @@ const ServiceDialog = ({
     <>
       <Dialog
         open
+        PaperComponent={DraggableResizablePaper}
         fullWidth
         maxWidth="sm"
         onClose={(event, reason) => {
@@ -214,7 +189,7 @@ const ServiceDialog = ({
           onClose(false);
         }}
       >
-        <DialogTitle sx={{ px: 6 }}>
+        <DialogTitle className={DIALOG_DRAG_HANDLE} sx={{ px: 6, cursor: "move" }}>
           <IconButton
             aria-label="close"
             onClick={() => onClose(false)}
@@ -231,10 +206,8 @@ const ServiceDialog = ({
           </Typography>
           <PlayerDebtSection
             playerName={playerName}
-            allowRecord={!hideActions}
-            onRecordDebt={handleRecordDebt}
-            leadingFill={isEditingName}
-            chipRowSx={{ mb: 0 }}
+            debtListReadOnly
+            chipRowSx={{ mb: 0, position: "relative" }}
             leading={
               canEditPlayerName && !hideActions && isEditingName ? (
                 <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -287,8 +260,19 @@ const ServiceDialog = ({
                   )}
                 </Box>
               ) : (
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, minWidth: 0 }}>
-                  <Typography variant="subtitle1" fontWeight={600} noWrap>
+                <Box
+                  sx={{
+                    position: "absolute",
+                    left: "50%",
+                    transform: "translateX(-50%)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 0.5,
+                    minWidth: 0,
+                    maxWidth: "60%",
+                  }}
+                >
+                  <Typography variant="subtitle1" fontWeight={700} color="primary" noWrap>
                     {playerName}
                   </Typography>
                   {canEditPlayerName && !hideActions && (

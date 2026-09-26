@@ -27,6 +27,11 @@ public class ResponseConvertor {
         return org.springframework.http.HttpStatus.BAD_REQUEST.value();
     }
 
+    /**
+     * @deprecated Uses the application error code as a raw HTTP status and unwraps the body,
+     * which can produce invalid statuses (e.g. 103) with an empty body. Use {@link #convert(Result)} instead.
+     */
+    @Deprecated
     public static final <T> ResponseEntity<T> convertToResponseEntity(Result<T> response) {
         if (response.isSuccess()) {
             return ResponseEntity.ok(response.getData());

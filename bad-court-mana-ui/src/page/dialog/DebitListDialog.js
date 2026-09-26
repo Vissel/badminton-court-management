@@ -16,11 +16,16 @@ import MenuItem from "@mui/material/MenuItem";
 import InputAdornment from "@mui/material/InputAdornment";
 import Snackbar from "@mui/material/Snackbar";
 import Alert from "@mui/material/Alert";
+import Pagination from "@mui/material/Pagination";
+import Chip from "@mui/material/Chip";
+import CircularProgress from "@mui/material/CircularProgress";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import api from "../../api/index";
 import { emitApiError } from "../../api/errorBus";
+import { listDebitHistory, REMAINING_DEBTS_FILTER } from "../../api/debtApi";
 import { VN_CURRENCY, formatVND } from "../MoneyUtils";
 import { formatVNDateTime, parseServerDateTime, toServerDateTimeString } from "../DateTimeUtils";
+import DraggableResizablePaper, { DIALOG_DRAG_HANDLE } from "./DraggableResizablePaper";
 
 const DEFAULT_FILTER = {
   from: "2026-01-01",
@@ -35,7 +40,18 @@ const DEFAULT_PAGINATION = {
   totalPage: 0,
 };
 
-const DebitListDialog = ({ show, playerName, onClose, onPaid, preselectedDebits }) => {
+const HISTORY_PAGE_SIZE = 10;
+// Raw input strings — empty means unbounded
+const EMPTY_HISTORY_FILTER = { from: "", to: "", amountFrom: "", amountTo: "" };
+
+const STATUS_META = {
+  PAID: { label: "Đã trả", color: "success" },
+  PARTIALLY_PAID: { label: "Trả một phần", color: "warning" },
+  PENDING: { label: "Chưa trả", color: "default" },
+};
+
+const DebitListDialog = ({ show, playerName, onClose, onPaid, preselectedDebits, onAddToPayment, readOnly = false, historyMode = false }) => {
+  const isReadOnly = readOnly || historyMode;
   const [debtData, setDebtData] = useState({
     remainingDebits: [],
     debitSummary: null,
@@ -58,6 +74,13 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid, preselectedDebits 
   const skipPrePayRef = useRef(false);
   const successCloseTimerRef = useRef(null);
 
+  // ── historyMode: /history browser — server-side filter + pagination ──
+  const [histPage, setHistPage] = useState(1);
+  const [histData, setHistData] = useState({ list: [], totalPage: 0, total: 0 });
+  const [histLoading, setHistLoading] = useState(false);
+  const [filterInput, setFilterInput] = useState(EMPTY_HISTORY_FILTER);
+  const [appliedFilter, setAppliedFilter] = useState(REMAINING_DEBTS_FILTER);
+
   const normalizeDateTime = (dateTime) => {
     const parsed = parseServerDateTime(dateTime);
     // Truncate to seconds because the server may return fractional seconds in ISO strings.
@@ -76,16 +99,22 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid, preselectedDebits 
       setPrePayResponse(null);
       setPaying(false);
       setSnackbar((s) => ({ ...s, open: false }));
+      setHistPage(1);
+      setHistData({ list: [], totalPage: 0, total: 0 });
+      setHistLoading(false);
+      setFilterInput(EMPTY_HISTORY_FILTER);
+      setAppliedFilter(REMAINING_DEBTS_FILTER);
       if (successCloseTimerRef.current) {
         clearTimeout(successCloseTimerRef.current);
         successCloseTimerRef.current = null;
       }
       return;
     }
+    if (historyMode) return; // the /history effect below owns this mode's fetch
     // Debts checked on the caller's page are pre-ticked here, matched by
     // dateTime|note|amount — the same identity the prePay mapping uses.
     const applyPreselected = (debts) => {
-      if (!preselectedDebits?.length) return;
+      if (!preselectedDebits?.length || isReadOnly) return;
       const keyOf = (d) =>
         `${normalizeDateTime(d?.dateTime)}|${d?.note}|${d?.money?.amount}`;
       const queues = new Map();
@@ -114,13 +143,54 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid, preselectedDebits 
         filter: DEFAULT_FILTER,
       })
       .then((res) => {
-        if (res?.data) {
-          setDebtData(res.data);
-          applyPreselected(res.data.remainingDebits || []);
+        const b = res?.data; // Result<GetRemainingDebtResponse>
+        const data = b?.success ? b.data : null;
+        if (data) {
+          setDebtData(data);
+          applyPreselected(data.remainingDebits || []);
+        } else {
+          setDebtData({ remainingDebits: [], debitSummary: null });
         }
       })
       .catch(() => setDebtData({ remainingDebits: [], debitSummary: null }));
-  }, [show, playerName, preselectedDebits]);
+  }, [show, playerName, preselectedDebits, isReadOnly, historyMode]);
+
+  // Draft filter inputs are pushed into the /history request 500ms after
+  // typing stops — the backend does the filtering, nothing is filtered here.
+  useEffect(() => {
+    if (!historyMode || !show) return;
+    const t = setTimeout(() => {
+      setHistPage(1);
+      setAppliedFilter({
+        from: filterInput.from || REMAINING_DEBTS_FILTER.from,
+        to: filterInput.to || REMAINING_DEBTS_FILTER.to,
+        amountFrom: Number(filterInput.amountFrom) || 0,
+        amountTo: Number(filterInput.amountTo) || 0,
+      });
+    }, 500);
+    return () => clearTimeout(t);
+  }, [filterInput, historyMode, show]);
+
+  useEffect(() => {
+    if (!historyMode || !show || !playerName) return;
+    setHistLoading(true);
+    listDebitHistory(
+      playerName,
+      { current: histPage, pageSize: HISTORY_PAGE_SIZE, totalPage: 0 },
+      appliedFilter
+    )
+      .then((res) => {
+        const b = res?.data;
+        const data = b?.success ? b.data : null;
+        setHistData({
+          list: data?.list || [],
+          totalPage: data?.pagination?.totalPage || 0,
+          total: data?.total || 0,
+        });
+      })
+      .catch(() => setHistData({ list: [], totalPage: 0, total: 0 }))
+      .finally(() => setHistLoading(false));
+  }, [historyMode, show, playerName, histPage, appliedFilter]);
 
   const numericPay = payAmount ? Number(payAmount) : 0;
   const { remainingDebits = [], debitSummary } = debtData;
@@ -142,6 +212,10 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid, preselectedDebits 
       setPrePayResponse(null);
       return;
     }
+    if (isReadOnly) {
+      setPrePayResponse(null);
+      return;
+    }
     if (!numericPay || numericPay <= 0) {
       setPrePayResponse(null);
       setSelected(new Set());
@@ -158,8 +232,8 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid, preselectedDebits 
           note: note,
         })
         .then((res) => {
-          if (res?.data) setPrePayResponse(res.data);
-          else setPrePayResponse(null);
+          const b = res?.data; // Result<PrepayDebitResponse>
+          setPrePayResponse(b?.success ? b.data : null);
         })
         .catch(() => setPrePayResponse(null));
     }, 500);
@@ -168,7 +242,7 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid, preselectedDebits 
         clearTimeout(prePayTimerRef.current);
       }
     };
-  }, [numericPay, playerName, paymentMethod, note]);
+  }, [numericPay, playerName, paymentMethod, note, isReadOnly]);
 
   const handlePayAmountChange = (e) => {
     const val = e.target.value;
@@ -197,8 +271,7 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid, preselectedDebits 
     setPayAmount(total > 0 ? String(total) : "");
   };
 
-  const handlePay = () => {
-    if (paying) return;
+  const buildListDebitPay = () => {
     const listDebitPay = [];
     selected.forEach((idx) => {
       const debt = remainingDebits[idx];
@@ -220,6 +293,27 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid, preselectedDebits 
         });
       }
     });
+    return listDebitPay;
+  };
+
+  // "Add to payment" mode: hand the selection to the caller (PayConfirm) as a
+  // PayDebitRequest-shaped object — it is settled later by /pay/payToPlayer.
+  const handleAddToPayment = () => {
+    const listDebitPay = buildListDebitPay();
+    if (listDebitPay.length === 0) return;
+    onAddToPayment?.({
+      playerName,
+      totalPayAmount: listDebitPay.reduce((sum, item) => sum + item.payAmount, 0),
+      paymentMethod,
+      note,
+      listDebitPay,
+    });
+    onClose();
+  };
+
+  const handlePay = () => {
+    if (paying) return;
+    const listDebitPay = buildListDebitPay();
     if (listDebitPay.length === 0) return;
     if (prePayTimerRef.current) {
       clearTimeout(prePayTimerRef.current);
@@ -236,7 +330,8 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid, preselectedDebits 
         listDebitPay,
       })
       .then((res) => {
-        const data = res?.data;
+        const b = res?.data; // Result<PayDebitResponse>
+        const data = b?.success ? b.data : null;
         const status = data?.status;
         if (status === "SUCCESS" || status === "PARTIAL") {
           setSnackbar({
@@ -250,7 +345,7 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid, preselectedDebits 
             onClose();
           }, 2000);
         } else {
-          emitApiError(data?.message || "Thanh toán thất bại");
+          emitApiError(data?.message || b?.errorMessage || "Thanh toán thất bại");
         }
       })
       .catch(() => {
@@ -313,12 +408,15 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid, preselectedDebits 
           if (reason === "backdropClick") return;
           onClose();
         }}
-        maxWidth="xs"
+        maxWidth={historyMode ? "sm" : "xs"}
         fullWidth
+        PaperComponent={DraggableResizablePaper}
         PaperProps={{ sx: { borderRadius: 3, overflow: "hidden" } }}
       >
         <Box
+          className={DIALOG_DRAG_HANDLE}
           sx={{
+            cursor: "move",
             bgcolor: "warning.light",
             display: "flex",
             flexDirection: "column",
@@ -343,12 +441,163 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid, preselectedDebits 
             <WarningAmberIcon sx={{ fontSize: 40, color: "#fff" }} />
           </Box>
           <Typography variant="h6" fontWeight={700} color="#fff">
-            Nợ của <strong>{playerName}</strong>
+            {historyMode ? "Lịch sử nợ của" : "Nợ của"} <strong>{playerName}</strong>
           </Typography>
         </Box>
 
         <DialogContent sx={{ px: 3, py: 2 }}>
-          {remainingDebits.length === 0 ? (
+          {historyMode ? (
+            <>
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 1.5 }}>
+                <TextField
+                  type="date"
+                  size="small"
+                  label="Từ ngày"
+                  value={filterInput.from}
+                  onChange={(e) => setFilterInput((f) => ({ ...f, from: e.target.value }))}
+                  slotProps={{ inputLabel: { shrink: true } }}
+                  sx={{ flex: "1 1 140px" }}
+                />
+                <TextField
+                  type="date"
+                  size="small"
+                  label="Đến ngày"
+                  value={filterInput.to}
+                  onChange={(e) => setFilterInput((f) => ({ ...f, to: e.target.value }))}
+                  slotProps={{ inputLabel: { shrink: true } }}
+                  sx={{ flex: "1 1 140px" }}
+                />
+                <TextField
+                  size="small"
+                  label="Nợ từ"
+                  value={filterInput.amountFrom}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === "" || /^\d+$/.test(v))
+                      setFilterInput((f) => ({ ...f, amountFrom: v }));
+                  }}
+                  slotProps={{
+                    input: {
+                      endAdornment: (
+                        <InputAdornment position="end">{VN_CURRENCY}</InputAdornment>
+                      ),
+                    },
+                  }}
+                  sx={{ flex: "1 1 120px" }}
+                />
+                <TextField
+                  size="small"
+                  label="Nợ đến"
+                  value={filterInput.amountTo}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === "" || /^\d+$/.test(v))
+                      setFilterInput((f) => ({ ...f, amountTo: v }));
+                  }}
+                  slotProps={{
+                    input: {
+                      endAdornment: (
+                        <InputAdornment position="end">{VN_CURRENCY}</InputAdornment>
+                      ),
+                    },
+                  }}
+                  sx={{ flex: "1 1 120px" }}
+                />
+              </Box>
+
+              {histLoading ? (
+                <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}>
+                  <CircularProgress size={22} />
+                </Box>
+              ) : histData.list.length === 0 ? (
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  textAlign="center"
+                  sx={{ py: 2 }}
+                >
+                  Không có lịch sử nợ nào.
+                </Typography>
+              ) : (
+                <>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    Tổng cộng {histData.total} khoản
+                  </Typography>
+                  <List dense disablePadding>
+                    {histData.list.map((it, idx) => {
+                      const meta = STATUS_META[it.status] || { label: it.status || "—", color: "default" };
+                      return (
+                        <ListItem
+                          key={idx}
+                          disableGutters
+                          disablePadding
+                          sx={{
+                            py: 0.75,
+                            borderBottom: 1,
+                            borderColor: "divider",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 1,
+                          }}
+                        >
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ minWidth: 22, textAlign: "center" }}
+                          >
+                            {(histPage - 1) * HISTORY_PAGE_SIZE + idx + 1}
+                          </Typography>
+                          <ListItemText
+                            primary={
+                              <Box
+                                sx={{
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  alignItems: "center",
+                                }}
+                              >
+                                <Typography variant="body2">{it.note || "Nợ"}</Typography>
+                                <Typography
+                                  variant="body2"
+                                  fontWeight={600}
+                                  sx={{ color: "warning.dark" }}
+                                >
+                                  {formatVND(it.debtAmount)} {it.currency || VN_CURRENCY}
+                                </Typography>
+                              </Box>
+                            }
+                            secondary={
+                              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                                <Typography variant="caption" color="text.secondary">
+                                  {formatVNDateTime(it.debtDateTime)}
+                                </Typography>
+                                <Chip
+                                  label={meta.label}
+                                  color={meta.color}
+                                  size="small"
+                                  variant="outlined"
+                                />
+                              </Box>
+                            }
+                          />
+                        </ListItem>
+                      );
+                    })}
+                  </List>
+                  {histData.totalPage > 1 && (
+                    <Box sx={{ display: "flex", justifyContent: "center", mt: 1 }}>
+                      <Pagination
+                        size="small"
+                        count={histData.totalPage}
+                        page={histPage}
+                        onChange={(_, p) => setHistPage(p)}
+                      />
+                    </Box>
+                  )}
+                </>
+              )}
+            </>
+          ) : remainingDebits.length === 0 ? (
             <Typography
               variant="body2"
               color="text.secondary"
@@ -370,62 +619,68 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid, preselectedDebits 
                 <Typography variant="body2" color="text.secondary">
                   Tổng nợ ({numberDebit} khoản)
                 </Typography>
-                <Typography variant="body1" fontWeight={700} color="warning.main">
+                <Typography variant="body1" fontWeight={700} color="warning">
                   {formatVND(totalDebts)} {debitSummary?.totalDebts?.currency || VN_CURRENCY}
                 </Typography>
               </Box>
 
-              <Box
-                sx={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  mb: 1,
-                }}
-              >
-                <Typography variant="body2" color="text.secondary">
-                  Tổng thanh toán
-                </Typography>
-                <Typography variant="body1" fontWeight={700} color="success.main">
-                  {formatVND(appliedPayTotal)} {VN_CURRENCY}
-                </Typography>
-              </Box>
+              {!isReadOnly && (
+                <>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      mb: 1,
+                    }}
+                  >
+                    <Typography variant="body2" color="text.secondary">
+                      Tổng thanh toán
+                    </Typography>
+                    <Typography variant="body1" fontWeight={700} color="success">
+                      {formatVND(appliedPayTotal)} {VN_CURRENCY}
+                    </Typography>
+                  </Box>
 
-              <Box sx={{ display: "flex", gap: 1, mb: 1.5 }}>
-                <TextField
-                  size="small"
-                  label="Số tiền thanh toán"
-                  placeholder="0"
-                  value={payAmount}
-                  onChange={handlePayAmountChange}
-                  sx={{ flex: 1 }}
-                  InputProps={{
-                    endAdornment: (
-                      <InputAdornment position="end">{VN_CURRENCY}</InputAdornment>
-                    ),
-                  }}
-                />
-                <Select
-                  size="small"
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value)}
-                  aria-label="Phương thức thanh toán"
-                  sx={{ minWidth: 130 }}
-                >
-                  <MenuItem value="CASH">Tiền mặt</MenuItem>
-                  <MenuItem value="TRANSFER">Chuyển khoản</MenuItem>
-                </Select>
-              </Box>
+                  <Box sx={{ display: "flex", gap: 1, mb: 1.5 }}>
+                    <TextField
+                      size="small"
+                      label="Số tiền thanh toán"
+                      placeholder="0"
+                      value={payAmount}
+                      onChange={handlePayAmountChange}
+                      sx={{ flex: 1 }}
+                      slotProps={{
+                        input: {
+                          endAdornment: (
+                            <InputAdornment position="end">{VN_CURRENCY}</InputAdornment>
+                          ),
+                        },
+                      }}
+                    />
+                    <Select
+                      size="small"
+                      value={paymentMethod}
+                      onChange={(e) => setPaymentMethod(e.target.value)}
+                      aria-label="Phương thức thanh toán"
+                      sx={{ minWidth: 130 }}
+                    >
+                      <MenuItem value="CASH">Tiền mặt</MenuItem>
+                      <MenuItem value="TRANSFER">Chuyển khoản</MenuItem>
+                    </Select>
+                  </Box>
 
-              <TextField
-                fullWidth
-                size="small"
-                label="Ghi chú"
-                placeholder="Ghi chú thanh toán"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                sx={{ mb: 1.5 }}
-              />
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Ghi chú"
+                    placeholder="Ghi chú thanh toán"
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    sx={{ mb: 1.5 }}
+                  />
+                </>
+              )}
 
               <Divider sx={{ mb: 1 }} />
 
@@ -444,13 +699,15 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid, preselectedDebits 
                       gap: 1,
                     }}
                   >
-                    <Checkbox
-                      checked={selected.has(idx)}
-                      indeterminate={partialSelected.has(idx)}
-                      onChange={() => toggleSelected(idx)}
-                      size="small"
-                      sx={{ p: 0.5 }}
-                    />
+                    {!isReadOnly && (
+                      <Checkbox
+                        checked={selected.has(idx)}
+                        indeterminate={partialSelected.has(idx)}
+                        onChange={() => toggleSelected(idx)}
+                        size="small"
+                        sx={{ p: 0.5 }}
+                      />
+                    )}
                     <Typography
                       variant="body2"
                       color="text.secondary"
@@ -471,7 +728,7 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid, preselectedDebits 
                           <Typography
                             variant="body2"
                             fontWeight={600}
-                            color="warning.dark"
+                            sx={{ color: "warning.dark" }}
                           >
                             {formatVND(debt.money?.amount)} {debt.money?.currency || VN_CURRENCY}
                           </Typography>
@@ -499,16 +756,18 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid, preselectedDebits 
           >
             Đóng
           </Button>
-          <Button
-            variant="contained"
-            color="warning"
-            onClick={handlePay}
-            disabled={paying || (selected.size === 0 && partialSelected.size === 0)}
-            sx={{ flex: 1, borderRadius: 2, py: 1.2, fontWeight: 700 }}
-            disableElevation
-          >
-            Thanh toán
-          </Button>
+          {!isReadOnly && (
+            <Button
+              variant="contained"
+              color="warning"
+              onClick={onAddToPayment ? handleAddToPayment : handlePay}
+              disabled={paying || (selected.size === 0 && partialSelected.size === 0)}
+              sx={{ flex: 1, borderRadius: 2, py: 1.2, fontWeight: 700 }}
+              disableElevation
+            >
+              {onAddToPayment ? "Thêm vào thanh toán" : "Thanh toán"}
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
 

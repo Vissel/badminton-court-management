@@ -7,13 +7,11 @@ import LoginPage from "./page/LoginPage";
 import HomePage from "./page/HomePage";
 import SetupPage from "./page/SetupPage";
 import ReportPage from "./page/ReportPage";
-import DebtPage from "./page/DebtPage";
+import DebtManagementPage from "./page/DebtManagementPage";
 import Footer from "./Footer";
 import Header from "./Header";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./context/ProtectedRoute";
-import HomePage2 from "./page/HomePage_mess";
-import HomePageError from "./page/HomePage_error";
 
 import DateTimeBar from "./DateTimeBar";
 import ErrorPopup from "./ErrorPopup";
@@ -54,22 +52,6 @@ function App() {
                 }
               />
               <Route
-                path="/home-2"
-                element={
-                  <ProtectedRoute>
-                    <HomePage2 />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/home-3"
-                element={
-                  <ProtectedRoute>
-                    <HomePageError />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
                 path="/setup"
                 element={
                   <ProtectedRoute>
@@ -86,10 +68,10 @@ function App() {
                 }
               />
               <Route
-                path="/debts"
+                path="/debtManagement"
                 element={
                   <ProtectedRoute>
-                    <DebtPage />
+                    <DebtManagementPage />
                   </ProtectedRoute>
                 }
               />

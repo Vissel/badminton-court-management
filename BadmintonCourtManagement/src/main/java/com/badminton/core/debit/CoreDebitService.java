@@ -9,17 +9,11 @@ import com.badminton.enums.DebitStatus;
 import com.badminton.enums.PaymentStatus;
 import com.badminton.exception.BusinessException;
 import com.badminton.exception.enums.ErrorCodeEnum;
-import com.badminton.model.debit.DebitModel;
-import com.badminton.model.debit.PayDebitModel;
-import com.badminton.model.debit.RemainingDebitModel;
-import com.badminton.model.dto.AllocateDebitPaymentRequest;
-import com.badminton.model.dto.AllocateDebitPaymentResponse;
-import com.badminton.model.dto.CreateDebitDTO;
-import com.badminton.model.dto.DebitPayDTO;
-import com.badminton.model.dto.PayDebitDTO;
-import com.badminton.model.dto.RemainingDebitDTO;
+import com.badminton.model.debit.*;
+import com.badminton.model.dto.*;
 import com.badminton.repository.DebitRepository;
 import com.badminton.repository.DebitSummaryRepository;
+import com.badminton.repository.PaymentDebitRepository;
 import com.badminton.repository.UserRepository;
 import com.badminton.requestmodel.Pagination;
 import com.badminton.response.debit.*;
@@ -37,10 +31,12 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.interceptor.TransactionAspectSupport;
 
 import java.math.BigDecimal;
+import java.text.Normalizer;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -59,6 +55,8 @@ public class CoreDebitService {
     private CoreAvailablePlayerService coreAvailablePlayerService;
     @Autowired
     private CorePayDebitService corePayDebitService;
+    @Autowired
+    private PaymentDebitRepository paymentDebitRepository;
 
     @Transactional
     public Boolean createDebit(CreateDebitDTO dto) throws BusinessException {
@@ -73,7 +71,7 @@ public class CoreDebitService {
         debit.setNote(dto.getNote());
         debit.setPlayer(playerAndSession.getLeft());
         debit.setSession(playerAndSession.getRight());
-
+        debit.setCreatedDate(dto.getCreatedTime());
         debitRepository.save(debit);
         // Update player debit summary incrementally to avoid transaction issue
         increasePlayerDebitSummary(debit);
@@ -91,8 +89,7 @@ public class CoreDebitService {
     @Transactional
     public RemainingDebitModel getRemainingDebtsBySinglePlayer(RemainingDebitDTO remainingDebitDTO) throws BusinessException {
         // step 1: get Player by playerName, throw BusinessException if not found
-        Player player = userRepository.findByPlayerName(remainingDebitDTO.getPlayerName())
-                .orElseThrow(() -> new BusinessException(ErrorCodeEnum.PLAYER_NOT_FOUND, "Player not found with name: " + remainingDebitDTO.getPlayerName()));
+        Player player = resolvePlayerByName(remainingDebitDTO.getPlayerName());
 
         // step 2: get DebitSummary by Player and isActive true
         Optional<DebitSummary> debitSummaryOpt = debitSummaryRepository.findByPlayerAndIsActiveTrue(player);
@@ -107,6 +104,137 @@ public class CoreDebitService {
 
         // step 4: convert and return RemainingDebitModel
         return convertToDebitModel(debitSummaryOpt, debitPage, remainingDebitDTO.getPlayerName());
+    }
+
+    /**
+     * Full debit history of a player (paid + remaining), newest first.
+     *
+     * @param dto playerName, pagination (1-based), optional from/to bounds
+     */
+    public DebitHistoryModel getDebitHistory(DebitHistoryDTO dto) throws BusinessException {
+        Player player = resolvePlayerByName(dto.getPlayerName());
+
+        Pageable pageable = buildPageable(dto.getPagination());
+        Page<Debit> debitPage = debitRepository.findHistoryByPlayerId(
+                player.getPlayerId(), dto.getFrom(), dto.getTo(),
+                dto.getAmountFrom() != null ? BigDecimal.valueOf(dto.getAmountFrom()) : null,
+                dto.getAmountTo() != null ? BigDecimal.valueOf(dto.getAmountTo()) : null,
+                pageable);
+
+        Map<Integer, Instant> lastPaidDates = findLastPaymentDates(debitPage.getContent());
+        List<DebitHistoryItemModel> items = debitPage.stream()
+                .map(debit -> toHistoryItemModel(debit, lastPaidDates.get(debit.getDebitId())))
+                .collect(Collectors.toList());
+
+        return DebitHistoryModel.builder()
+                .playerName(dto.getPlayerName())
+                .items(items)
+                .total(debitPage.getTotalElements())
+                .totalPage(debitPage.getTotalPages())
+                .build();
+    }
+
+    /**
+     * Aggregate summary over the player's full debit history (paid + remaining).
+     */
+    public DebitHistorySummaryModel getDebitHistorySummary(String playerName) throws BusinessException {
+        Player player = resolvePlayerByName(playerName);
+
+        Object[] row = debitRepository.summarizeHistoryByPlayerId(player.getPlayerId());
+        // Spring Data JPA returns the aggregate tuple wrapped inside a single-element Object[]
+        Object[] values = (row != null && row.length == 1 && row[0] instanceof Object[] nested) ? nested : row;
+        BigDecimal totalDebt = toBigDecimal(values != null && values.length > 0 ? values[0] : null);
+        BigDecimal totalRemaining = toBigDecimal(values != null && values.length > 1 ? values[1] : null);
+        int numDebits = values != null && values.length > 2 && values[2] instanceof Number ? ((Number) values[2]).intValue() : 0;
+        int numPaid = values != null && values.length > 3 && values[3] instanceof Number ? ((Number) values[3]).intValue() : 0;
+
+        return DebitHistorySummaryModel.builder()
+                .playerName(playerName)
+                .totalDebitAmount(totalDebt)
+                .totalPaidAmount(totalDebt.subtract(totalRemaining))
+                .totalRemainingAmount(totalRemaining)
+                .numDebits(numDebits)
+                .numPaidDebits(numPaid)
+                .numUnpaidDebits(numDebits - numPaid)
+                .currency(MoneyUtils.CURRENCY_VN)
+                .build();
+    }
+
+    private static BigDecimal toBigDecimal(Object value) {
+        if (value instanceof BigDecimal bigDecimal) {
+            return bigDecimal;
+        }
+        if (value instanceof Number number) {
+            return BigDecimal.valueOf(number.doubleValue());
+        }
+        return BigDecimal.ZERO;
+    }
+
+    /**
+     * Resolve a player by name: exact match first, then a normalized match that
+     * tolerates case, extra whitespace, leading zeros in digits and Vietnamese
+     * diacritics (e.g. "nguoi choi 9" matches stored "nguoi choi 009").
+     */
+    private Player resolvePlayerByName(String playerName) throws BusinessException {
+        List<Player> exactMatches = userRepository.findAllByPlayerName(playerName);
+        if (!exactMatches.isEmpty()) {
+            return exactMatches.getFirst();
+        }
+        String target = normalizePlayerName(playerName);
+        List<Player> candidates = userRepository.findAll().stream()
+                .filter(p -> normalizePlayerName(p.getPlayerName()).equals(target))
+                .collect(Collectors.toList());
+        if (candidates.size() == 1) {
+            return candidates.getFirst();
+        }
+        throw new BusinessException(ErrorCodeEnum.PLAYER_NOT_FOUND,
+                "Player not found with name: " + playerName);
+    }
+
+    private static String normalizePlayerName(String name) {
+        if (name == null) {
+            return "";
+        }
+        String collapsed = name.trim().toLowerCase().replaceAll("\\s+", " ");
+        String noDiacritics = Normalizer.normalize(collapsed, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}+", "")
+                .replace('\u0111', 'd');
+        String[] tokens = noDiacritics.split(" ");
+        StringBuilder sb = new StringBuilder();
+        for (String token : tokens) {
+            if (token.matches("0+\\d+")) {
+                token = token.replaceAll("^0+", "");
+            }
+            sb.append(token).append(' ');
+        }
+        return sb.toString().trim();
+    }
+
+    private Map<Integer, Instant> findLastPaymentDates(List<Debit> debits) {
+        if (debits == null || debits.isEmpty()) {
+            return Map.of();
+        }
+        List<Integer> debitIds = debits.stream().map(Debit::getDebitId).toList();
+        return paymentDebitRepository.findLastPaymentDateByDebitIds(debitIds).stream()
+                .collect(Collectors.toMap(
+                        row -> (Integer) row[0],
+                        row -> (Instant) row[1]));
+    }
+
+    private DebitHistoryItemModel toHistoryItemModel(Debit debit, Instant paidDateTime) {
+        BigDecimal remaining = debit.getRemainingAmount() != null ? debit.getRemainingAmount() : BigDecimal.ZERO;
+        BigDecimal debt = debit.getDebtAmount() != null ? debit.getDebtAmount() : BigDecimal.ZERO;
+        return DebitHistoryItemModel.builder()
+                .debitId(debit.getDebitId())
+                .debtDateTime(debit.getCreatedDate())
+                .paidDateTime(paidDateTime)
+                .debtAmount(debt)
+                .remainingAmount(remaining)
+                .paidAmount(debt.subtract(remaining))
+                .status(debit.getStatus())
+                .currency(debit.getCurrency())
+                .note(debit.getNote())
+                .build();
     }
 
     private RemainingDebitModel convertToDebitModel(Optional<DebitSummary> debitSummaryOpt, Page<Debit> debitPage, String playerName) {
@@ -154,10 +282,7 @@ public class CoreDebitService {
      */
     @Transactional
     public PrepayDebitResponse prepayDebitsForPlayer(AllocateDebitPaymentRequest request) throws BusinessException {
-        Player player = userRepository.findByPlayerName(request.getPlayerName())
-                .orElseThrow(() -> new BusinessException(
-                        ErrorCodeEnum.PLAYER_NOT_FOUND,
-                        "Player not found with name: " + request.getPlayerName()));
+        Player player = resolvePlayerByName(request.getPlayerName());
         List<Debit> unpaidDebits = debitRepository.findUnpaidDebitsByPlayerIdOrderByCreatedDateAsc(player.getPlayerId());
         if (unpaidDebits.isEmpty()) {
             throw new BusinessException(ErrorCodeEnum.DEBTS_NOT_FOUND);
@@ -211,11 +336,8 @@ public class CoreDebitService {
                 .status(PaymentStatus.INPROGRESS) // keep it default
                 .build();
         try {
-            log.info("Allocating DebitPayment...");
-            Player player = userRepository.findByPlayerName(allocateDebitPaymentRequest.getPlayerName())
-                    .orElseThrow(() -> new BusinessException(
-                            ErrorCodeEnum.PLAYER_NOT_FOUND,
-                            "Player not found with name: " + allocateDebitPaymentRequest.getPlayerName()));
+            log.info("Allocating DebitPayment for player:{}", allocateDebitPaymentRequest.getPlayerName());
+            Player player = resolvePlayerByName(allocateDebitPaymentRequest.getPlayerName());
 
             List<Debit> unpaidDebits = debitRepository.findUnpaidDebitsByPlayerIdOrderByCreatedDateAsc(player.getPlayerId());
             if (unpaidDebits.isEmpty()) {
@@ -263,13 +385,14 @@ public class CoreDebitService {
                     : "Payment allocation completed. Some debts are still remaining");
             response.setErrorCode(0);
         } catch (BusinessException e) {
-            log.error("Allocating DebitPayment business error: {}", e.getMessage());
+            log.error("Allocating DebitPayment for player:{} got business error: {}", allocateDebitPaymentRequest.getPlayerName(), e.getMessage());
             response.setStatus(PaymentStatus.FAIL);
             response.setMessage(e.getErrorMessage());
             response.setErrorCode(Integer.valueOf(e.getErrorCodeEnum().getCode()));
             TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
         } catch (Exception e) {
-            log.error("Allocating DebitPayment error:{}", e.getMessage(), e);
+            log.error("Allocating DebitPayment for player:{} got error:{}", allocateDebitPaymentRequest.getPlayerName()
+                    , e.getMessage());
             response.setStatus(PaymentStatus.FAIL);
             response.setMessage("Server error while allocating debit payment");
             response.setErrorCode(Integer.valueOf(ErrorCodeEnum.INTERNAL_SERVER_ERROR.getCode()));
@@ -281,12 +404,9 @@ public class CoreDebitService {
 
     @Transactional
     public DebitSummaryResponse getDebitSummary(String playerName) throws BusinessException {
-        List<Player> players = userRepository.findAllByPlayerName(playerName);
-        if (players.size() != 1) {
-            throw new BusinessException(ErrorCodeEnum.PLAYER_NOT_FOUND);
-        }
+        Player player = resolvePlayerByName(playerName);
 
-        Optional<DebitSummary> summaryOpt = debitSummaryRepository.findByPlayerAndIsActiveTrue(players.getFirst());
+        Optional<DebitSummary> summaryOpt = debitSummaryRepository.findByPlayerAndIsActiveTrue(player);
         if (!summaryOpt.isPresent()) {
             return new DebitSummaryResponse(
                     playerName,
@@ -412,15 +532,16 @@ public class CoreDebitService {
 
     private Pair<Player, Session> getPlayerAndSession(String name, Instant createdTime) throws BusinessException {
         String createdTimeStr = DateTimeFormatter.ISO_LOCAL_DATE_TIME.withZone(java.time.ZoneOffset.UTC).format(createdTime);
-        Session session = sessionService.getSessionByDateTime(createdTimeStr);
-        if (session == null) {
+        List<Session> sessions = sessionService.getSessionsByDateTime(createdTimeStr);
+        if (sessions.isEmpty()) {
             throw new BusinessException(ErrorCodeEnum.CURRENT_SESSION_NOT_FOUND);
         }
-        Player player = coreAvailablePlayerService.checkAvailableAndGetPlayer(session, name);
-        if (player == null) {
-            throw new BusinessException(ErrorCodeEnum.PLAYER_NOT_FOUND);
+        for (Session session : sessions) {
+            Player player = coreAvailablePlayerService.checkAvailableAndGetPlayer(session, name);
+            if (player != null) {
+                return Pair.of(player, session);
+            }
         }
-
-        return Pair.of(player, session);
+        throw new BusinessException(ErrorCodeEnum.PLAYER_NOT_FOUND);
     }
 }

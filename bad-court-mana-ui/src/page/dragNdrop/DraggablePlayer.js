@@ -39,6 +39,7 @@ function DraggablePlayer({ name, isLocked, onDropService, onClick, courtId, area
         margin: "5px",
         backgroundColor: "white",
         border: "1px solid gray",
+        borderRadius: "3px",
         textAlign: "center",
         cursor: isLocked ? "not-allowed" : "move",
         transition: "all 2s ease",

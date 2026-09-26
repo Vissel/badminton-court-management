@@ -11,6 +11,7 @@ import Stack from "@mui/material/Stack";
 import Box from "@mui/material/Box";
 
 import "./GameDialog.css";
+import DraggableResizablePaper, { DIALOG_DRAG_HANDLE } from "./DraggableResizablePaper";
 
 const WIN = "Win";
 const TEAM_ONE = "teamOne";
@@ -288,8 +289,9 @@ const GameDialog = ({ show, data, onConfirm, onExit }) => {
       maxWidth="lg"
       fullWidth
       scroll="paper"
+      PaperComponent={DraggableResizablePaper}
     >
-      <DialogTitle align="center">Thông tin trận cầu</DialogTitle>
+      <DialogTitle align="center" className={DIALOG_DRAG_HANDLE} sx={{ cursor: "move" }}>Thông tin trận cầu</DialogTitle>
       <DialogContent dividers>
         <Stack direction="row" spacing={2} flexWrap="wrap" sx={{ mb: 2 }}>
           <Typography fontWeight={700}>Tổng tiền : {formatCurrency(totalCost)}</Typography>

@@ -20,7 +20,7 @@ import api from "./index";
  * 3) POST /api/v1/debit/listRemainingDebts
  *    Request: { playerNames: [name], pagination: {current,pageSize,totalPage},
  *               filter: {from, to, amountFrom, amountTo} }
- *    → GetRemainingDebtResponse { playerName, debitSummary,
+ *    → Result<GetRemainingDebtResponse> — data: { playerName, debitSummary,
  *        remainingDebits: [{ dateTime, money: {amount, currency}, note }] }
  *
  * 4) POST /api/v1/debit/pay
@@ -29,8 +29,9 @@ import api from "./index";
  *      - pay ALL debts  → only totalPayAmount (= player totalDebts), no listDebitPay
  *      - pay SELECTED   → listDebitPay = [{dateTime, payAmount}] per checked debt,
  *                         totalPayAmount = sum(payAmount)
- *    → PayDebitResponse { playerName, paymentAmount, paidDebts, remainingDebts,
- *        numPaidDebts, numRemainingDebts, paymentDate, status, message }
+ *    → Result<PayDebitResponse> — data: { playerName, paymentAmount, paidDebts,
+ *        remainingDebts, numPaidDebts, numRemainingDebts, paymentDate, status,
+ *        message }
  */
 
 // Wide-open range: the management page wants all remaining debts, not just
@@ -84,4 +85,31 @@ export const payDebits = ({ playerName, totalPayAmount, paymentMethod = "CASH", 
     paymentMethod,
     note,
     ...(listDebitPay && listDebitPay.length > 0 ? { listDebitPay } : {}),
+  });
+
+// GET /api/v1/debit/summaryHistory?playerName=
+// → Result<DebitHistorySummaryResponse>: { playerName, totalDebitAmount,
+//   totalPaidAmount, totalRemainingAmount, numDebits, numPaidDebits,
+//   numUnpaidDebits, currency } — accumulated over paid + remaining debts.
+export const getDebitHistorySummary = (playerName) =>
+  api.get(`/api/v1/debit/summaryHistory?playerName=${encodeURIComponent(playerName)}`, {
+    skipErrorToast: true,
+  });
+
+// POST /api/v1/debit/history → Result<PageResponse<DebitHistoryItemResponse>>
+// item: { playerName, debtAmount, debtDateTime, paidAmount, paidDateTime,
+//         remainingAmount, currency, status, note }
+export const listDebitHistory = (playerName, pagination, filter) =>
+  api.post("/api/v1/debit/history", {
+    playerName,
+    pagination: pagination || { current: 1, pageSize: 10, totalPage: 0 },
+    filter: filter || REMAINING_DEBTS_FILTER,
+  });
+
+export const exportDebtReport = (request) =>
+  api.post("/api/v1/debit/report/export", request, {
+    responseType: "blob",
+    headers: {
+      Accept: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    },
   });

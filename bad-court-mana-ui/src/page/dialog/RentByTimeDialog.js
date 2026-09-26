@@ -15,6 +15,7 @@ import InputLabel from "@mui/material/InputLabel";
 import IconButton from "@mui/material/IconButton";
 import DeleteIcon from "@mui/icons-material/Delete";
 import { formatVND } from "../MoneyUtils";
+import DraggableResizablePaper, { DIALOG_DRAG_HANDLE } from "./DraggableResizablePaper";
 
 // ── Pure helpers (no React state) ──────────────────────────────────────────
 
@@ -238,8 +239,9 @@ const RentByTimeDialog = ({
             }}
             maxWidth="sm"
             fullWidth
+            PaperComponent={DraggableResizablePaper}
         >
-            <DialogTitle align="center">
+            <DialogTitle align="center" className={DIALOG_DRAG_HANDLE} sx={{ cursor: "move" }}>
                 {editMode ? "Cập nhật thuê theo giờ" : "Thuê theo giờ"}
             </DialogTitle>
 

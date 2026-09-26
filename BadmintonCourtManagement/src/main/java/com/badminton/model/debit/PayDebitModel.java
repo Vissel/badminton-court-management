@@ -1,5 +1,6 @@
 package com.badminton.model.debit;
 
+import com.badminton.constant.PayType;
 import lombok.Builder;
 import lombok.Data;
 
@@ -11,7 +12,7 @@ import java.time.Instant;
 public class PayDebitModel {
     private String playerName;
     private BigDecimal paymentAmount;
-    private String paymentMethod;
+    private PayType paymentMethod;
     private DebitModel paidDebit;
     private Instant paymentDate;
     private String status;

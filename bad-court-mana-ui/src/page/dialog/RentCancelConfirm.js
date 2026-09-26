@@ -6,6 +6,7 @@ import DialogActions from "@mui/material/DialogActions";
 import Button from "@mui/material/Button";
 import Typography from "@mui/material/Typography";
 import Stack from "@mui/material/Stack";
+import DraggableResizablePaper, { DIALOG_DRAG_HANDLE } from "./DraggableResizablePaper";
 
 const RentCancelConfirm = ({ show, rental, onConfirm, onExit }) => {
     if (!show) return null;
@@ -19,8 +20,9 @@ const RentCancelConfirm = ({ show, rental, onConfirm, onExit }) => {
             }}
             maxWidth="xs"
             fullWidth
+            PaperComponent={DraggableResizablePaper}
         >
-            <DialogTitle>Xác nhận huỷ thuê theo giờ?</DialogTitle>
+            <DialogTitle className={DIALOG_DRAG_HANDLE} sx={{ cursor: "move" }}>Xác nhận huỷ thuê theo giờ?</DialogTitle>
             {rental && (
                 <DialogContent dividers>
                     <Stack spacing={1}>

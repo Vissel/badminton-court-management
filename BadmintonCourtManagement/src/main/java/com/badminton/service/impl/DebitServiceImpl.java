@@ -4,16 +4,22 @@ import com.badminton.core.debit.CoreDebitService;
 import com.badminton.enums.PaymentStatus;
 import com.badminton.exception.BusinessException;
 import com.badminton.exception.enums.ErrorCodeEnum;
+import com.badminton.model.debit.DebitHistoryItemModel;
+import com.badminton.model.debit.DebitHistoryModel;
+import com.badminton.model.debit.DebitHistorySummaryModel;
 import com.badminton.model.debit.RemainingDebitModel;
 import com.badminton.model.dto.AllocateDebitPaymentRequest;
 import com.badminton.model.dto.AllocateDebitPaymentResponse;
 import com.badminton.model.dto.CreateDebitDTO;
+import com.badminton.model.dto.DebitHistoryDTO;
 import com.badminton.model.dto.DebitPayDTO;
 import com.badminton.model.dto.RemainingDebitDTO;
 import com.badminton.requestmodel.Pagination;
+import com.badminton.requestmodel.debit.DebitHistoryRequest;
 import com.badminton.requestmodel.debit.DebitRequest;
 import com.badminton.requestmodel.debit.GetRemainingDebtRequest;
 import com.badminton.requestmodel.debit.PayDebitRequest;
+import com.badminton.response.PageResponse;
 import com.badminton.response.debit.*;
 import com.badminton.response.result.Result;
 import com.badminton.service.DebitService;
@@ -29,6 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -42,7 +49,6 @@ public class DebitServiceImpl implements DebitService {
 
     @Autowired
     private CoreDebitService coreDebitService;
-
 
     @Transactional
     @Override
@@ -108,7 +114,8 @@ public class DebitServiceImpl implements DebitService {
             @Override
             public GetRemainingDebtResponse process() throws BusinessException {
                 log.info("Getting remaining debts for player: {}", getRequest().getPlayerNames().get(0));
-                RemainingDebitModel remainingDebit = coreDebitService.getRemainingDebtsBySinglePlayer(convertToDebitDTO(getRequest()));
+                RemainingDebitModel remainingDebit = coreDebitService
+                        .getRemainingDebtsBySinglePlayer(convertToDebitDTO(getRequest()));
                 return convertToGetRemainingDebtResponse(remainingDebit);
             }
         });
@@ -172,7 +179,8 @@ public class DebitServiceImpl implements DebitService {
                 Assert.notEmpty(request.getListDebitPay(), "Debit pay list must not be null or empty");
                 request.getListDebitPay().forEach(debitPay -> {
                     Assert.notNull(debitPay, "Debit pay element must not be null");
-                    Assert.isTrue(StringUtils.isNotBlank(debitPay.getDateTime()), "Debit pay date time must not be blank");
+                    Assert.isTrue(StringUtils.isNotBlank(debitPay.getDateTime()),
+                            "Debit pay date time must not be blank");
                     Assert.isTrue(debitPay.getPayAmount() > 0, "Debit pay amount must be positive");
                 });
                 BigDecimal listTotalAmount = request.getListDebitPay().stream()
@@ -185,15 +193,18 @@ public class DebitServiceImpl implements DebitService {
             @Override
             public PayDebitResponse process() throws BusinessException {
 
-                AllocateDebitPaymentResponse response = coreDebitService.allocateDebitPayment(convertToAllocateDebitPaymentRequest(getRequest()));
+                AllocateDebitPaymentResponse response = coreDebitService
+                        .allocateDebitPayment(convertToAllocateDebitPaymentRequest(getRequest()));
                 if (response == null) {
-                    throw new BusinessException(ErrorCodeEnum.INTERNAL_SERVER_ERROR, "Debit allocation returned empty response");
+                    throw new BusinessException(ErrorCodeEnum.INTERNAL_SERVER_ERROR,
+                            "Debit allocation returned empty response");
                 }
 
                 PayDebitResponse payDebitResponse = convertToPayDebitResponse(response);
 
                 if (PaymentStatus.FAIL.equals(response.getStatus())) {
-                    log.error("Pay debits failed for player [{}]: {}", getRequest().getPlayerName(), response.getMessage());
+                    log.error("Pay debits failed for player [{}]: {}", getRequest().getPlayerName(),
+                            response.getMessage());
                     throw new BusinessException(
                             resolveErrorCode(response.getErrorCode()),
                             response.getMessage(),
@@ -224,6 +235,117 @@ public class DebitServiceImpl implements DebitService {
                 return coreDebitService.getDebitSummary(playerName);
             }
         });
+    }
+
+    @Override
+    public Result<DebitHistorySummaryResponse> getDebitHistorySummary(String playerName) {
+        return serviceTemplate.execute(new ProcessCallback<String, DebitHistorySummaryResponse>() {
+            @Override
+            public String getRequest() {
+                return playerName;
+            }
+
+            @Override
+            public void preProcess(String request) {
+                Assert.isTrue(StringUtils.isNotBlank(request), "Player name must not be blank");
+            }
+
+            @Override
+            public DebitHistorySummaryResponse process() throws BusinessException {
+                return convertToDebitHistorySummaryResponse(coreDebitService.getDebitHistorySummary(playerName));
+            }
+        });
+    }
+
+    private DebitHistorySummaryResponse convertToDebitHistorySummaryResponse(DebitHistorySummaryModel model) {
+        return new DebitHistorySummaryResponse(
+                model.getPlayerName(),
+                model.getTotalDebitAmount() != null ? model.getTotalDebitAmount().floatValue() : 0f,
+                model.getTotalPaidAmount() != null ? model.getTotalPaidAmount().floatValue() : 0f,
+                model.getTotalRemainingAmount() != null ? model.getTotalRemainingAmount().floatValue() : 0f,
+                model.getNumDebits(),
+                model.getNumPaidDebits(),
+                model.getNumUnpaidDebits(),
+                model.getCurrency());
+    }
+
+    private static final int DEFAULT_PAGE = 1;
+    private static final int DEFAULT_PAGE_SIZE = 10;
+
+    @Override
+    public Result<PageResponse<DebitHistoryItemResponse>> getDebitHistory(DebitHistoryRequest request) {
+        return serviceTemplate
+                .execute(new ProcessCallback<DebitHistoryRequest, PageResponse<DebitHistoryItemResponse>>() {
+                    @Override
+                    public DebitHistoryRequest getRequest() {
+                        return request;
+                    }
+
+                    @Override
+                    public void preProcess(DebitHistoryRequest request) {
+                        Assert.notNull(request, "Request must not be null");
+                        Assert.isTrue(StringUtils.isNotBlank(request.getPlayerName()), "Player name must not be blank");
+                    }
+
+                    @Override
+                    public PageResponse<DebitHistoryItemResponse> process() throws BusinessException {
+                        log.info("Getting debit history for player: {}", getRequest().getPlayerName());
+                        DebitHistoryDTO dto = convertToDebitHistoryDTO(getRequest());
+                        DebitHistoryModel model = coreDebitService.getDebitHistory(dto);
+
+                        PageResponse<DebitHistoryItemResponse> pageResponse = new PageResponse<>();
+                        pageResponse.setList(model.getItems() != null
+                                ? model.getItems().stream()
+                                        .map(item -> convertToDebitHistoryItemResponse(item, model.getPlayerName()))
+                                        .collect(Collectors.toList())
+                                : List.of());
+                        pageResponse.setTotal(model.getTotal());
+                        Pagination pagination = dto.getPagination();
+                        pagination.setTotalPage(model.getTotalPage());
+                        pageResponse.setPagination(pagination);
+                        return pageResponse;
+                    }
+                });
+    }
+
+    private DebitHistoryDTO convertToDebitHistoryDTO(DebitHistoryRequest request) {
+        Pagination pagination = request.getPagination();
+        if (pagination == null || pagination.getCurrent() <= 0 || pagination.getPageSize() <= 0) {
+            pagination = new Pagination(DEFAULT_PAGE, DEFAULT_PAGE_SIZE, 0);
+        }
+        Instant from = request.getFilter() != null && StringUtils.isNotBlank(request.getFilter().getFrom())
+                ? TimeUtils.convertToInstant(request.getFilter().getFrom())
+                : null;
+        Instant to = request.getFilter() != null && StringUtils.isNotBlank(request.getFilter().getTo())
+                ? TimeUtils.convertToInstant(request.getFilter().getTo())
+                : null;
+        Float amountFrom = request.getFilter() != null && request.getFilter().getAmountFrom() > 0
+                ? request.getFilter().getAmountFrom()
+                : null;
+        Float amountTo = request.getFilter() != null && request.getFilter().getAmountTo() > 0
+                ? request.getFilter().getAmountTo()
+                : null;
+        return DebitHistoryDTO.builder()
+                .playerName(request.getPlayerName())
+                .pagination(pagination)
+                .from(from)
+                .to(to)
+                .amountFrom(amountFrom)
+                .amountTo(amountTo)
+                .build();
+    }
+
+    private DebitHistoryItemResponse convertToDebitHistoryItemResponse(DebitHistoryItemModel item, String playerName) {
+        return new DebitHistoryItemResponse(
+                playerName,
+                item.getDebtAmount() != null ? item.getDebtAmount().floatValue() : 0f,
+                item.getDebtDateTime() != null ? TimeUtils.toDateTimeDisplay(item.getDebtDateTime()) : null,
+                item.getPaidAmount() != null ? item.getPaidAmount().floatValue() : 0f,
+                item.getPaidDateTime() != null ? TimeUtils.toDateTimeDisplay(item.getPaidDateTime()) : null,
+                item.getRemainingAmount() != null ? item.getRemainingAmount().floatValue() : 0f,
+                item.getCurrency() != null ? item.getCurrency() : MoneyUtils.CURRENCY_VN,
+                item.getStatus() != null ? item.getStatus().name() : null,
+                item.getNote());
     }
 
     private CreateDebitDTO convertToCreateDebitDTO(DebitRequest request) {
@@ -294,26 +416,22 @@ public class DebitServiceImpl implements DebitService {
     private GetRemainingDebtResponse convertToGetRemainingDebtResponse(RemainingDebitModel remainingDebit) {
         MoneyResponse moneyResponse = new MoneyResponse(
                 remainingDebit.getTotalDebts() != null ? remainingDebit.getTotalDebts().floatValue() : 0f,
-                MoneyUtils.CURRENCY_VN
-        );
+                MoneyUtils.CURRENCY_VN);
 
         DebitSummaryResponse debitSummary = new DebitSummaryResponse(
                 remainingDebit.getPlayerName(),
                 moneyResponse,
-                remainingDebit.getNumberDebit()
-        );
+                remainingDebit.getNumberDebit());
 
         List<RemainingDebitsResponse> remainingDebits = remainingDebit.getDebitModels() != null
                 ? remainingDebit.getDebitModels().stream()
-                .map(debitModel -> new RemainingDebitsResponse(
-                        debitModel.getDateTime() != null ? debitModel.getDateTime().toString() : null,
-                        new MoneyResponse(
-                                debitModel.getMoney() != null ? debitModel.getMoney().floatValue() : 0f,
-                                MoneyUtils.CURRENCY_VN
-                        ),
-                        debitModel.getNote()
-                ))
-                .collect(Collectors.toList())
+                        .map(debitModel -> new RemainingDebitsResponse(
+                                debitModel.getDateTime() != null ? debitModel.getDateTime().toString() : null,
+                                new MoneyResponse(
+                                        debitModel.getMoney() != null ? debitModel.getMoney().floatValue() : 0f,
+                                        MoneyUtils.CURRENCY_VN),
+                                debitModel.getNote()))
+                        .collect(Collectors.toList())
                 : null;
 
         return GetRemainingDebtResponse.builder()

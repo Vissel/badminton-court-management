@@ -10,6 +10,7 @@ import Typography from "@mui/material/Typography";
 import Chip from "@mui/material/Chip";
 import PersonOutlinedIcon from "@mui/icons-material/PersonOutlined";
 import { formatVND } from "../MoneyUtils";
+import DraggableResizablePaper, { DIALOG_DRAG_HANDLE } from "./DraggableResizablePaper";
 
 const QUICK_AMOUNTS = [50000, 100000, 150000, 200000];
 
@@ -54,9 +55,10 @@ const AdvancePaymentDialog = ({ show, playerName, onConfirm, onSkip, onClose }) 
             }}
             maxWidth="xs"
             fullWidth
+            PaperComponent={DraggableResizablePaper}
             PaperProps={{ sx: { borderRadius: 2.5 } }}
         >
-            <DialogTitle sx={{ pb: 0.5, display: "flex", alignItems: "center", gap: 1 }}>
+            <DialogTitle className={DIALOG_DRAG_HANDLE} sx={{ pb: 0.5, display: "flex", alignItems: "center", gap: 1, cursor: "move" }}>
                 <PersonOutlinedIcon fontSize="small" color="primary" />
                 <span>Trả trước cho <strong>{playerName}</strong></span>
             </DialogTitle>

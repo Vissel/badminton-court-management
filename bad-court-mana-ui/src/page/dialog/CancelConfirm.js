@@ -3,6 +3,7 @@ import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogActions from "@mui/material/DialogActions";
 import Button from "@mui/material/Button";
+import DraggableResizablePaper, { DIALOG_DRAG_HANDLE } from "./DraggableResizablePaper";
 
 const CancelConfirm = ({ show, courtId, onConfirm, onExit }) => {
   if (!show) return null;
@@ -16,8 +17,9 @@ const CancelConfirm = ({ show, courtId, onConfirm, onExit }) => {
       }}
       maxWidth="xs"
       fullWidth
+      PaperComponent={DraggableResizablePaper}
     >
-      <DialogTitle>Xác nhận huỷ trận đấu ?</DialogTitle>
+      <DialogTitle className={DIALOG_DRAG_HANDLE} sx={{ cursor: "move" }}>Xác nhận huỷ trận đấu ?</DialogTitle>
       <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
         <Button variant="outlined" color="inherit" onClick={onExit}>
           Tắt

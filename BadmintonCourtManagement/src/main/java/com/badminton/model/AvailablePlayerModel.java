@@ -1,5 +1,6 @@
 package com.badminton.model;
 
+import com.badminton.constant.PayType;
 import lombok.Data;
 
 import java.time.Instant;
@@ -16,7 +17,7 @@ public class AvailablePlayerModel {
 
     private Float payAmount;
 
-    private String payType;
+    private PayType payType;
 
     private Float advancePayment;
 }

@@ -1,8 +1,8 @@
 import { render, screen } from '@testing-library/react';
 import App from './App';
 
-test('renders learn react link', () => {
+test('renders the login screen when unauthenticated', async () => {
   render(<App />);
-  const linkElement = screen.getByText(/learn react/i);
-  expect(linkElement).toBeInTheDocument();
+  const loginTexts = await screen.findAllByText(/Đăng nhập/i);
+  expect(loginTexts.length).toBeGreaterThan(0);
 });

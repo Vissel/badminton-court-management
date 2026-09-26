@@ -432,4 +432,31 @@ public class SessionServiceImpl {
         }
     }
 
+    /**
+     * Get all sessions for the date of the given date time (UTC+7 wall-clock),
+     * ordered by fromTime desc.
+     *
+     * @param dateTime Date time string in ISO-8601 format (e.g., "2026-09-05T10:00:00")
+     * @return sessions for that day, or empty list if none
+     */
+    @Transactional(readOnly = true)
+    public List<Session> getSessionsByDateTime(String dateTime) {
+        if (dateTime == null || dateTime.isBlank()) {
+            return List.of();
+        }
+
+        try {
+            LocalDateTime localDateTime = LocalDateTime.parse(dateTime, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+            LocalDate requestDate = localDateTime.toLocalDate();
+
+            Instant startOfDay = requestDate.atStartOfDay(ZoneOffset.UTC).toInstant();
+            Instant endOfDay = requestDate.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+
+            return sessionRepo.findByFromTimeBetweenOrderByFromTimeDesc(startOfDay, endOfDay);
+        } catch (DateTimeParseException e) {
+            log.error("Failed to parse dateTime: {}", dateTime, e);
+            return List.of();
+        }
+    }
+
 }

@@ -32,10 +32,12 @@ import DebitListDialog from "./DebitListDialog";
  *                  creates the debt immediately via this callback instead of
  *                  buffering it locally; the summary refreshes on success
  *  leading         node rendered at the left of the chips row
- *  leadingFill     leading takes a full row (chips wrap to a second line,
- *                  right-aligned) — use when leading is a wide control like
- *                  a rename input
  *  chipRowSx       extra sx merged into the chips row
+ *  onAddToPayment  (payDebits) => void — when provided, the debit list dialog
+ *                  collects a selection instead of paying directly (used by
+ *                  PayConfirm so debts are settled with the main payment)
+ *  debtListReadOnly  true → the debit list dialog is view-only (no
+ *                  checkboxes / pay controls, just the list and a close button)
  */
 const PlayerDebtSection = ({
   playerName,
@@ -45,8 +47,9 @@ const PlayerDebtSection = ({
   onDebtsChange,
   onRecordDebt,
   leading,
-  leadingFill = false,
   chipRowSx = {},
+  onAddToPayment,
+  debtListReadOnly = false,
 }) => {
   const [debitSummary, setDebitSummary] = useState(null);
   const [showDebitDialog, setShowDebitDialog] = useState(false);
@@ -163,37 +166,45 @@ const PlayerDebtSection = ({
         direction="row"
         alignItems="center"
         spacing={1}
+        useFlexGap
         sx={{ minHeight: 24, mb: 1.5, flexWrap: "wrap", rowGap: 0.5, ...chipRowSx }}
       >
-        {leadingFill ? (
-          <Box sx={{ flexBasis: "100%", minWidth: 0 }}>{leading}</Box>
-        ) : (
-          leading
-        )}
-        <Box sx={{ flexGrow: 1 }} />
-        {allowRecord && canOpenDebtInput && !showDebtInput && (
-          <Chip
-            label="+ Ghi nợ"
-            size="small"
-            color="warning"
-            onClick={() => setShowDebtInput(true)}
-            sx={{ cursor: "pointer", fontWeight: 600 }}
-          />
-        )}
-        {debitSummary && (debitSummary.numberDebit || 0) > 0 ? (
-          <Chip
-            icon={<WarningAmberIcon fontSize="small" />}
-            label={`Nợ: ${formatVND(debitSummary.totalDebts?.amount)} ${debitSummary.totalDebts?.currency || VN_CURRENCY} (${debitSummary.numberDebit})`}
-            size="small"
-            color="warning"
-            onClick={() => setShowDebitDialog(true)}
-            sx={{ cursor: "pointer", fontWeight: 600 }}
-          />
-        ) : (
-          <Typography variant="caption" color="text.disabled">
-            Không có nợ
-          </Typography>
-        )}
+        {leading}
+        <Box
+          sx={{
+            ml: "auto",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            flexWrap: "wrap",
+            gap: 1,
+            minWidth: 0,
+          }}
+        >
+          {allowRecord && canOpenDebtInput && !showDebtInput && (
+            <Chip
+              label="+ Ghi nợ"
+              size="small"
+              color="warning"
+              onClick={() => setShowDebtInput(true)}
+              sx={{ cursor: "pointer", fontWeight: 600 }}
+            />
+          )}
+          {debitSummary && (debitSummary.numberDebit || 0) > 0 ? (
+            <Chip
+              icon={<WarningAmberIcon fontSize="small" />}
+              label={`Nợ: ${formatVND(debitSummary.totalDebts?.amount)} ${debitSummary.totalDebts?.currency || VN_CURRENCY} (${debitSummary.numberDebit})`}
+              size="small"
+              color="warning"
+              onClick={() => setShowDebitDialog(true)}
+              sx={{ cursor: "pointer", fontWeight: 600 }}
+            />
+          ) : (
+            <Typography variant="caption" color="text.disabled">
+              Không có nợ
+            </Typography>
+          )}
+        </Box>
       </Stack>
 
       {/* Record-debt input row */}
@@ -251,19 +262,19 @@ const PlayerDebtSection = ({
           }}
         >
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
-            <WarningAmberIcon fontSize="small" color="warning" />
-            <Typography variant="body2" color="warning.dark" fontWeight={600}>
+            <WarningAmberIcon fontSize="small" sx={{ color: "common.black" }} />
+            <Typography variant="body2" sx={{ color: "common.black" }} fontWeight={600}>
               Ghi nợ
             </Typography>
           </Box>
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-            <Typography variant="body2" color="warning.dark" fontWeight={700}>
+            <Typography variant="body2" sx={{ color: "common.black" }} fontWeight={700}>
               {formatVND(debt)} {VN_CURRENCY}
             </Typography>
             <IconButton
               size="small"
               onClick={() => removeDebtAt(i)}
-              sx={{ p: 0.25, color: "warning.dark" }}
+              sx={{ p: 0.25, color: "common.black" }}
             >
               <CloseIcon fontSize="small" />
             </IconButton>
@@ -284,12 +295,12 @@ const PlayerDebtSection = ({
           }}
         >
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
-            <WarningAmberIcon fontSize="small" color="warning" />
-            <Typography variant="body2" color="warning.dark" fontWeight={600}>
+            <WarningAmberIcon fontSize="small" sx={{ color: "common.black" }} />
+            <Typography variant="body2" sx={{ color: "common.black" }} fontWeight={600}>
               Ghi nợ
             </Typography>
           </Box>
-          <Typography variant="body2" color="warning.dark" fontWeight={700}>
+          <Typography variant="body2" sx={{ color: "common.black" }} fontWeight={700}>
             {formatVND(pendingDebt)} {VN_CURRENCY}
           </Typography>
         </Box>
@@ -300,6 +311,8 @@ const PlayerDebtSection = ({
         playerName={playerName}
         onClose={() => setShowDebitDialog(false)}
         onPaid={fetchDebitSummary}
+        onAddToPayment={onAddToPayment}
+        readOnly={debtListReadOnly}
       />
     </>
   );

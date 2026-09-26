@@ -27,7 +27,7 @@ function Header() {
     { label: "Trang chủ", path: "/home" },
     { label: "Cài đặt", path: "/setup" },
     { label: "Thống kê", path: "/report" },
-    { label: "Quản lý nợ", path: "/debts" },
+    { label: "Quản lý nợ", path: "/debtManagement" },
     ...(isRoot ? [{ label: "Super Admin", path: "/super-admin" }] : []),
     { label: "Đăng xuất", path: null, action: "logout" },
   ];

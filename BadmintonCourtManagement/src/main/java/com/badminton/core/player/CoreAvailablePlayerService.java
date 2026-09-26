@@ -58,7 +58,16 @@ public class CoreAvailablePlayerService {
     }
 
     public AvailablePlayer getAvailablePlayerByName(Session session, String name) {
-        return availablePlayerRepository.findAvailablePlayerInSessionByName(session, name).orElse(null);
+        List<AvailablePlayer> players = availablePlayerRepository
+                .findAllAvailablePlayerInSessionByName(session, name);
+        if (players.isEmpty()) {
+            return null;
+        }
+        // Prefer the row still present in session; fall back to the earliest row.
+        return players.stream()
+                .filter(p -> p.getLeaveTime() == null)
+                .findFirst()
+                .orElse(players.getFirst());
     }
 
     public Player checkAvailableAndGetPlayer(Session session, String name) {

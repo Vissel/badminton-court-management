@@ -57,7 +57,7 @@ public class CorePayDebitService {
                     "Payment amount is invalid for debit ID: " + debit.getDebitId());
         }
 
-        Payment payment = new Payment(payAmount, payDebit.getNote(), debit.getPlayer());
+        Payment payment = new Payment(payAmount, payDebit.getNote(), debit.getPlayer(), payDebit.getPayMethod());
         paymentRepository.save(payment);
 
         PaymentDebit paymentDebit = new PaymentDebit(payment, debit, payAmount);

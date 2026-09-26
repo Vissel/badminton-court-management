@@ -1,5 +1,6 @@
 package com.badminton.model.dto;
 
+import com.badminton.constant.PayType;
 import com.badminton.enums.PaymentStatus;
 import lombok.Builder;
 import lombok.Data;
@@ -12,7 +13,7 @@ import java.time.Instant;
 public class AllocateDebitPaymentResponse {
     private String playerName;
     private BigDecimal paymentAmount;
-    private String paymentMethod;
+    private PayType paymentMethod;
     private BigDecimal paidDebts;
     private BigDecimal remainingDebts;
     private int numPaidDebts;
@@ -22,4 +23,3 @@ public class AllocateDebitPaymentResponse {
     private String message;
     private int errorCode;
 }
-
