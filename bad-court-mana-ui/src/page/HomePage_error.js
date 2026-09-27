@@ -1,8 +1,14 @@
 import React, { useEffect, useRef, useState } from "react";
 import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
-import "../App.css"; // Make sure you define court-area positions here
+import Box from "@mui/material/Box";
+import Grid from "@mui/material/Grid";
+import TextField from "@mui/material/TextField";
+import Typography from "@mui/material/Typography";
+import Card from "@mui/material/Card";
+import CardContent from "@mui/material/CardContent";
+import Paper from "@mui/material/Paper";
+import "../App.css";
 import "../index.css";
-import "bootstrap/dist/css/bootstrap.min.css";
 
 let playerId = 4;
 const COURT_COUNT = 8;
@@ -16,8 +22,7 @@ const HomePageError = () => {
     { id: "player-2", label: "Player B" },
     { id: "player-3", label: "Player C" },
   ];
-  const [courtAssignments, setCourtAssignments] = useState({}); // { court1-areaA: playerObj }
-  const [courtStatus, setCourtStatus] = useState({}); // { court1: 'default' | 'ready' | 'in-progress' }
+  const [courtAssignments, setCourtAssignments] = useState({});
 
   const handleAddPlayer = (e) => {
     if (e.key === "Enter" && playerInput.trim()) {
@@ -37,28 +42,18 @@ const HomePageError = () => {
     const draggedPlayer = players.find((p) => p.id === draggableId);
     if (!draggedPlayer) return;
 
-    // If dropped into a court-area, assign it
     if (destination.droppableId.startsWith("court")) {
       const newAssignments = {
         ...courtAssignments,
         [destination.droppableId]: draggedPlayer,
       };
 
-      // Remove from player list
-      //   const remainingPlayers = players.filter((p) => p.id !== draggableId);
-      //   setPlayers(remainingPlayers);
       setCourtAssignments(newAssignments);
-      // Defer player removal to allow react-beautiful-dnd cleanup
-      // setTimeout(() => {
       setPlayers((prev) => prev.filter((p) => p.id !== draggableId));
-      // }, 0);
-    }
-    // You might also want to handle dragging within the player-pool if that's a desired feature
-    else if (
+    } else if (
       source.droppableId === "player-pool" &&
       destination.droppableId === "player-pool"
     ) {
-      // Reorder players within the player-pool
       const newPlayers = Array.from(players);
       const [removed] = newPlayers.splice(source.index, 1);
       newPlayers.splice(destination.index, 0, removed);
@@ -69,22 +64,26 @@ const HomePageError = () => {
   const courtAreaRef = useRef(null);
   useEffect(() => {
     setPlayers(initialPlayers);
-
-    // Scroll to the bottom of the court area when the component mounts
-    // if (courtAreaRef.current) {
-    //   courtAreaRef.current.scrollTop = courtAreaRef.current.scrollHeight;
-    // }
   }, []);
 
   return (
-    <div className="container-fluid vh-100 overflow-auto" ref={courtAreaRef}>
-      <div className="row h-100">
-        {/* Player Area */}
-        <DragDropContext onDragEnd={onDragEnd}>
-          <div className="col-2 border-end p-3 d-flex flex-column">
-            <input
-              type="text"
-              className="form-control mb-3"
+    <Box ref={courtAreaRef} sx={{ height: "100%", overflow: "auto" }}>
+      <DragDropContext onDragEnd={onDragEnd}>
+        <Grid container sx={{ minHeight: "100%" }}>
+          <Grid
+            size={{ xs: 12, md: 2 }}
+            sx={{
+              borderRight: { md: 1 },
+              borderColor: "divider",
+              p: 2,
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <TextField
+              size="small"
+              fullWidth
+              sx={{ mb: 2 }}
               placeholder="Player A"
               value={playerInput}
               onChange={(e) => setPlayerInput(e.target.value)}
@@ -93,7 +92,7 @@ const HomePageError = () => {
 
             <Droppable droppableId="player-pool">
               {(provided) => (
-                <div
+                <Box
                   className="player-list-scroll"
                   ref={provided.innerRef}
                   {...provided.droppableProps}
@@ -104,41 +103,42 @@ const HomePageError = () => {
                       draggableId={player.id}
                       index={index}
                     >
-                      {(provided) => (
-                        <div
-                          className="card mb-2"
-                          ref={provided.innerRef}
-                          {...provided.draggableProps}
-                          {...provided.dragHandleProps}
+                      {(prov) => (
+                        <Card
+                          ref={prov.innerRef}
+                          {...prov.draggableProps}
+                          {...prov.dragHandleProps}
+                          sx={{ mb: 1 }}
+                          variant="outlined"
                         >
-                          <div className="card-body py-2 text-center">
-                            {player.label}
-                          </div>
-                        </div>
+                          <CardContent sx={{ py: 1, textAlign: "center" }}>
+                            <Typography variant="body2">{player.label}</Typography>
+                          </CardContent>
+                        </Card>
                       )}
                     </Draggable>
                   ))}
                   {provided.placeholder}
-                </div>
+                </Box>
               )}
             </Droppable>
-          </div>
+          </Grid>
 
-          {/* Court Area */}
-          <div className="col-10 p-3 overflow-auto">
-            <div className="row">
+          <Grid size={{ xs: 12, md: 10 }} sx={{ p: 2, overflow: "auto" }}>
+            <Grid container spacing={2}>
               {[...Array(COURT_COUNT)].map((_, courtIndex) => {
                 const courtId = `court${courtIndex + 1}`;
                 return (
-                  <div key={courtId} className="col-md-6 mb-4">
-                    <div className="court-wrapper position-relative border">
-                      <p>{courtId}</p>
-                      <img
+                  <Grid key={courtId} size={{ xs: 12, md: 6 }}>
+                    <Paper variant="outlined" className="court-wrapper" sx={{ position: "relative" }}>
+                      <Typography sx={{ px: 1, pt: 1 }}>{courtId}</Typography>
+                      <Box
+                        component="img"
                         src="./bad-court2.jpg"
                         alt={`Court ${courtIndex + 1}`}
-                        className="img-fruid w-100"
+                        sx={{ width: "100%", display: "block" }}
                       />
-                      {AREA_LABELS.map((area, idx) => {
+                      {AREA_LABELS.map((area) => {
                         const areaId = `${courtId}-area${area}`;
                         return (
                           <Droppable key={areaId} droppableId={areaId}>
@@ -151,9 +151,13 @@ const HomePageError = () => {
                                 }`}
                               >
                                 {courtAssignments[areaId] && (
-                                  <div className="card small-card text-center">
-                                    {courtAssignments[areaId].label}
-                                  </div>
+                                  <Card variant="outlined" className="small-card">
+                                    <CardContent sx={{ py: 0.5, textAlign: "center" }}>
+                                      <Typography variant="caption">
+                                        {courtAssignments[areaId].label}
+                                      </Typography>
+                                    </CardContent>
+                                  </Card>
                                 )}
                                 {provided.placeholder}
                               </div>
@@ -161,15 +165,15 @@ const HomePageError = () => {
                           </Droppable>
                         );
                       })}
-                    </div>
-                  </div>
+                    </Paper>
+                  </Grid>
                 );
               })}
-            </div>
-          </div>
-        </DragDropContext>
-      </div>
-    </div>
+            </Grid>
+          </Grid>
+        </Grid>
+      </DragDropContext>
+    </Box>
   );
 };
 

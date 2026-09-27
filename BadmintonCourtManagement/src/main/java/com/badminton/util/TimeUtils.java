@@ -43,7 +43,14 @@ public class TimeUtils {
             // If it's not a full timestamp, move to the next check
         }
 
-        // 3. Try parsing as a simple Date (2026-01-01)
+        // 3. Try parsing as a local date-time without timezone (2026-01-01T10:00:00)
+        try {
+            return LocalDateTime.parse(input).toInstant(ZoneOffset.UTC);
+        } catch (DateTimeParseException e) {
+            // If it's not a local date-time, move to the next check
+        }
+
+        // 4. Try parsing as a simple Date (2026-01-01)
         try {
             return LocalDate.parse(input).atStartOfDay(ZoneOffset.UTC).toInstant();
         } catch (DateTimeParseException e) {
@@ -174,5 +181,24 @@ public class TimeUtils {
         calendar.add(Calendar.HOUR, +7);
         log.info("Convert to DB time zone value: {}", calendar.toInstant().toString());
         return calendar.toInstant();
+    }
+
+    public static String convertDateTimeToYearMonthFormat(String dateTimeString) {
+        if (dateTimeString == null || dateTimeString.isBlank()) {
+            throw new IllegalArgumentException("Created time must not be null or blank");
+        }
+
+        try {
+            // Try parsing ISO-8601 format (e.g., "2026-09-05T10:00:00" or "2026-09-05t10:00:00")
+            DateTimeFormatter inputFormatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
+            LocalDateTime dateTime = LocalDateTime.parse(dateTimeString, inputFormatter);
+
+            // Convert to "yyyy month" format (e.g., "2026 September")
+            DateTimeFormatter outputFormatter = DateTimeFormatter.ofPattern("yyyy MMMM");
+            return dateTime.format(outputFormatter);
+        } catch (DateTimeParseException e) {
+            // If already in correct format or other format, return as-is
+            return dateTimeString;
+        }
     }
 }

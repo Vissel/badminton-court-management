@@ -21,7 +21,8 @@ public class GameDTO extends ResponseDTO {
     private String playerName;
     private CourtDTO court;
     private List<ShuttleBallDTO> shuttleBalls;
-//    private int ballQuantity;
+    //    private int ballQuantity;
+    private String gameType;
     /**
      * this variable is used to display value from backend to frontend only.
      * Opposite side may have risks and not apply. << TODO
@@ -38,6 +39,7 @@ public class GameDTO extends ResponseDTO {
                 GameShuttleMap::getShuttleNumber));
 
         this.gameState = game.getState();
+        this.gameType = game.getGtype();
         this.court = new CourtDTO(game.getCourt(), game.getTeamOne(), game.getTeamTwo());
     }
 }

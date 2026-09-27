@@ -1,0 +1,37 @@
+HELP.md
+BadmintonCourtManagement/target/
+BadmintonCourtManagement/.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+*.war
+
+### STS ## #
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+.DS_Store
+
+### NetBeans ###
+bad-court-mana-ui/nbproject/private/
+bad-court-mana-ui/nbbuild/
+bad-court-mana-ui/dist/
+bad-court-mana-ui/nbdist/
+bad-court-mana-ui/.nb-gradle/
+bad-court-mana-ui/build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/
+
+deployment/*

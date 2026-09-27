@@ -1,52 +1,434 @@
-import React, { useEffect, useCallback, useState } from "react";
-import "./ServiceDialog.css";
-import { TYPE } from "../HomePage";
+import React, { useState, useEffect } from "react";
+import Dialog from "@mui/material/Dialog";
+import DialogContent from "@mui/material/DialogContent";
+import DialogActions from "@mui/material/DialogActions";
+import Button from "@mui/material/Button";
+import Typography from "@mui/material/Typography";
+import Box from "@mui/material/Box";
+import Divider from "@mui/material/Divider";
+import List from "@mui/material/List";
+import ListItem from "@mui/material/ListItem";
+import ListItemText from "@mui/material/ListItemText";
+import IconButton from "@mui/material/IconButton";
+import Chip from "@mui/material/Chip";
+import Stack from "@mui/material/Stack";
+import Select from "@mui/material/Select";
+import MenuItem from "@mui/material/MenuItem";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import CancelOutlinedIcon from "@mui/icons-material/CancelOutlined";
+import PersonOutlinedIcon from "@mui/icons-material/PersonOutlined";
+import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
+import PaymentOutlinedIcon from "@mui/icons-material/PaymentOutlined";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import CloseIcon from "@mui/icons-material/Close";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
+import { TYPE, ADVANCE_SERVICE_NAME } from "../HomePage";
+import { VN_CURRENCY, formatVND } from "../MoneyUtils";
+import PlayerDebtSection from "./PlayerDebtSection";
+import DraggableResizablePaper, { DIALOG_DRAG_HANDLE } from "./DraggableResizablePaper";
+
+const EMPTY_DEBT_STATE = {
+  debtList: [],
+  debtNote: "",
+  totalRecordedDebt: 0,
+  pendingDebt: 0,
+  totalDebitAmount: 0,
+};
 
 const PayConfirm = ({ show, data, onConfirm, onExit }) => {
-  const [btnClass, setBtnClass] = useState('');
-
-  const handleEscPress = useCallback((event) => {
-    if (event.key === "Escape") {
-      onExit();
-    }
-  }, [onExit]);
+  // Debt flow (summary / list / record / pay) lives in PlayerDebtSection;
+  // it reports recorded debts up so the payable amounts stay in sync.
+  const [debtInfo, setDebtInfo] = useState(EMPTY_DEBT_STATE);
+  const [paymentMethod, setPaymentMethod] = useState("CASH");
+  // Existing debts picked in DebitListDialog — settled together with this
+  // payment via PayRequest.payDebits (PayDebitRequest shape).
+  const [payDebits, setPayDebits] = useState(null);
 
   useEffect(() => {
     if (show) {
-      if(TYPE.PAY ===data.type){
-        setBtnClass('btn-primary')
-      }else{
-        setBtnClass('btn-danger');
-      }
-      // Add event listener when the component mounts
-      document.addEventListener("keydown", handleEscPress);
-
-      // Clean up: remove event listener when the component unmounts
-      return () => {
-        document.removeEventListener("keydown", handleEscPress);
-      };
+      setDebtInfo(EMPTY_DEBT_STATE);
+      setPaymentMethod("CASH");
+      setPayDebits(null);
     }
-  }, [show, handleEscPress]);
-  if (!show) return null;
-  return (
-    <div className="dialog-overlay">
-      <div className="service-dialog-box">
-        <h5 className="mb-3 text-center">{data.title}</h5>
+  }, [show]);
 
-        {/* Buttons */}
-        <div className="dialog-actions mt-4">
-          <button
-            className={`btn ${btnClass} me-2`}
-            onClick={() => onConfirm(data)}
+  if (!show || !data) return null;
+
+  const isPayment = data?.type === TYPE.PAY;
+  const headerColor = isPayment ? "success.main" : "error.main";
+  const headerBg = isPayment ? "success.light" : "error.light";
+  const headerIcon = isPayment ? (
+    <CheckCircleIcon sx={{ fontSize: 48, color: "#fff" }} />
+  ) : (
+    <CancelOutlinedIcon sx={{ fontSize: 48, color: "#fff" }} />
+  );
+  const actionLabel = isPayment ? "Xác nhận thanh toán" : "Xác nhận huỷ";
+
+  const allServices = data.services || [];
+  // Separate advance (Trả trước) from regular services
+  const advanceItem = allServices.find(
+    (s) => s.serviceName === ADVANCE_SERVICE_NAME
+  );
+  const regularServices = allServices.filter(
+    (s) => s.serviceName !== ADVANCE_SERVICE_NAME
+  );
+  const advanceAmount = advanceItem ? Math.abs(advanceItem.cost || 0) : 0;
+
+  // Calculate total of regular services
+  const regularTotal = regularServices.reduce((sum, item) => sum + (item.cost || 0), 0);
+
+  // Old debts settled together with this payment (picked in DebitListDialog)
+  const debtPayAmount = payDebits?.totalPayAmount || 0;
+
+  // Everything owed in this transaction: today's services + debts being settled
+  const totalDue = regularTotal + debtPayAmount;
+
+  // Today's share still payable before recording any debt — caps "Ghi nợ"
+  const payableAmount = Math.max(regularTotal - advanceAmount, 0);
+
+  // SỐ TIỀN: cash to collect now — the advance covers today's cost and the
+  // settled debts; newly recorded debts reduce it further
+  const amountToPay = Math.max(
+    totalDue - advanceAmount - debtInfo.totalRecordedDebt - debtInfo.pendingDebt,
+    0
+  );
+
+  // Total cost (this is what the player has to pay in total)
+  const totalCost = regularTotal;
+
+  // Amount to return to customer (advance left over after covering totalDue)
+  const returnAmount = Math.max(advanceAmount - totalDue, 0);
+
+  return (
+    <>
+      <Dialog
+        open={show}
+        onClose={(event, reason) => {
+          if (reason === "backdropClick") return;
+          onExit();
+        }}
+        maxWidth="sm"
+        fullWidth
+        PaperComponent={DraggableResizablePaper}
+        PaperProps={{
+          sx: { borderRadius: 3, overflow: "hidden" },
+        }}
+      >
+        {/* ── Colored header banner ── */}
+        <Box
+          className={DIALOG_DRAG_HANDLE}
+          sx={{
+            cursor: "move",
+            bgcolor: headerBg,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            position: "relative",
+            py: 3,
+            px: 2,
+          }}
+        >
+          <IconButton
+            aria-label="Đóng"
+            onClick={onExit}
+            sx={{
+              position: "absolute",
+              top: 8,
+              right: 8,
+              color: "#fff",
+              bgcolor: "rgba(255, 255, 255, 0.25)",
+              border: "1px solid rgba(255, 255, 255, 0.4)",
+              "&:hover": {
+                bgcolor: "rgba(255, 255, 255, 0.4)",
+              },
+            }}
           >
-            Xác nhận
-          </button>
-          <button className="btn btn-secondary" onClick={onExit}>
-            Tắt
-          </button>
-        </div>
-      </div>
-    </div>
+            <CloseIcon />
+          </IconButton>
+          <Box
+            sx={{
+              bgcolor: headerColor,
+              borderRadius: "50%",
+              width: 72,
+              height: 72,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              mb: 1.5,
+              boxShadow: "0 4px 14px 0 rgba(0,0,0,0.15)",
+            }}
+          >
+            {headerIcon}
+          </Box>
+          <Typography variant="h6" fontWeight={700} color="#fff">
+            {isPayment ? "Xác nhận thanh toán" : "Xác nhận huỷ dịch vụ"}
+          </Typography>
+        </Box>
+
+        {/* ── Amount hero ── */}
+        <Box sx={{ textAlign: "center", py: 2.5, px: 3 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ letterSpacing: 1 }}>
+            SỐ TIỀN
+          </Typography>
+          <Typography
+            variant="h3"
+            fontWeight={700}
+            color={headerColor}
+            sx={{ mt: 0.5, lineHeight: 1.2 }}
+          >
+            {formatVND(amountToPay)}{" "}
+            <Typography
+              component="span"
+              variant="h6"
+              color="text.secondary"
+              fontWeight={500}
+            >
+              {VN_CURRENCY}
+            </Typography>
+          </Typography>
+        </Box>
+
+        <Divider />
+
+        {/* ── Details ── */}
+        <DialogContent sx={{ px: 3, py: 2, overflowX: "hidden" }}>
+          {/* Player name + debt summary / list / record / pay flow on one row */}
+          <PlayerDebtSection
+            playerName={data.playerName}
+            active={show}
+            allowRecord={isPayment && data?.allowRecordDebt !== false}
+            payableAmount={payableAmount}
+            onDebtsChange={setDebtInfo}
+            onAddToPayment={isPayment ? setPayDebits : undefined}
+            leading={
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
+                <PersonOutlinedIcon fontSize="small" color="action" />
+                <Typography variant="body2" color="text.secondary" sx={{ minWidth: 60 }}>
+                  Người chơi
+                </Typography>
+                <Typography variant="subtitle1" fontWeight={700} color="primary" noWrap>
+                  {data.playerName}
+                </Typography>
+              </Box>
+            }
+          />
+
+          {/* Debts selected in DebitListDialog, paid together with this bill */}
+          {payDebits && (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 1 }}>
+              <WarningAmberIcon fontSize="small" sx={{ color: "warning.dark" }} />
+              <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
+                Trả nợ ({payDebits.listDebitPay?.length || 0} khoản)
+              </Typography>
+              <Typography variant="body2" fontWeight={600} sx={{ color: "warning.dark" }}>
+                {formatVND(payDebits.totalPayAmount)} {VN_CURRENCY}
+              </Typography>
+            </Box>
+          )}
+
+          {/* Payment method (pay only — cancel collects nothing) */}
+          {isPayment && (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 1.5 }}>
+              <PaymentOutlinedIcon fontSize="small" color="action" />
+              <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
+                Phương thức thanh toán
+              </Typography>
+              <Select
+                size="small"
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value)}
+                aria-label="Phương thức thanh toán"
+                sx={{ minWidth: 130 }}
+              >
+                <MenuItem value="CASH">Tiền mặt</MenuItem>
+                <MenuItem value="TRANSFER">Chuyển khoản</MenuItem>
+              </Select>
+            </Box>
+          )}
+
+          {/* Service breakdown */}
+          {regularServices.length > 0 && (
+            <>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
+                <ReceiptLongIcon fontSize="small" color="action" />
+                <Typography variant="body2" color="text.secondary">
+                  Chi tiết dịch vụ
+                </Typography>
+              </Box>
+              <List dense disablePadding sx={{ pl: 4 }}>
+                {regularServices.map((svc, idx) => (
+                  <ListItem
+                    key={idx}
+                    disableGutters
+                    disablePadding
+                    sx={{
+                      py: 0.5,
+                      borderBottom: 1,
+                      borderColor: "divider",
+                    }}
+                  >
+                    <ListItemText
+                      primary={
+                        <Box
+                          sx={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                          }}
+                        >
+                          <Typography variant="body2">{svc.serviceName}</Typography>
+                          <Typography variant="body2" fontWeight={600}>
+                            {formatVND(svc.cost)} {VN_CURRENCY}
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            </>
+          )}
+
+          {/* Advance service display (aligned with ServiceDialog) */}
+          {advanceItem && (
+            <List dense disablePadding sx={{ pl: 4, mt: 1 }}>
+              <ListItem
+                disableGutters
+                disablePadding
+                sx={{
+                  py: 1,
+                  pl: 2,
+                  borderLeft: 4,
+                  borderLeftColor: "success.main",
+                  bgcolor: "success.50",
+                  borderBottom: 1,
+                  borderColor: "divider",
+                }}
+              >
+                <ListItemText
+                  primary={
+                    <Stack direction="row" alignItems="center" spacing={1}>
+                      <Chip
+                        label="Đã trả"
+                        size="small"
+                        color="success"
+                        variant="outlined"
+                        sx={{ fontSize: "0.65rem", height: 20, fontWeight: 500 }}
+                      />
+                      <Typography variant="body2" fontWeight={600}>
+                        {ADVANCE_SERVICE_NAME}
+                      </Typography>
+                    </Stack>
+                  }
+                  secondary={
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        color: "success.dark",
+                        fontWeight: 600,
+                        mt: 0.5
+                      }}
+                    >
+                      {formatVND(advanceAmount)} {VN_CURRENCY}
+                    </Typography>
+                  }
+                />
+              </ListItem>
+            </List>
+          )}
+        </DialogContent>
+
+        <Divider />
+
+        {/* ── Total line ── */}
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            px: 3,
+            py: 1.5,
+            bgcolor: "grey.50",
+          }}
+        >
+          <Typography variant="subtitle1" fontWeight={700}>
+            Tổng cộng chi phí hôm nay:
+          </Typography>
+          <Typography variant="subtitle1" fontWeight={700} color={headerColor}>
+            {formatVND(totalCost)} {VN_CURRENCY}
+          </Typography>
+        </Box>
+
+        {/* ── Return amount line (if advance > total) ── */}
+        {returnAmount > 0 && (
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              px: 3,
+              py: 1.5,
+              bgcolor: "warning.light",
+              borderTop: 1,
+              borderColor: "divider",
+            }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+              <ArrowBackIcon fontSize="small" sx={{ color: "common.black" }} />
+              <Typography variant="body2" sx={{ color: "common.black" }} fontWeight={600}>
+                Tiền trả lại
+              </Typography>
+            </Box>
+            <Typography variant="body2" sx={{ color: "common.black" }} fontWeight={700}>
+              {formatVND(returnAmount)} {VN_CURRENCY}
+            </Typography>
+          </Box>
+        )}
+
+        {/* ── Actions ── */}
+        <DialogActions sx={{ px: 3, pb: 2.5, pt: 1.5, gap: 1.5 }}>
+          <Button
+            variant="outlined"
+            color="inherit"
+            onClick={onExit}
+            fullWidth
+            size="large"
+            sx={{
+              borderRadius: 2,
+              borderColor: "divider",
+              color: "text.secondary",
+              py: 1.2,
+            }}
+          >
+            Huỷ
+          </Button>
+          <Button
+            variant="contained"
+            color={isPayment ? "success" : "error"}
+            onClick={() => onConfirm({
+              ...data,
+              returnAmount: returnAmount,
+              amountToPay: amountToPay,
+              totalCost: totalCost,
+              debitAmount: debtInfo.totalDebitAmount,
+              debitNote: debtInfo.debtNote,
+              paymentMethod: paymentMethod,
+              payDebits: payDebits
+            })}
+            fullWidth
+            size="large"
+            disableElevation
+            sx={{
+              borderRadius: 2,
+              py: 1.2,
+              fontWeight: 700,
+            }}
+          >
+            {actionLabel}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
   );
 };
 

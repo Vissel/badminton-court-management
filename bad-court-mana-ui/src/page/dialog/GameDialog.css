@@ -1,27 +1,4 @@
-/* src/components/GameDialog.css */
-.dialog-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  /* height: 100vh; */
-  backdrop-filter: blur(6px);
-  background-color: rgba(0, 0, 0, 0.4);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 2000;
-}
-
-.dialog-box {
-  background: rgb(255, 255, 255);
-  border-radius: 12px;
-  padding: 25px;
-  width: 800px;
-  height: auto;
-  max-width: 100%;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-}
+/* Layout for teams inside GameDialog (MUI Dialog provides backdrop and paper) */
 
 .ball-list input {
   font-size: 0.9rem;
@@ -42,37 +19,28 @@
   gap: 10px;
   position: relative;
 }
-/* 2. Style and position the badge for the winning team */
+
 .team-win::before {
-  content: '🏆 Winner 🏆'; /* The text/emoji for the badge */
+  content: "🏆 Winner 🏆";
   position: absolute;
-  top: -20px; /* Adjust position above the box */
+  top: -20px;
   left: 50%;
-  transform: translateX(-50%); /* Center the badge horizontally */
-  
-  /* Styling the badge */
-  background-color: #4CAF50; /* Green background */
+  transform: translateX(-50%);
+  background-color: #4caf50;
   color: white;
   padding: 3px 10px;
   border-radius: 4px;
   font-size: 0.75rem;
   font-weight: bold;
   letter-spacing: 0.5px;
-  white-space: nowrap; /* Prevents text wrap */
+  white-space: nowrap;
   z-index: 10;
 }
+
 .team-win {
   border: 2px solid transparent;
-  /* padding: 10px; */
   border-radius: 6px;
-  border-color: green; /* Green border for winner */
-}
-
-.team-lose {
-  border: 2px solid transparent;
-  padding: 10px;
-  border-radius: 6px;
-  border-color: red; /* Red border for loser */
+  border-color: green;
 }
 
 .player-row {
@@ -84,14 +52,4 @@
   width: 2px;
   background-color: #ccc;
   margin: 0 10px;
-}
-
-.dialog-actions {
-  display: flex;
-  justify-content: space-between;
-  width: 100%;
-}
-.dialog-label{
-  /* width: 35%; */
-  flex-grow: 4;
 }

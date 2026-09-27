@@ -15,7 +15,7 @@ import com.badminton.requestmodel.GameDTO;
 import com.badminton.response.result.*;
 import com.badminton.service.GameService;
 import com.badminton.service.ProcessCallback;
-import com.badminton.service.ServiceTemple;
+import com.badminton.service.ServiceTemplate;
 import com.badminton.service.calculator.GameExpenseCalculator;
 import com.badminton.util.CommonUtil;
 import com.badminton.util.MoneyUtils;
@@ -40,7 +40,7 @@ public class GameServiceImpl implements GameService {
     @Autowired
     GameExpenseCalculator gameExpenseCalculator;
     @Autowired
-    ServiceTemple serviceTemple;
+    ServiceTemplate serviceTemple;
 
     @Override
     public List<Game> findAllInprogress() {

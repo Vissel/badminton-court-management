@@ -19,6 +19,7 @@ public class SessionServiceImplTest {
 	SessionServiceImpl sessionService;
 
 	@Test
+	@org.springframework.transaction.annotation.Transactional
 	public void testFindListCurrentSession() {
 		List<Session> listSession = sessionService.findListCurrentSession();
 		assertThat(!listSession.isEmpty());

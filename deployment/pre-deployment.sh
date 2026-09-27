@@ -14,6 +14,15 @@ echo "--- Starting Pre-Deployment to: $DEST_LOCATION ---"
 # Check for existence of at least one directory and one .war file
 UI_FOLDER=$(find . -maxdepth 1 -type d ! -name "." ! -name ".*" ! -name "bad-court-ui" ! -name "BadmintonCourtManagement" | head -n 1)
 WAR_FILE=$(find . -maxdepth 1 -name "*.war" | head -n 1)
+ZIP_FILE=$(find . -maxdepth 1 -name "*.zip" | head -n 1)
+
+# If no UI folder found but ZIP file exists, extract it
+if [ -z "$UI_FOLDER" ] && [ -f "$ZIP_FILE" ]; then
+    echo "No frontend folder found, but ZIP file detected. Extracting '$ZIP_FILE'..."
+    unzip -q "$ZIP_FILE"
+    UI_FOLDER=$(find . -maxdepth 1 -type d ! -name "." ! -name ".*" ! -name "bad-court-ui" ! -name "BadmintonCourtManagement" | head -n 1)
+    echo "Extracted to folder: '$UI_FOLDER'"
+fi
 
 # Validation logic
 if [ -n "$UI_FOLDER" ] && [ -f "$WAR_FILE" ]; then

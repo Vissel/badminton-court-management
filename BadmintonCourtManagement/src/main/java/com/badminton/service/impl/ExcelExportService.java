@@ -3,18 +3,20 @@ package com.badminton.service.impl;
 import com.badminton.constant.CommonConstant;
 import com.badminton.constant.ErrorConstant;
 import com.badminton.constant.GameConstant;
-import com.badminton.entity.AvailablePlayer;
-import com.badminton.entity.Game;
-import com.badminton.entity.Session;
-import com.badminton.entity.Team;
+import com.badminton.constant.RentConstant;
+import com.badminton.constant.ServiceConstants;
+import com.badminton.entity.*;
 import com.badminton.exception.BusinessException;
 import com.badminton.exception.enums.ErrorCodeEnum;
+import com.badminton.model.dto.RentShuttleDTO;
 import com.badminton.model.dto.ReportCost;
 import com.badminton.model.dto.ServiceDTO;
 import com.badminton.model.dto.TeamDTO;
 import com.badminton.model.report.*;
 import com.badminton.repository.AvailablePlayerRepository;
 import com.badminton.repository.GameRepository;
+import com.badminton.repository.PaymentRepository;
+import com.badminton.repository.RentByTimeRepository;
 import com.badminton.requestmodel.ExportReportRequest;
 import com.badminton.requestmodel.Pagination;
 import com.badminton.requestmodel.ReportListRequest;
@@ -23,7 +25,7 @@ import com.badminton.response.ReportResponse;
 import com.badminton.response.result.Result;
 import com.badminton.service.ExportService;
 import com.badminton.service.ProcessCallback;
-import com.badminton.service.ServiceTemple;
+import com.badminton.service.ServiceTemplate;
 import com.badminton.service.SessionServiceImpl;
 import com.badminton.util.MoneyUtils;
 import com.badminton.util.ServiceUtil;
@@ -47,6 +49,7 @@ import org.springframework.util.Assert;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -59,13 +62,17 @@ import java.util.stream.IntStream;
 @Service
 public class ExcelExportService implements ExportService {
     @Autowired
-    ServiceTemple serviceTemple;
+    ServiceTemplate serviceTemple;
     @Autowired
     SessionServiceImpl sessionService;
     @Autowired
     AvailablePlayerRepository availablePlayerRepo;
     @Autowired
     GameRepository gameRepo;
+    @Autowired
+    RentByTimeRepository rentByTimeRepo;
+    @Autowired
+    PaymentRepository paymentRepo;
 
     private static final int HEADER_ROW_INDEX = 0;
     private static final int HEADER_CELL_INDEX = HEADER_ROW_INDEX;
@@ -135,7 +142,8 @@ public class ExcelExportService implements ExportService {
                 if (count == 0) {
                     return pageResponse;
                 }
-                List<Session> listSession = sessionService.findListSessionBy(getRequest().getYearMonth(), getRequest().getPagination());
+                List<Session> listSession = sessionService.findListSessionBy(getRequest().getYearMonth(),
+                        getRequest().getPagination());
                 pageResponse.setList(convertToListReportResponse(listSession));
                 Pagination paginationResponse = getRequest().getPagination();
                 final int totalPage = ((int) count / getRequest().getPagination().getPageSize()) + 1;
@@ -182,7 +190,8 @@ public class ExcelExportService implements ExportService {
 
     @Transactional
     @Override
-    public void streamingExportReportList(ExportReportRequest exportedRptRequest, OutputStream outputStream) throws IOException {
+    public void streamingExportReportList(ExportReportRequest exportedRptRequest, OutputStream outputStream)
+            throws IOException {
         String title = TITLE_VN + exportedRptRequest.getSessionIds().size() + " phiên làm việc.";
         Map<String, RptShuttle> shuttleAcc = new LinkedHashMap<>();
         Map<String, RptService> serviceAcc = new LinkedHashMap<>();
@@ -190,8 +199,10 @@ public class ExcelExportService implements ExportService {
         Instant firstDate = null;
         Instant lastDate = null;
 
-        // SXSSFWorkbook(-1) disables automatic row flushing so pre-created rows 2-3 remain
-        // accessible after writing data rows, allowing us to back-fill the summary header.
+        // SXSSFWorkbook(-1) disables automatic row flushing so pre-created rows 2-3
+        // remain
+        // accessible after writing data rows, allowing us to back-fill the summary
+        // header.
         try (SXSSFWorkbook workbook = new SXSSFWorkbook(-1)) {
             SXSSFSheet sheet = workbook.createSheet("Report");
             writeTitle(title, workbook, sheet);
@@ -207,8 +218,10 @@ public class ExcelExportService implements ExportService {
                 ReportDTO report = retrieveReport(String.valueOf(sessionId));
                 Instant sessionDate = report.getSession().getFromTime();
 
-                if (firstDate == null || sessionDate.isBefore(firstDate)) firstDate = sessionDate;
-                if (lastDate == null || sessionDate.isAfter(lastDate)) lastDate = sessionDate;
+                if (firstDate == null || sessionDate.isBefore(firstDate))
+                    firstDate = sessionDate;
+                if (lastDate == null || sessionDate.isAfter(lastDate))
+                    lastDate = sessionDate;
                 totalPayAcc += totalPayOf(report.getAvailablePlayers());
                 accumulate(shuttleAcc, report.getListTotalShuttle(), RptShuttle::getShuttleName);
                 accumulate(serviceAcc, report.getListTotalService(), RptService::getServiceName);
@@ -219,9 +232,11 @@ public class ExcelExportService implements ExportService {
             }
 
             writeMultiSessionHeader(sheet, workbook, firstDate, lastDate, totalPayAcc);
-            writeTotalHeader(sheet, workbook, new ArrayList<>(shuttleAcc.values()), new ArrayList<>(serviceAcc.values()));
+            writeTotalHeader(sheet, workbook, new ArrayList<>(shuttleAcc.values()),
+                    new ArrayList<>(serviceAcc.values()));
             columns.forEach(sheet::autoSizeColumn);
-            sheet.setAutoFilter(new CellRangeAddress(START_BODY_TABLE_HEADER_ROW_SINGLE_RPT_INDEX, START_BODY_TABLE_HEADER_ROW_SINGLE_RPT_INDEX, DATE_COL, COURT_FEE_COL));
+            sheet.setAutoFilter(new CellRangeAddress(START_BODY_TABLE_HEADER_ROW_SINGLE_RPT_INDEX,
+                    START_BODY_TABLE_HEADER_ROW_SINGLE_RPT_INDEX, DATE_COL, COURT_FEE_COL));
             workbook.write(outputStream);
             outputStream.flush();
             workbook.dispose();
@@ -239,7 +254,8 @@ public class ExcelExportService implements ExportService {
         return players.stream().mapToDouble(p -> p.getPayAmount() != null ? p.getPayAmount() : 0).sum();
     }
 
-    private void writeMultiSessionHeader(SXSSFSheet sheet, Workbook workbook, Instant firstDate, Instant lastDate, double totalPay) {
+    private void writeMultiSessionHeader(SXSSFSheet sheet, Workbook workbook, Instant firstDate, Instant lastDate,
+                                         double totalPay) {
         Row r1 = sheet.getRow(START_HEADER_ROW_INDEX);
         r1.createCell(DATE_COL).setCellValue(DATE_VN);
         r1.createCell(DATE_FORMAT_COL).setCellValue(FORMATED_DATE_VN);
@@ -247,7 +263,8 @@ public class ExcelExportService implements ExportService {
         r1.setRowStyle(createTblStyle(workbook));
 
         Row r2 = sheet.getRow(START_HEADER_DATA_ROW_INDEX);
-        r2.createCell(DATE_COL).setCellValue(firstDate != null ? TimeUtils.toDateDisplay(firstDate, TimeUtils.newVNLocal()) : "");
+        r2.createCell(DATE_COL)
+                .setCellValue(firstDate != null ? TimeUtils.toDateDisplay(firstDate, TimeUtils.newVNLocal()) : "");
         r2.createCell(DATE_FORMAT_COL).setCellValue(lastDate != null ? TimeUtils.toVNDateFormat(lastDate) : "");
         r2.createCell(TOTAL_COL).setCellValue(totalPay);
     }
@@ -258,9 +275,12 @@ public class ExcelExportService implements ExportService {
         Instant first = null, last = null;
         for (Integer id : request.getSessionIds()) {
             Session s = sessionService.findSessionById(id.toString());
-            if (s == null) continue;
-            if (first == null || s.getFromTime().isBefore(first)) first = s.getFromTime();
-            if (last == null || s.getFromTime().isAfter(last)) last = s.getFromTime();
+            if (s == null)
+                continue;
+            if (first == null || s.getFromTime().isBefore(first))
+                first = s.getFromTime();
+            if (last == null || s.getFromTime().isAfter(last))
+                last = s.getFromTime();
         }
         String fromStr = first != null ? fmt.format(first) : "unknown";
         String toStr = last != null ? fmt.format(last) : "unknown";
@@ -292,7 +312,8 @@ public class ExcelExportService implements ExportService {
         List<AvailablePlayer> players = reportData.getAvailablePlayers();
         List<Game> games = reportData.getGames();
 
-        Map<Long, String> partnerMap = players.stream().collect(Collectors.toMap(AvailablePlayer::getAvaId, p -> p.getPlayer().getPlayerName(), (a, b) -> a));
+        Map<Long, String> partnerMap = players.stream()
+                .collect(Collectors.toMap(AvailablePlayer::getAvaId, p -> p.getPlayer().getPlayerName(), (a, b) -> a));
 
         String date = TimeUtils.toDateDisplay(session.getFromTime(), TimeUtils.newVNLocal());
         String dateFormat = TimeUtils.toVNDateFormat(session.getFromTime());
@@ -350,9 +371,10 @@ public class ExcelExportService implements ExportService {
         Session session = reportDTO.getSession();
         List<AvailablePlayer> players = reportDTO.getAvailablePlayers();
         List<Game> games = reportDTO.getGames();
-//        List<ReportCost> listCost = reportDTO.getListCost();
+        // List<ReportCost> listCost = reportDTO.getListCost();
         String title = TITLE_VN + TimeUtils.toDateDisplay(session.getFromTime(), TimeUtils.newVNLocal());
-        // If you have a template, use: Workbook workbook = WorkbookFactory.create(new File("template.xlsx"));
+        // If you have a template, use: Workbook workbook = WorkbookFactory.create(new
+        // File("template.xlsx"));
         Workbook workbook = new XSSFWorkbook();
         Sheet sheet = workbook.createSheet("Report");
         writeTitle(title, workbook, sheet);
@@ -361,7 +383,8 @@ public class ExcelExportService implements ExportService {
 
         Row tableHeader = sheet.createRow(START_BODY_TABLE_HEADER_ROW_SINGLE_RPT_INDEX);
         String[] tblHeaders = {PLAYER_NO_VN, PLAYER_NAME_VN, PAY_AMOUNT_VN, LEAVE_TIME_VN, COURT_FEE_VN};
-        for (int i = 0; i < tblHeaders.length; i++) tableHeader.createCell(i).setCellValue(tblHeaders[i]);
+        for (int i = 0; i < tblHeaders.length; i++)
+            tableHeader.createCell(i).setCellValue(tblHeaders[i]);
 
         // 3. Map for Partner Names (AvaId -> Name)
         Map<Long, String> partnerMap = players.stream().collect(
@@ -388,16 +411,18 @@ public class ExcelExportService implements ExportService {
             int colIndex = 5;
             colIndex = writeGameInfoColumns(games, avaPlayer, partnerMap, colIndex, rowHeader, rowNumber);
             setRemainingServices(avaPlayer.getServices(), colIndex, rowHeader, rowNumber);
-//            for (ReportCost rptCost : listCost) {
-//                setServiceValueIntoNextTwoColumn(rptCost, avaPlayer, partnerMap, colIndex, rowHeader, rowNumber);
-//                colIndex += 2; // Move to next game pair (F, H, J...)
-//            }
+            // for (ReportCost rptCost : listCost) {
+            // setServiceValueIntoNextTwoColumn(rptCost, avaPlayer, partnerMap, colIndex,
+            // rowHeader, rowNumber);
+            // colIndex += 2; // Move to next game pair (F, H, J...)
+            // }
         }
         // Auto-size columns for basic info
         for (int i = 0; i < 5; i++) {
             sheet.autoSizeColumn(i);
         }
-        sheet.setAutoFilter(new CellRangeAddress(START_BODY_TABLE_HEADER_ROW_SINGLE_RPT_INDEX, START_BODY_TABLE_HEADER_ROW_SINGLE_RPT_INDEX, 0, tblHeaders.length - 1));
+        sheet.setAutoFilter(new CellRangeAddress(START_BODY_TABLE_HEADER_ROW_SINGLE_RPT_INDEX,
+                START_BODY_TABLE_HEADER_ROW_SINGLE_RPT_INDEX, 0, tblHeaders.length - 1));
         // Write to file
         try (ByteArrayOutputStream out = new ByteArrayOutputStream();) {
             workbook.write(out);
@@ -407,7 +432,8 @@ public class ExcelExportService implements ExportService {
         }
     }
 
-    private void writeTotalHeader(Sheet sheet, Workbook workbook, List<RptShuttle> listTotalShuttle, List<RptService> listTotalService) {
+    private void writeTotalHeader(Sheet sheet, Workbook workbook, List<RptShuttle> listTotalShuttle,
+                                  List<RptService> listTotalService) {
         Row r1 = sheet.getRow(START_HEADER_ROW_INDEX);
         Row r2 = sheet.getRow(START_HEADER_DATA_ROW_INDEX);
 
@@ -452,17 +478,22 @@ public class ExcelExportService implements ExportService {
                                                   int colIndex, Row row, Row rowNumber) throws NullPointerException {
         Team matchingTeam = getPlayerTeamInGame(avaPlayer, game);
 
-        String gameTitle = String.format("%s (%s - %s) %s:", game.getCourt().getCourtName(), TimeUtils.convertInstantToTimeStr(game.getCreatedDate()), TimeUtils.convertInstantToTimeStr(game.getEndedDate()), matchingTeam.isWin() ? GameConstant.WIN_VN : GameConstant.LOSE_VN);
+        String gameTitle = String.format("%s (%s - %s) %s:", game.getCourt().getCourtName(),
+                TimeUtils.convertInstantToTimeStr(game.getCreatedDate()),
+                TimeUtils.convertInstantToTimeStr(game.getEndedDate()),
+                matchingTeam.isWin() ? GameConstant.WIN_VN : GameConstant.LOSE_VN);
         row.createCell(colIndex).setCellValue(gameTitle);
 
         // Row N: "Court (Time):" and "partner: Name"
         String partnerName = getPartnerName(avaPlayer, matchingTeam, partnerMap);
-        row.createCell(colIndex + 1).setCellValue(GameConstant.PARTNER_VN.concat(CommonConstant.COLON).concat(partnerName));
+        row.createCell(colIndex + 1)
+                .setCellValue(GameConstant.PARTNER_VN.concat(CommonConstant.COLON).concat(partnerName));
         rowNumber.createCell(colIndex).setCellValue(getExpenseValue(avaPlayer, matchingTeam));
 
     }
 
-    private void setServiceValueIntoNextTwoColumn(ReportCost rptCost, AvailablePlayer avaPlayer, Map<Long, String> partnerMap,
+    private void setServiceValueIntoNextTwoColumn(ReportCost rptCost, AvailablePlayer avaPlayer,
+                                                  Map<Long, String> partnerMap,
                                                   int colIndex, Row row, Row rowNumber) {
         TeamDTO matchingTeam = getPlayerTeamInGame(avaPlayer, rptCost);
 
@@ -476,13 +507,15 @@ public class ExcelExportService implements ExportService {
         // Row N: "Court (Time):" and "partner: Name"
         String partnerName = getPartnerName(avaPlayer, matchingTeam);
 
-        row.createCell(colIndex + 1).setCellValue(GameConstant.PARTNER_VN.concat(CommonConstant.COLON).concat(partnerName));
+        row.createCell(colIndex + 1)
+                .setCellValue(GameConstant.PARTNER_VN.concat(CommonConstant.COLON).concat(partnerName));
         rowNumber.createCell(colIndex).setCellValue(getExpenseValue(avaPlayer, null));
     }
 
     private String getPartnerName(AvailablePlayer currAvaPlayer, Team matchingTeam, Map<Long, String> partnerMap) {
         AvailablePlayer anotherPlayer = getAnotherPlayer(currAvaPlayer, matchingTeam);
-        return anotherPlayer != null ? partnerMap.getOrDefault(anotherPlayer.getAvaId(), GameConstant.NO_PARTNER) : GameConstant.NO_PARTNER;
+        return anotherPlayer != null ? partnerMap.getOrDefault(anotherPlayer.getAvaId(), GameConstant.NO_PARTNER)
+                : GameConstant.NO_PARTNER;
     }
 
     private String getPartnerName(AvailablePlayer currAvaPlayer, TeamDTO matchingTeam) {
@@ -545,8 +578,10 @@ public class ExcelExportService implements ExportService {
 
         Row r2 = sheet.createRow(START_HEADER_DATA_ROW_INDEX); // Row 4
         r2.createCell(DATE_COL).setCellValue(TimeUtils.toDateDisplay(session.getFromTime(), TimeUtils.newVNLocal()));
-        r2.createCell(DATE_FORMAT_COL).setCellValue(TimeUtils.toVNDateFormat(session.getFromTime())); // Format as needed
-        r2.createCell(DURING_COL).setCellValue(TimeUtils.convertInstantsToString(session.getFromTime(), session.getToTime()));
+        r2.createCell(DATE_FORMAT_COL).setCellValue(TimeUtils.toVNDateFormat(session.getFromTime())); // Format as
+        // needed
+        r2.createCell(DURING_COL)
+                .setCellValue(TimeUtils.convertInstantsToString(session.getFromTime(), session.getToTime()));
         r2.createCell(TOTAL_COL).setCellValue(totalPay);
     }
 
@@ -575,14 +610,17 @@ public class ExcelExportService implements ExportService {
 
     private float extractCourtFee(String services) {
         List<ServiceDTO> listService = ServiceUtil.convertStringToListService(services);
-        Optional<ServiceDTO> costInPerService = listService.stream().filter(s -> GameConstant.COST_IN_PERSON_VN.equals(s.getServiceName())).findFirst();
+        Optional<ServiceDTO> costInPerService = listService.stream()
+                .filter(s -> GameConstant.COST_IN_PERSON_VN.equals(s.getServiceName())).findFirst();
         return costInPerService.isPresent() ? costInPerService.get().getCost() : MoneyUtils.DEFAULT;
     }
 
     private Team getPlayerTeamInGame(AvailablePlayer p, Game g) throws NullPointerException {
-        if (g.getTeamOne() != null && (p.equals(g.getTeamOne().getPlayerOne()) || p.equals(g.getTeamOne().getPlayerTwo())))
+        if (g.getTeamOne() != null
+                && (p.equals(g.getTeamOne().getPlayerOne()) || p.equals(g.getTeamOne().getPlayerTwo())))
             return g.getTeamOne();
-        if (g.getTeamTwo() != null && (p.equals(g.getTeamTwo().getPlayerOne()) || p.equals(g.getTeamTwo().getPlayerTwo())))
+        if (g.getTeamTwo() != null
+                && (p.equals(g.getTeamTwo().getPlayerOne()) || p.equals(g.getTeamTwo().getPlayerTwo())))
             return g.getTeamTwo();
         throw new NullPointerException();
     }
@@ -590,15 +628,18 @@ public class ExcelExportService implements ExportService {
     private TeamDTO getPlayerTeamInGame(AvailablePlayer p, ReportCost rptCost) throws NullPointerException {
         final long availableId = p.getAvaId();
 
-        if (rptCost.getTeam1() != null && (availableId == rptCost.getTeam1().getPlayer1().getId() || availableId == rptCost.getTeam1().getPlayer2().getId()))
+        if (rptCost.getTeam1() != null && (availableId == rptCost.getTeam1().getPlayer1().getId()
+                || availableId == rptCost.getTeam1().getPlayer2().getId()))
             return rptCost.getTeam1();
-        if (rptCost.getTeam2() != null && (availableId == rptCost.getTeam2().getPlayer1().getId() || availableId == rptCost.getTeam2().getPlayer2().getId()))
+        if (rptCost.getTeam2() != null && (availableId == rptCost.getTeam2().getPlayer1().getId()
+                || availableId == rptCost.getTeam2().getPlayer2().getId()))
             return rptCost.getTeam2();
         throw new NullPointerException();
     }
 
     private List<ReportResponse> convertToListReportResponse(List<Session> listSession) {
-        return IntStream.range(0, listSession.size()).mapToObj(index -> convertToReportResponse(index, listSession.get(index))).collect(Collectors.toList());
+        return IntStream.range(0, listSession.size())
+                .mapToObj(index -> convertToReportResponse(index, listSession.get(index))).collect(Collectors.toList());
     }
 
     private ReportResponse convertToReportResponse(int index, Session s) {
@@ -607,14 +648,15 @@ public class ExcelExportService implements ExportService {
         rptResponse.setSessionId(s.getSessionId());
         rptResponse.setDate(s.getFromTime());
         rptResponse.setDuring(TimeUtils.convertInstantsToString(s.getFromTime(), s.getToTime()));
-        float revenue = getTotalGrossRevenue(s.getAvailablePlayers());
+        float revenue = getTotalGrossRevenue(applyDebitPayments(s.getAvailablePlayers(), findSessionPayments(s)));
         rptResponse.setGrossRevenue(revenue);
         rptResponse.setGrossRevenueFormat(MoneyUtils.formatToVND(revenue));
         return rptResponse;
     }
 
     private float getTotalGrossRevenue(List<AvailablePlayer> availablePlayers) {
-        return availablePlayers.stream().filter(player -> player.getPayAmount() != null).map(AvailablePlayer::getPayAmount).reduce(0f, Float::sum);
+        return availablePlayers.stream().filter(player -> player.getPayAmount() != null)
+                .map(AvailablePlayer::getPayAmount).reduce(0f, Float::sum);
     }
 
     private void validatePagination(ReportListRequest request) {
@@ -652,17 +694,110 @@ public class ExcelExportService implements ExportService {
         List<AvailablePlayer> availablePlayers = availablePlayerRepo.findAllBySession(session);
         List<Long> avaIds = availablePlayers.stream().map(AvailablePlayer::getAvaId).toList();
         List<Game> games = gameRepo.findGamesByPlayerIds(avaIds);
-        return buildReportModel(session, availablePlayers, games);
+        List<RentByTime> rentals = avaIds.stream()
+                .flatMap(avaId -> rentByTimeRepo.findByAvailablePlayerAvaId(avaId).stream())
+                .collect(Collectors.toList());
+        List<AvailablePlayer> reportPlayers = applyDebitPayments(availablePlayers, findSessionPayments(session));
+        return buildReportModel(session, reportPlayers, games, rentals);
     }
 
-    private ReportDTO buildReportModel(Session session, List<AvailablePlayer> availablePlayers, List<Game> games) {
-        List<RptShuttle> listTotalShuttle = buildListTotalShuttle(games);
+    /**
+     * Debt payments are stored as Payment rows without a session link, so they are
+     * scoped to a session by paymentDate falling inside [fromTime, toTime].
+     */
+    private List<Payment> findSessionPayments(Session session) {
+        Instant to = session.getToTime() != null ? session.getToTime() : Instant.now();
+        return paymentRepo.findByPaymentDateBetween(session.getFromTime(), to);
+    }
+
+    /**
+     * Reflect session-scope debt payments into the report's player list using
+     * detached copies only (never persists report data):
+     * - session player already carrying the PAY_DEBIT_VN service: the payment was
+     *   already included at checkout, ignore it.
+     * - session player without it: append the service and add the paid total to
+     *   payAmount so revenue includes it.
+     * - payer not present in this session: synthesize a player row carrying the
+     *   PAY_DEBIT_VN service with the paid total.
+     */
+    private List<AvailablePlayer> applyDebitPayments(List<AvailablePlayer> players, List<Payment> payments) {
+        List<AvailablePlayer> result = new ArrayList<>(players);
+        if (payments == null || payments.isEmpty()) {
+            return result;
+        }
+        Map<Integer, List<Payment>> paymentsByPlayer = payments.stream()
+                .collect(Collectors.groupingBy(p -> p.getPlayer().getPlayerId(), LinkedHashMap::new,
+                        Collectors.toList()));
+
+        paymentsByPlayer.forEach((playerId, playerPayments) -> {
+            AvailablePlayer source = result.stream()
+                    .filter(p -> p.getPlayer().getPlayerId() == playerId)
+                    .findFirst()
+                    .orElse(null);
+            if (source == null) {
+                result.add(buildDebitPayer(playerPayments));
+            } else if (!hasPayDebitService(source)) {
+                float paid = sumPayments(playerPayments);
+                AvailablePlayer copy = copyForReport(source);
+                List<ServiceDTO> services = new ArrayList<>(
+                        ServiceUtil.convertStringToListService(copy.getCurrentServices()));
+                services.add(new ServiceDTO(ServiceConstants.PAY_DEBIT_VN, paid));
+                copy.setServices(ServiceUtil.buildJsonArrayStr(services));
+                copy.setPayAmount((copy.getPayAmount() != null ? copy.getPayAmount() : 0f) + paid);
+                result.set(result.indexOf(source), copy);
+            }
+        });
+        return result;
+    }
+
+    private boolean hasPayDebitService(AvailablePlayer player) {
+        return ServiceUtil.convertStringToListService(player.getCurrentServices()).stream()
+                .anyMatch(s -> ServiceConstants.PAY_DEBIT_VN.equalsIgnoreCase(s.getServiceName()));
+    }
+
+    private AvailablePlayer copyForReport(AvailablePlayer src) {
+        AvailablePlayer copy = new AvailablePlayer(src.getPlayer(), src.getSession());
+        copy.setAvaId(src.getAvaId());
+        copy.setServices(src.getServices());
+        copy.setPayAmount(src.getPayAmount());
+        copy.setPayType(src.getPayType());
+        copy.setLeaveTime(src.getLeaveTime());
+        copy.setAdvancePayment(src.getAdvancePayment());
+        copy.setIsCanceled(src.getIsCanceled());
+        return copy;
+    }
+
+    private AvailablePlayer buildDebitPayer(List<Payment> payments) {
+        Payment latest = payments.stream()
+                .max(Comparator.comparing(Payment::getPaymentDate))
+                .orElse(payments.get(0));
+        AvailablePlayer payer = new AvailablePlayer(latest.getPlayer());
+        payer.setLeaveTime(latest.getPaymentDate());
+        payer.setPayType(latest.getPayType());
+        float paid = sumPayments(payments);
+        payer.setPayAmount(paid);
+        payer.setServices(ServiceUtil.buildJsonArrayStr(
+                List.of(new ServiceDTO(ServiceConstants.PAY_DEBIT_VN, paid))));
+        return payer;
+    }
+
+    private float sumPayments(List<Payment> payments) {
+        return payments.stream()
+                .map(Payment::getAmount)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .floatValue();
+    }
+
+    private ReportDTO buildReportModel(Session session, List<AvailablePlayer> availablePlayers, List<Game> games,
+                                       List<RentByTime> rentals) {
+        List<RptShuttle> listTotalShuttle = buildListTotalShuttle(games, rentals);
         List<RptService> listTotalService = buildListTotalService(availablePlayers);
         return new ReportDTO(session, availablePlayers, games, null, listTotalShuttle, listTotalService);
     }
 
-    private List<RptShuttle> buildListTotalShuttle(List<Game> games) {
-        return new ArrayList<>(games.stream()
+    private List<RptShuttle> buildListTotalShuttle(List<Game> games, List<RentByTime> rentals) {
+        Map<String, RptShuttle> shuttleMap = games.stream()
                 .filter(g -> g.getShuttleMap() != null)
                 .flatMap(g -> g.getShuttleMap().stream())
                 .collect(Collectors.toMap(
@@ -680,14 +815,37 @@ public class ExcelExportService implements ExportService {
                             existing.setQuantity(existing.getQuantity() + next.getQuantity());
                             return existing;
                         },
-                        LinkedHashMap::new
-                )).values());
+                        LinkedHashMap::new));
+
+        if (rentals != null) {
+            for (RentByTime rental : rentals) {
+                List<RentShuttleDTO> rentalShuttles = ServiceUtil.convertShuttlesJsonToList(rental.getShuttles());
+                for (RentShuttleDTO rs : rentalShuttles) {
+                    RptShuttle rpt = shuttleMap.get(rs.getShuttleName());
+                    if (rpt == null) {
+                        rpt = new RptShuttle();
+                        rpt.setShuttleName(rs.getShuttleName());
+                        rpt.setPrice(rs.getCost());
+                        rpt.setPriceFormat(MoneyUtils.formatToVND(rs.getCost()));
+                        rpt.setQuantity(rs.getNumber());
+                        shuttleMap.put(rs.getShuttleName(), rpt);
+                    } else {
+                        rpt.setQuantity(rpt.getQuantity() + rs.getNumber());
+                    }
+                }
+            }
+        }
+
+        return new ArrayList<>(shuttleMap.values());
     }
 
     private List<RptService> buildListTotalService(List<AvailablePlayer> availablePlayers) {
         return new ArrayList<>(availablePlayers.stream()
                 .flatMap(p -> ServiceUtil.convertStringToListService(p.getCurrentServices()).stream())
                 .filter(s -> !s.getServiceName().toLowerCase().contains(GameConstant.COST_IN_PERSON_VN.toLowerCase()))
+                .filter(s -> !s.getServiceName().toLowerCase().contains(GameConstant.ADVANCE_PAYMENT_VN.toLowerCase()))
+                .filter(s -> !(s.getServiceName().toLowerCase().contains(RentConstant.RENT_BY_TIME_STR.toLowerCase()) ||
+                        s.getServiceName().toLowerCase().contains(RentConstant.RENT_BY_TIME_EN_STR.toLowerCase())))
                 .collect(Collectors.toMap(
                         ServiceDTO::getServiceName,
                         s -> {
@@ -703,8 +861,8 @@ public class ExcelExportService implements ExportService {
                             existing.setQuantity(existing.getQuantity() + 1);
                             return existing;
                         },
-                        LinkedHashMap::new
-                )).values());
+                        LinkedHashMap::new))
+                .values());
     }
 
     private Float getPayAmount(AvailablePlayer availablePlayer) {

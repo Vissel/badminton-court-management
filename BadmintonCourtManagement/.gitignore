@@ -1,34 +1,30 @@
-HELP.md
-target/
-.mvn/wrapper/maven-wrapper.jar
-!**/src/main/**/target/
-!**/src/test/**/target/
-.war
+# Java / Maven
+/target/
+!.mvn/wrapper/maven-wrapper.jar
+.mvn/wrapper/*.jar
+deployment/*
+bad-court-mana-ui/build
+../bad-court-mana-ui/caulong-qa
 
-### STS ## #
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
-
-### IntelliJ IDEA ###
-.idea
-*.iws
-*.iml
-*.ipr
-
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-build/
-!**/src/main/**/build/
-!**/src/test/**/build/
-
-### VS Code ###
+# IDE
+.idea/
 .vscode/
+*.iml
+*.class
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Local environment
+.env
+.env.*
+
+# Generated / temporary files
+*.tmp
+*.bak
+*.swp
+*~

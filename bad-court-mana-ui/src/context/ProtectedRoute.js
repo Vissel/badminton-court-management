@@ -1,20 +1,34 @@
 import React, { useContext } from "react";
 import { Navigate, Outlet } from "react-router-dom";
+import Box from "@mui/material/Box";
+import CircularProgress from "@mui/material/CircularProgress";
+import Typography from "@mui/material/Typography";
 import { AuthContext } from "./AuthContext";
 
 const ProtectedRoute = ({ children }) => {
   const { authenticated, loading } = useContext(AuthContext);
 
-  //   if (loading) return <div>Loading...</div>;
   if (loading) {
-    return <div>Loading session...</div>; // Wait until auth check finishes
+    return (
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 2,
+          minHeight: "40vh",
+        }}
+      >
+        <CircularProgress />
+        <Typography color="text.secondary">Loading session...</Typography>
+      </Box>
+    );
   }
   if (!authenticated) {
-    // Redirect to the login page if not authenticated
     return <Navigate to="/login" replace />;
   }
 
-  // Render the children (the protected component) or Outlet for nested routes
   return children ? children : <Outlet />;
 };
 

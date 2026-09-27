@@ -53,7 +53,7 @@ public class Game {
     private String state;
 
     /**
-     * game type: com.badminton.constant.GameType SHARE or NEGO
+     * game type: com.badminton.constant.GameType SHARE or NEGO, or RENT
      */
     private String gtype;
 

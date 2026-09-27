@@ -3,7 +3,7 @@ package com.badminton.controller;
 import com.badminton.requestmodel.RegisterUserDTO;
 import com.badminton.requestmodel.ResetUserRequest;
 import com.badminton.response.result.Result;
-import com.badminton.service.CourtServicesServiceImpl;
+import com.badminton.service.CourtServicesService;
 import com.badminton.service.UserService;
 import com.badminton.util.ResponseConvertor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,7 +18,7 @@ public class SuperAdminController {
     @Autowired
     UserService userService;
     @Autowired
-    CourtServicesServiceImpl courtService;
+    CourtServicesService courtService;
 
     @PostMapping("/registerUser")
     public ResponseEntity<String> registerUser(@RequestBody RegisterUserDTO userDTO) {

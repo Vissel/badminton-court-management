@@ -203,6 +203,21 @@
   overflow: hidden;
 }
 
+.courts-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.courts-row {
+  display: flex;
+  flex-direction: row;
+  gap: 2px;
+  justify-content: center;
+  flex: 1;
+}
+
 .court-info {
   font-weight: bold;
 }
@@ -214,16 +229,17 @@
   border: 1px solid #ccc;
 }
 
-.service-area{
+.service-area {
   font-size: 14px;
 }
-.selection-box{
-        padding: 5px 10px;
-        margin: 5px;
-        background-color: "rgb(239 242 244)";
-        border-radius: 4px;
-        cursor: move;
-        border: 1px solid #aac;
+
+.selection-box {
+  padding: 5px 10px;
+  margin: 5px;
+  background-color: "rgb(239 242 244)";
+  border-radius: 4px;
+  cursor: move;
+  border: 1px solid #aac;
 }
 
 .player-area-panel {

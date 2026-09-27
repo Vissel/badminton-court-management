@@ -16,7 +16,27 @@ public class ResponseConvertor {
         if (response.isSuccess()) {
             return ResponseEntity.ok(response);
         }
-        return ResponseEntity.status(response.getErrorCode()).body(response);
+        return ResponseEntity.status(resolveHttpStatus(response.getErrorCode())).body(response);
+    }
+
+    private static int resolveHttpStatus(int errorCode) {
+        // Application error codes (e.g. PLAYER_NOT_FOUND = 103) must not be used as raw HTTP statuses.
+        if (errorCode >= 500) {
+            return org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR.value();
+        }
+        return org.springframework.http.HttpStatus.BAD_REQUEST.value();
+    }
+
+    /**
+     * @deprecated Uses the application error code as a raw HTTP status and unwraps the body,
+     * which can produce invalid statuses (e.g. 103) with an empty body. Use {@link #convert(Result)} instead.
+     */
+    @Deprecated
+    public static final <T> ResponseEntity<T> convertToResponseEntity(Result<T> response) {
+        if (response.isSuccess()) {
+            return ResponseEntity.ok(response.getData());
+        }
+        return ResponseEntity.status(response.getErrorCode()).body(response.getData());
     }
 
     public static <R extends Resource> ResponseEntity<R> convertExportToResource(Result<ExportReportResult> response) {

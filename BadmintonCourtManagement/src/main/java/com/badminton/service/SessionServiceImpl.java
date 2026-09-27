@@ -6,31 +6,39 @@ import com.badminton.entity.Game;
 import com.badminton.entity.Player;
 import com.badminton.entity.Session;
 import com.badminton.exception.BusinessException;
+import com.badminton.model.dto.ServiceDTO;
 import com.badminton.repository.AvailablePlayerRepository;
 import com.badminton.repository.SessionRepository;
 import com.badminton.repository.UserRepository;
 import com.badminton.repository.filter.SessionParam;
 import com.badminton.requestmodel.Pagination;
 import com.badminton.requestmodel.SessionRequest;
+import com.badminton.requestmodel.debit.DebitRequest;
 import com.badminton.response.result.Result;
 import com.badminton.response.result.SessionResult;
+import com.badminton.time.model.SessionScope;
 import com.badminton.util.Converter;
+import com.badminton.util.MoneyUtils;
+import com.badminton.util.ServiceUtil;
 import com.badminton.util.TimeUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.domain.Sort.Order;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.Assert;
 
-import java.time.Instant;
-import java.time.LocalTime;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
+import java.time.*;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.time.format.TextStyle;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -45,7 +53,7 @@ public class SessionServiceImpl {
     private SessionRepository sessionRepo;
 
     @Autowired
-    private ServiceTemple serviceTemple;
+    private ServiceTemplate serviceTemple;
 
     @Autowired
     private GameService gameService;
@@ -54,6 +62,13 @@ public class SessionServiceImpl {
     private AvailablePlayerRepository avaPlayerRepo;
     @Autowired
     UserRepository userRepo;
+
+    @Autowired
+    @Lazy
+    private DebitService debitService;
+
+    @Autowired
+    private TransactionTemplate transactionTemplate;
 
     /**
      * DB display the time data ...
@@ -152,21 +167,25 @@ public class SessionServiceImpl {
     }
 
     public List<Session> findListSessionBy(String yearMonthString, Pagination pagination) {
-//        Pageable pageable = PageRequest.of(pagination.getCurrent(), pagination.getPageSize(), Sort.by(Sort.Direction.DESC, "fromTime"));
+        // Pageable pageable = PageRequest.of(pagination.getCurrent(),
+        // pagination.getPageSize(), Sort.by(Sort.Direction.DESC, "fromTime"));
         Page<Session> pageSessions;
-//        if (!StringUtils.isNoneBlank(yearMonthString) || "Tất cả".equals(yearMonthString)) {
-//            pageSessions = sessionRepo.findAll(pageable);
-//        } else {
+        // if (!StringUtils.isNoneBlank(yearMonthString) || "Tất
+        // cả".equals(yearMonthString)) {
+        // pageSessions = sessionRepo.findAll(pageable);
+        // } else {
 
         SessionParam sessionParam = buildSessionParams(yearMonthString, pagination);
 
-        pageSessions = sessionRepo.findByFromTimeBetween(sessionParam.getFrom(), sessionParam.getTo(), sessionParam.getPageable());
+        pageSessions = sessionRepo.findByFromTimeBetween(sessionParam.getFrom(), sessionParam.getTo(),
+                sessionParam.getPageable());
 
         return pageSessions.stream().toList();
     }
 
     private Pageable buildPageableFrom(Pagination pagination) {
-        return PageRequest.of(pagination.getCurrent(), pagination.getPageSize(), Sort.by(Sort.Direction.DESC, "fromTime"));
+        return PageRequest.of(pagination.getCurrent(), pagination.getPageSize(),
+                Sort.by(Sort.Direction.DESC, "fromTime"));
     }
 
     public long countSessionBy(String yearMonthString, Pagination pagination) {
@@ -175,8 +194,7 @@ public class SessionServiceImpl {
     }
 
     private SessionParam buildSessionParams(String yearMonthString, Pagination pagination) {
-        SessionParam sessionParam =
-                TimeUtils.convertYearMonthToInstant(yearMonthString);
+        SessionParam sessionParam = TimeUtils.convertYearMonthToInstant(yearMonthString);
 
         sessionParam.setPageable(buildPageableFrom(pagination));
         return sessionParam;
@@ -186,7 +204,6 @@ public class SessionServiceImpl {
         return sessionRepo.findById(Integer.valueOf(sessionId)).orElse(null);
     }
 
-    @Transactional
     public Result<SessionResult> closeOutDateSession(SessionRequest sessionRequest) {
         return serviceTemple.execute(new ProcessCallback<SessionRequest, SessionResult>() {
             @Override
@@ -201,23 +218,28 @@ public class SessionServiceImpl {
 
             @Override
             public SessionResult process() throws BusinessException {
-                SessionResult result = new SessionResult();
-                result.setMessage("Closing out of date sessions.");
+                return transactionTemplate.execute(new TransactionCallback<SessionResult>() {
+                    @Override
+                    public SessionResult doInTransaction(TransactionStatus status) {
+                        SessionResult result = new SessionResult();
+                        result.setMessage("Closing out of date sessions.");
 
-                // 1. check current time is inTheSameDay and close the sessions.
-                List<Session> closedSessions = setInactiveForSession(getRequest().isScheduler());
+                        // 1. check current time is inTheSameDay and close the sessions.
+                        List<Session> closedSessions = setInactiveForSession(getRequest().isScheduler());
 
-                // 2. false => deactivateSessions, terminateGame
-                cancelInprogressGames();
+                        // 2. false => deactivateSessions, terminateGame
+                        cancelInprogressGames();
 
-                // 3. remove all available players out closed sessions.
-                for (Session closedSession : closedSessions) {
-                    List<AvailablePlayer> availablePlayerList =
-                            avaPlayerRepo.findAllForUpdateBySessionAndLeaveTimeIsNull(closedSession);
-                    removeListPlayerOutCurrentSession(availablePlayerList);
-                }
-                result.setMessage("Close session successfully!");
-                return result;
+                        // 3. remove all available players out closed sessions.
+                        for (Session closedSession : closedSessions) {
+                            List<AvailablePlayer> availablePlayerList = avaPlayerRepo
+                                    .findAllForUpdateBySessionAndLeaveTimeIsNull(closedSession);
+                            removeListPlayerOutCurrentSession(availablePlayerList);
+                        }
+                        result.setMessage("Close session successfully!");
+                        return result;
+                    }
+                });
             }
         });
     }
@@ -231,6 +253,11 @@ public class SessionServiceImpl {
                     .collect(Collectors.toList());
         }
         // set the to time for session.
+        if (closedSessions.isEmpty()) {
+            log.info("No sessions to close - operation completed successfully with no changes.");
+            return closedSessions;
+        }
+
         closedSessions.stream()
                 .forEach(s -> {
                     s.setActive(false);
@@ -243,12 +270,15 @@ public class SessionServiceImpl {
                     }
                     s.setToTime(endOfDayInclusive);
                 });
-        Assert.notEmpty(closedSessions, "There is no session to close.");
         return sessionRepo.saveAll(closedSessions);
     }
 
     public void cancelInprogressGames() {
         List<Game> availableGames = gameService.findAllInprogress();
+        if (availableGames.isEmpty()) {
+            log.info("No in-progress games to cancel - operation completed successfully with no changes.");
+            return;
+        }
         availableGames.stream().forEach(game -> {
             Instant endOfDayInclusive = toEndOfDay(game.getCreatedDate());
             game.setEndedDate(endOfDayInclusive);
@@ -300,7 +330,8 @@ public class SessionServiceImpl {
 
         List<Player> listPlayer = userRepo.findAllByPlayerName(playerName);
         Assert.notEmpty(listPlayer, "Cannot find player");
-        List<AvailablePlayer> availablePlayerList = avaPlayerRepo.findAllForUpdateBySessionAndPlayerAndLeaveTimeIsNull(currSession, listPlayer.getFirst());
+        List<AvailablePlayer> availablePlayerList = avaPlayerRepo
+                .findAllForUpdateBySessionAndPlayerAndLeaveTimeIsNull(currSession, listPlayer.getFirst());
         Assert.isTrue(!availablePlayerList.isEmpty(), "There is no Available player for update.");
 
         return removeListPlayerOutCurrentSession(availablePlayerList);
@@ -313,9 +344,119 @@ public class SessionServiceImpl {
      * @return
      * @throws IllegalArgumentException
      */
-    public Boolean removeListPlayerOutCurrentSession(List<AvailablePlayer> availablePlayerList) throws IllegalArgumentException {
-        availablePlayerList.stream().forEach(a -> a.setLeaveTime(getUTCPlus7Instant()));
+    @Transactional(rollbackFor = Exception.class)
+    public Boolean removeListPlayerOutCurrentSession(List<AvailablePlayer> availablePlayerList)
+            throws IllegalArgumentException {
+        availablePlayerList.forEach(availablePlayer -> {
+            float remainingDebt = calculateRemainingDebt(availablePlayer);
+            if (remainingDebt > 0) {
+                Result<Boolean> debitResult = debitService.createDebit(buildDebitRequest(availablePlayer, remainingDebt));
+                if (!debitResult.isSuccess()) {
+                    throw new IllegalStateException("Failed to create debit for player "
+                            + availablePlayer.getPlayer().getPlayerName()
+                            + ": " + debitResult.getErrorMessage());
+                }
+            }
+            availablePlayer.setLeaveTime(getUTCPlus7Instant());
+        });
         avaPlayerRepo.saveAll(availablePlayerList);
         return Boolean.TRUE;
     }
+
+    private float calculateRemainingDebt(AvailablePlayer availablePlayer) {
+        List<ServiceDTO> services = ServiceUtil.convertStringToListService(availablePlayer.getCurrentServices());
+        float totalCost = services.stream()
+                .map(ServiceDTO::getCost)
+                .reduce(0f, Float::sum);
+        float payAmount = availablePlayer.getPayAmount() != null ? availablePlayer.getPayAmount() : 0f;
+        float advancePayment = availablePlayer.getAdvancePayment() != null ? availablePlayer.getAdvancePayment() : 0f;
+        return Math.max(totalCost - payAmount - advancePayment, 0f);
+    }
+
+    private DebitRequest buildDebitRequest(AvailablePlayer availablePlayer, float remainingDebt) {
+        DebitRequest debitRequest = new DebitRequest();
+        debitRequest.setDebitAmount(remainingDebt);
+        debitRequest.setCurrency(MoneyUtils.CURRENCY_VN);
+        debitRequest.setNote(availablePlayer.getCurrentServices());
+        debitRequest.setPlayerName(availablePlayer.getPlayer().getPlayerName());
+        debitRequest.setCreatedTime(availablePlayer.getSession().getFromTime().toString());
+        return debitRequest;
+    }
+
+    /**
+     * Get session scope with UTC+7 timezone
+     *
+     * @return SessionScope with start and end times in UTC+7
+     */
+    @Transactional
+    public SessionScope getSessionScope() {
+        List<Session> currentSessions = findListCurrentSession();
+        if (currentSessions.isEmpty() || currentSessions.size() != 1) {
+            throw new IllegalStateException("No active session found or invalid");
+        }
+        Instant startOfDay = currentSessions.getFirst().getFromTime();
+        Instant endOfDay = toEndOfDay(startOfDay);
+        return new SessionScope(startOfDay, endOfDay);
+    }
+
+    /**
+     * Get session by date time (UTC+7)
+     *
+     * @param dateTime Date time string in ISO-8601 format (e.g., "2026-09-05T10:00:00")
+     * @return Single session for that day, or null if not found
+     */
+    @Transactional(readOnly = true)
+    public Session getSessionByDateTime(String dateTime) {
+        if (dateTime == null || dateTime.isBlank()) {
+            return null;
+        }
+
+        try {
+            // Parse the UTC+7 datetime string to get the requested local date
+            LocalDateTime localDateTime = LocalDateTime.parse(dateTime, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+            LocalDate requestDate = localDateTime.toLocalDate();
+
+            // DB instants are stored in UTC+7 wall-clock basis (see TimeUtils.toDateDisplay),
+            // so a session for VN date D has from_time within the UTC calendar day D.
+            Instant startOfDay = requestDate.atStartOfDay(ZoneOffset.UTC).toInstant();
+            Instant endOfDay = requestDate.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+
+            // Query sessions for that day, ordered by fromTime desc
+            List<Session> sessions = sessionRepo.findByFromTimeBetweenOrderByFromTimeDesc(startOfDay, endOfDay);
+
+            // Return first session or null
+            return sessions.isEmpty() ? null : sessions.getFirst();
+        } catch (DateTimeParseException e) {
+            log.error("Failed to parse dateTime: {}", dateTime, e);
+            return null;
+        }
+    }
+
+    /**
+     * Get all sessions for the date of the given date time (UTC+7 wall-clock),
+     * ordered by fromTime desc.
+     *
+     * @param dateTime Date time string in ISO-8601 format (e.g., "2026-09-05T10:00:00")
+     * @return sessions for that day, or empty list if none
+     */
+    @Transactional(readOnly = true)
+    public List<Session> getSessionsByDateTime(String dateTime) {
+        if (dateTime == null || dateTime.isBlank()) {
+            return List.of();
+        }
+
+        try {
+            LocalDateTime localDateTime = LocalDateTime.parse(dateTime, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+            LocalDate requestDate = localDateTime.toLocalDate();
+
+            Instant startOfDay = requestDate.atStartOfDay(ZoneOffset.UTC).toInstant();
+            Instant endOfDay = requestDate.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+
+            return sessionRepo.findByFromTimeBetweenOrderByFromTimeDesc(startOfDay, endOfDay);
+        } catch (DateTimeParseException e) {
+            log.error("Failed to parse dateTime: {}", dateTime, e);
+            return List.of();
+        }
+    }
+
 }

@@ -21,6 +21,7 @@ import java.util.stream.Collectors;
 public class SetUpServiceResponse {
     private int totalCourt;
     private String costInPerson;
+    private String rentByTime;
     private List<ShuttleBallResponse> shuttleBalls;
     private List<ServiceResponse> services;
 
@@ -31,6 +32,10 @@ public class SetUpServiceResponse {
         this.services = listService.stream().map(ser -> {
             if (ser.getSerName().equals(ApiConstant.COST_IN_PERNSON)) {
                 setCostInPerson(MoneyUtils.formatToVND(ser.getCost()));
+                return null;
+            }
+            if (ser.getSerName().equals(ApiConstant.RENT_BY_TIME)) {
+                setRentByTime(MoneyUtils.formatToVND(ser.getCost()));
                 return null;
             }
             return new ServiceResponse(ser);

@@ -1,9 +1,21 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
+import Box from "@mui/material/Box";
+import Paper from "@mui/material/Paper";
+import Typography from "@mui/material/Typography";
+import FormControl from "@mui/material/FormControl";
+import InputLabel from "@mui/material/InputLabel";
+import Select from "@mui/material/Select";
+import MenuItem from "@mui/material/MenuItem";
+import Tabs from "@mui/material/Tabs";
+import Tab from "@mui/material/Tab";
+import Snackbar from "@mui/material/Snackbar";
+import Alert from "@mui/material/Alert";
 
 import "../App.css";
 import api from "../api/index";
+import { emitApiError } from "../api/errorBus";
 
 import DraggableService from "./dragNdrop/DraggableService";
 import Court from "./dragNdrop/Court";
@@ -13,36 +25,49 @@ import GameDialog from "./dialog/GameDialog";
 import ShuttleBallDialog from "./dialog/ShuttleBallDialog";
 import CancelConfirm from "./dialog/CancelConfirm";
 import PayConfirm from "./dialog/PayConfirm";
-import { VN_CURRENCY, formatVND, rawNumber } from "./MoneyUtils";
+import AdvancePaymentDialog from "./dialog/AdvancePaymentDialog";
+import RentByTimeDialog from "./dialog/RentByTimeDialog";
+import RentFinishConfirm from "./dialog/RentFinishConfirm";
+import { VN_CURRENCY, formatVND } from "./MoneyUtils";
 
-const COST_IN_PERSON = "costInPerson";
+const RENT_BY_TIME_PREFIX = "Thuê theo giờ "
 const VN_COST_IN_PERSON = "Tiền sân";
 export const TYPE = {
   PAY: "PAY",
   CANCEL: "CANCEL",
 };
+export const ADVANCE_SERVICE_NAME = "Trả trước";
 /* HomePage */
 function HomePage() {
-  const [courtIds, setCourtIds] = useState([]);
   const [activeCourts, setActiveCourts] = useState([]);
+
+  const [activeTab, setActiveTab] = useState(0);
+  const COURTS_PER_TAB = 8;
 
   const courtNumber = (court) => parseInt(court.courtName.replace("Sân ", ""), 10);
 
-  const rightColumn = useMemo(() => {
-    const half = Math.ceil(activeCourts.length / 2);
-    return activeCourts
-      .filter((c) => courtNumber(c) <= half)
+  const tabCourts = useMemo(() => {
+    const start = activeTab * COURTS_PER_TAB;
+    return [...activeCourts]
       .sort((a, b) => courtNumber(a) - courtNumber(b))
-      .map((c) => ({ courtId: c.courtId, courtName: c.courtName }));
-  }, [activeCourts]);
+      .slice(start, start + COURTS_PER_TAB);
+  }, [activeCourts, activeTab]);
 
-  const leftColumn = useMemo(() => {
-    const half = Math.ceil(activeCourts.length / 2);
-    return activeCourts
-      .filter((c) => courtNumber(c) > half)
-      .sort((a, b) => courtNumber(a) - courtNumber(b))
+  const tabRightColumn = useMemo(() => {
+    const half = Math.ceil(tabCourts.length / 2);
+    return tabCourts
+      .filter((_, i) => i < half)
       .map((c) => ({ courtId: c.courtId, courtName: c.courtName }));
-  }, [activeCourts]);
+  }, [tabCourts]);
+
+  const tabLeftColumn = useMemo(() => {
+    const half = Math.ceil(tabCourts.length / 2);
+    return tabCourts
+      .filter((_, i) => i >= half)
+      .map((c) => ({ courtId: c.courtId, courtName: c.courtName }));
+  }, [tabCourts]);
+
+  const totalTabs = Math.max(1, Math.ceil(activeCourts.length / COURTS_PER_TAB));
 
   const [courts, setCourts] = useState({});
 
@@ -53,6 +78,7 @@ function HomePage() {
   const [selectedBallVO, setSelectedBallVO] = useState("");
   const [services, setServices] = useState([]);
   const [costInPerson, setCostInPerson] = useState();
+  const [rentByTime, setRentByTime] = useState();
   const [availablePlayers, setAvailablePlayers] = useState([]);
   const [newPlayer, setNewPlayer] = useState("");
   const scrollRef = useRef(null);
@@ -64,6 +90,22 @@ function HomePage() {
   const [cancelCourtId, setCancelCourtId] = useState("");
   const [showPayConfirmDialog, setShowPayConfirmDialog] = useState(false);
   const [payConfirmData, setPayConfirmData] = useState(null);
+  const [paySuccess, setPaySuccess] = useState(false);
+  const [paySuccessMsg, setPaySuccessMsg] = useState("");
+  const [dialogHideActions, setDialogHideActions] = useState(false);
+  const [showAdvanceDialog, setShowAdvanceDialog] = useState(false);
+  const [pendingPlayerName, setPendingPlayerName] = useState(null);
+
+  // Rent by time state
+  const [showRentDialog, setShowRentDialog] = useState(false);
+  const [rentCourtId, setRentCourtId] = useState(null);
+  const [rentCourtName, setRentCourtName] = useState(null);
+  const [rentEditMode, setRentEditMode] = useState(false);
+  const [rentInitialData, setRentInitialData] = useState(null);
+  const [rentPlayerName, setRentPlayerName] = useState("");
+  const [rentalInfoMap, setRentalInfoMap] = useState({}); // courtId -> rental info
+  const [showFinishConfirm, setShowFinishConfirm] = useState(false);
+  const [finishRentCourtId, setFinishRentCourtId] = useState(null);
 
   const responseSuccess = (response) => {
     return response != null && response.status === 200 && response.data != null;
@@ -82,7 +124,7 @@ function HomePage() {
       shuttleName: ballChangeOption.shuttleName,
       shuttleCost: ballChangeOption.cost,
       selected: true,
-    });
+    }).catch(() => { });
     setSelectedBall(index);
     setSelectedBallVO(ballChangeOption);
   };
@@ -99,15 +141,9 @@ function HomePage() {
         },
       ],
     };
-    api.post(`/court-mana/removePlayerFromCourt`, courtPayload);
-    // .then((res) => {
-    //   if (responseSuccess(res)) {
-
-    //   }
-    // })
-    // .catch((error) => {
-    //   console.error(`Error while onDropPlayerBack - ${playerName}, ${courtId}, ${areaKey}, ${error} `);
-    // });
+    api.post(`/court-mana/removePlayerFromCourt`, courtPayload).catch((error) => {
+      console.error(`Error while onDropPlayerBack - ${playerName}, ${courtId}, ${areaKey}, ${error} `);
+    });
     setCourts((prev) => {
       const updated = { ...prev };
       for (const id in updated) {
@@ -159,7 +195,9 @@ function HomePage() {
         ],
       };
 
-      api.post(`/court-mana/addPlayerToCourt`, gameDTO);
+      api.post(`/court-mana/addPlayerToCourt`, gameDTO).catch((error) => {
+        console.error(`Error adding player ${playerName} to court ${courtId}-${areaKey}`, error);
+      });
       setCourts((prev) => {
         const updated = { ...prev };
         for (const id in updated) {
@@ -188,23 +226,254 @@ function HomePage() {
     }
   };
 
-  const occupied = () => {};
+  const occupied = () => { };
   const onDropPlayerBack = (playerName, courtId, areaKey) => {
     console.log(availablePlayers);
     removePlayerFromCourtApi(playerName, courtId, areaKey);
   };
 
-  const onAddPlayer = async(name) => {
+  const onAddPlayer = async (name) => {
+    // Show advance payment dialog first, then call API after user responds
+    setPendingPlayerName(name);
+    setShowAdvanceDialog(true);
+  };
+
+  const handleAdvanceConfirm = async (playerName, advanceAmount) => {
+    setShowAdvanceDialog(false);
     try {
-      await api.post("/court-mana/addPlayer", name);
+      await api.post("/court-mana/addPlayer", {
+        playerName: playerName,
+        advanceAmount: advanceAmount,
+      });
       console.log("Adding new player successfully.");
-      setAvailablePlayers((prev) => [...prev, name]);
-      // set costInPerson
-      handleDropService(name, VN_COST_IN_PERSON, costInPerson, formatVND(costInPerson));
+      setAvailablePlayers((prev) => [...prev, playerName]);
+      // Add Tiền sân service
+      handleDropService(playerName, VN_COST_IN_PERSON, costInPerson, formatVND(costInPerson));
+      // If advance > 0, add "Trả trước" to the local service map (backend already added it)
+      if (advanceAmount > 0) {
+        setPlayerServiceMap((prev) => {
+          const existing = prev[playerName] || [];
+          return {
+            ...prev,
+            [playerName]: [
+              ...existing,
+              {
+                serviceName: ADVANCE_SERVICE_NAME,
+                cost: advanceAmount,
+                costFormat: formatVND(advanceAmount),
+              },
+            ],
+          };
+        });
+      }
     } catch (error) {
       console.error("Error while adding player to available session.");
-      alert("Có lỗi khi thêm người chơi. Refresh lại trang này!");
+      emitApiError("Có lỗi khi thêm người chơi. Refresh lại trang này!");
     }
+  };
+
+  const handleAdvanceSkip = async (playerName) => {
+    setShowAdvanceDialog(false);
+    try {
+      await api.post("/court-mana/addPlayer", {
+        playerName: playerName,
+        advanceAmount: 0,
+      });
+      console.log("Adding new player successfully (no advance).");
+      setAvailablePlayers((prev) => [...prev, playerName]);
+      // Add Tiền sân service
+      handleDropService(playerName, VN_COST_IN_PERSON, costInPerson, formatVND(costInPerson));
+    } catch (error) {
+      console.error("Error while adding player to available session.");
+      emitApiError("Có lỗi khi thêm người chơi. Refresh lại trang này!");
+    }
+  };
+
+  const handleUpdatePlayerName = async (oldName, newName) => {
+    try {
+      const res = await api.post("/court-mana/updatePlayerName", {
+        currName: oldName,
+        newName: newName,
+      });
+
+      if (responseSuccess(res)) {
+        // Update available players list
+        setAvailablePlayers((prev) =>
+          prev.map((player) => player === oldName ? newName : player)
+        );
+
+        // Update player service map
+        setPlayerServiceMap((prev) => {
+          const updated = { ...prev };
+          if (updated[oldName]) {
+            updated[newName] = updated[oldName];
+            delete updated[oldName];
+          }
+          return updated;
+        });
+
+        // Update courts if player is on a court
+        setCourts((prev) => {
+          const updated = { ...prev };
+          for (const courtId in updated) {
+            for (const area in updated[courtId]) {
+              if (updated[courtId][area] === oldName) {
+                updated[courtId][area] = newName;
+              }
+            }
+          }
+          return updated;
+        });
+
+        // Update selected player if it's the renamed player
+        if (selectedPlayer === oldName) {
+          setSelectedPlayer(newName);
+        }
+
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Error updating player name:", error);
+      emitApiError("Có lỗi khi đổi tên người chơi. Vui lòng thử lại!");
+      return false;
+    }
+  };
+
+  // ── Rent by time handlers ──────────────────────────────────────────────
+  const handleRentByTime = (courtId) => {
+    const court = activeCourts.find((c) => c.courtId === courtId);
+
+    const autoPlayer = findPlayerNameFromCourt(courtId);
+    setRentCourtId(courtId);
+    setRentCourtName(court?.courtName || courtId);
+    setRentEditMode(false);
+    setRentInitialData(null);
+    setRentPlayerName(autoPlayer);
+    setShowRentDialog(true);
+  };
+
+  const handleRentConfirm = async (rentData) => {
+    try {
+      const areaKey = findPlayerNameFromCourt(rentCourtId);
+      let res;
+
+      if (rentData.editMode) {
+        // Update existing rental
+        const rental = rentalInfoMap[rentCourtId];
+        res = await api.post(`/court-mana/updateRentByTime?rentId=${rental.id}`, {
+          courtId: rentCourtId,
+          playerName: rentData.playerName,
+          courtArea: areaKey,
+          numTime: rentData.numTime || 1,
+          shuttleBalls: rentData.shuttleBalls || [],
+          startTime: rentData.startTime,
+          endTime: rentData.endTime,
+          costPerHour: rentData.fee
+        });
+      } else {
+        // Create new rental
+        res = await api.post("/court-mana/applyRentByTime", {
+          courtId: rentCourtId,
+          playerName: rentData.playerName,
+          courtArea: areaKey,
+          numTime: rentData.numTime || 1,
+          shuttleBalls: rentData.shuttleBalls || [],
+          startTime: rentData.startTime,
+          endTime: rentData.endTime,
+          costPerHour: rentData.fee
+        });
+      }
+
+      if (responseSuccess(res)) {
+        setShowRentDialog(false);
+        // Update rental info for this court
+        setRentalInfoMap((prev) => ({
+          ...prev,
+          [rentCourtId]: res.data,
+        }));
+      }
+    } catch (error) {
+      console.error("Error applying rent by time:", error);
+      emitApiError("Có lỗi khi thuê sân theo giờ. Vui lòng thử lại!");
+    }
+  };
+  // drop player back to available players area
+  const removePlayerFromCourt = (rentResponse) => {
+    const court = courts[rentResponse.courtId];
+    const area = Object.keys(court).find((key) => court[key] != null);
+
+    removePlayerFromCourtApi(rentResponse.playerName, rentCourtId, area);
+  }
+
+  // Step 1: Button click just opens the confirm dialog
+  const handleFinishRent = (courtId) => {
+    setFinishRentCourtId(courtId);
+    setShowFinishConfirm(true);
+  };
+
+  // Step 2: Actual API call happens after user confirms in the dialog
+  const handleConfirmFinishRent = async ({ courtFee, shuttleList }) => {
+    const rental = rentalInfoMap[finishRentCourtId];
+    if (!rental) return;
+    try {
+      const res = await api.post(
+        `/court-mana/payRentByTime?rentId=${rental.id}`
+        // ,
+        // {
+        //   courtFee,
+        //   shuttleBalls: shuttleList,
+        // }
+      );
+      if (responseSuccess(res)) {
+        setRentalInfoMap((prev) => {
+          const next = { ...prev };
+          delete next[finishRentCourtId];
+          return next;
+        });
+        removePlayerFromCourt(res.data);
+        setServiceToPlayer(res.data.playerName, RENT_BY_TIME_PREFIX + res.data.courtName, res.data.fee, formatVND(res.data.fee));
+      }
+    } catch (error) {
+      console.error("Error finishing rent:", error);
+      emitApiError("Có lỗi khi kết thúc thuê sân. Vui lòng thử lại!");
+    } finally {
+      setShowFinishConfirm(false);
+      setFinishRentCourtId(null);
+    }
+  };
+  const handleExitFinishConfirm = () => {
+    setShowFinishConfirm(false);
+    setFinishRentCourtId(null);
+  };
+  const handleCancelRent = async (courtId) => {
+    const rental = rentalInfoMap[courtId];
+    if (!rental) return;
+    if (!window.confirm("Bạn có chắc muốn huỷ thuê sân?")) return;
+    try {
+      const res = await api.post(`/court-mana/cancelRentByTime?rentId=${rental.id}`);
+      if (responseSuccess(res)) {
+        setRentalInfoMap((prev) => {
+          const next = { ...prev };
+          delete next[courtId];
+          return next;
+        });
+        removePlayerFromCourt(res.data);
+      }
+    } catch (error) {
+      console.error("Error cancelling rent:", error);
+      emitApiError("Có lỗi khi huỷ thuê sân. Vui lòng thử lại!");
+    }
+  };
+
+  const handleUpdateRent = (courtId) => {
+    const rental = rentalInfoMap[courtId];
+    if (!rental) return;
+    setRentCourtId(courtId);
+    setRentCourtName(rental.courtName || courtId);
+    setRentEditMode(true);
+    setRentInitialData(rental);
+    setShowRentDialog(true);
   };
 
   // Add shuttle ball area.
@@ -264,10 +533,11 @@ function HomePage() {
           if (response.data === true) {
             setLockedCourts((prev) => ({ ...prev, [courtId]: true }));
           } else {
-            alert(" Không thể bắt đầu. Số lượng người chơi mới không hợp lệ .");
+            emitApiError(" Không thể bắt đầu. Số lượng người chơi mới không hợp lệ .");
           }
         }
-      });
+      })
+      .catch(() => { });
   };
   const courtAreaPayload = (area, playerName, expense, isWin) => {
     return {
@@ -351,9 +621,9 @@ function HomePage() {
 
   /** On Finish */
   const onFinish = async (courtId) => {
-    const gameRes = await api.get(
-      `/gameResult/getGameResult?courtId=${courtId}`
-    );
+    const gameRes = await api
+      .get(`/gameResult/getGameResult?courtId=${courtId}`)
+      .catch(() => null);
     if (responseSuccess(gameRes)) {
       setGameDialogData(gameRes.data);
       setShowGameDialog(true);
@@ -380,7 +650,7 @@ function HomePage() {
       await api.post(`/gameResult/confirmGameResult`, payload);
     } catch (error) {
       console.error(error);
-      alert("Hành động thất bại. Load lại trang và thử lại. ");
+      emitApiError("Hành động thất bại. Load lại trang và thử lại. ");
       setShowGameDialog(false);
       return;
     }
@@ -443,15 +713,17 @@ function HomePage() {
     setCancelCourtId(courtId);
   };
   const cancelGameRes = async (courtId) => {
-    const res = await api.post(`/gameResult/rejectGameResult`, {
-      court: {
-        courtId: courtId,
-      },
-      gameState: "Cancel",
-    });
+    const res = await api
+      .post(`/gameResult/rejectGameResult`, {
+        court: {
+          courtId: courtId,
+        },
+        gameState: "Cancel",
+      })
+      .catch(() => null);
 
-    if (res.status !== 200 && res.data === false) {
-      alert("Hành động thất bại. Load lại trang và thử lại. ");
+    if (!res || res.status !== 200 || res.data === false) {
+      emitApiError("Hành động thất bại. Load lại trang và thử lại. ");
       return;
     }
 
@@ -464,12 +736,9 @@ function HomePage() {
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [showDialog, setShowDialog] = useState(false);
 
-  const handleDropService = (playerName, serviceName, cost, costFormat) => {
+  // set a service to player, no api call
+  const setServiceToPlayer = (playerName, serviceName, cost, costFormat) => {
     if (!playerName) return;
-    // add to db
-    saveServiceToPlayer(playerName, serviceName, cost, costFormat);
-
-    // player: Array[Services]
     setPlayerServiceMap((prev) => {
       const existing = prev[playerName] || [];
       // if (existing.includes(serviceName)) return prev;
@@ -485,15 +754,33 @@ function HomePage() {
         ],
       };
     });
+  }
+
+  const handleDropService = (playerName, serviceName, cost, costFormat) => {
+    // add to db
+    saveServiceToPlayer(playerName, serviceName, cost, costFormat);
+
+    // player: Array[Services]
+    setServiceToPlayer(playerName, serviceName, cost, costFormat);
   };
 
   // Handle clicking on player
   const handleClickPlayer = (p) => {
     console.log(`Click on player:${p}`);
     setSelectedPlayer(p);
+    setDialogHideActions(false);
     setShowDialog(true);
   };
-const saveServiceToPlayer = async(playerName, serviceName, cost) => {
+
+  // Handle clicking on player inside a Court area (view-only, no pay/delete)
+  const handleCourtPlayerClick = (p) => {
+    console.log(`Court player click: ${p}`);
+    setSelectedPlayer(p);
+    setDialogHideActions(true);
+    setShowDialog(true);
+  };
+  const saveServiceToPlayer = async (playerName, serviceName, cost) => {
+    if (!playerName) return;
     return await api.post(`/court-mana/addServiceToPlayer?playerName=${playerName}`, {
       serviceName: serviceName,
       cost: cost,
@@ -510,7 +797,6 @@ const saveServiceToPlayer = async(playerName, serviceName, cost) => {
           const courts = courtRes.data;
           setActiveCourts(courts);
           const ids = courts.map((c) => c.courtId);
-          setCourtIds(ids);
           setCourts(
             ids.reduce((acc, id) => ({ ...acc, [id]: { A: null, B: null, C: null, D: null } }), {})
           );
@@ -518,7 +804,7 @@ const saveServiceToPlayer = async(playerName, serviceName, cost) => {
 
         // check available session
         const response = await api.post("/session/checkCreateNewSession");
-        if(response.success === false){
+        if (response.success === false) {
           console.error("checkCreateNewSession got error.")
           return;
         }
@@ -568,8 +854,14 @@ const saveServiceToPlayer = async(playerName, serviceName, cost) => {
             (s) => s.serviceName === "costInPerson"
           ).cost;
           setCostInPerson(costPersonService);
+          const rentByTimeService = listService.find(
+            (s) => s.serviceName === "rentByTime"
+          );
+          if (rentByTimeService) {
+            setRentByTime(rentByTimeService.cost);
+          }
           setServices(
-            listService.filter((s) => s.serviceName !== "costInPerson")
+            listService.filter((s) => s.serviceName !== "costInPerson" && s.serviceName !== "rentByTime")
           );
         }
 
@@ -577,16 +869,40 @@ const saveServiceToPlayer = async(playerName, serviceName, cost) => {
         const resCourtMana = await api.get(`/court-mana/getCourtManagement`);
         if (resCourtMana.status === 200 && resCourtMana.data !== "") {
           const resGames = resCourtMana.data.gameDTOs;
-          // const resCourts = resCourtMana.data.remainCourts;
+
+          // set rental info map
+          setRentalInfoMap((prev) => {
+            const currInfo = { ...prev };
+            if (resCourtMana.data.rentByTimeResponses) {
+              resCourtMana.data.rentByTimeResponses.forEach((rental) => {
+                const id = parseInt(rental.courtId);
+                currInfo[id] = rental;
+              });
+            }
+            return currInfo;
+          });
+
           if (resGames !== "") {
             setCourts((prev) => {
               const currCourts = { ...prev };
               resGames.forEach((g) => {
                 const id = parseInt(g.court.courtId);
                 g.court.courtAreas.forEach((courtArea) => {
-                  // set player onto area of court
-                  currCourts[id][courtArea.area] =
+                  const courtPlayerName =
                     courtArea.playerInArea.playerName;
+                  // set player onto area of court
+                  currCourts[id][courtArea.area] = courtPlayerName;
+
+                  // also load services for court players
+                  // (backend includes serviceResponses in playerInArea)
+                  const courtPlayerServices =
+                    courtArea.playerInArea.serviceResponses;
+                  if (courtPlayerName && courtPlayerServices) {
+                    setPlayerServiceMap((prev) => ({
+                      ...prev,
+                      [courtPlayerName]: courtPlayerServices,
+                    }));
+                  }
                 });
                 // set lock court if gameState is Start
                 if (g.gameState === "Start") {
@@ -607,16 +923,6 @@ const saveServiceToPlayer = async(playerName, serviceName, cost) => {
 
             resAvaPlayers.forEach((player) => {
               const playerServiceList = player.serviceResponses;
-              //  player.serviceDTOs.map((service) => {
-              //   let serviceString = service;
-              //   if (service.includes(COST_IN_PERSON)) {
-              //     serviceString = service.replace(
-              //       COST_IN_PERSON,
-              //       VN_COST_IN_PERSON
-              //     );
-              //   }
-              //   return convertStringToService(serviceString);
-              // });
 
               setPlayerServiceMap((prevMap) => {
                 return {
@@ -629,23 +935,21 @@ const saveServiceToPlayer = async(playerName, serviceName, cost) => {
         } else {
           console.error(`Cannot get court management data.`);
         }
-        // fetch available players in current session
-        // const avaPlayers = await api.get("/court-mana/getAvailablePlayers");
-        // if (avaPlayers.status === 200) {
-        //   setAvailablePlayers(avaPlayers.data.map((p) => p.playerName));
-        // }
       } catch (error) {
         console.error(
           `Error while checking available session. Error: ${error}`
         );
       }
+
+      // scroll to bottom after all content is fully rendered
+      requestAnimationFrame(() => {
+        if (scrollRef.current) {
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+      });
     };
 
     fetchCourtInfor();
-    // scrolling to the end
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
   }, []);
 
   const handleUpdateServices = async (playerName, updatedServices) => {
@@ -655,10 +959,9 @@ const saveServiceToPlayer = async(playerName, serviceName, cost) => {
         cost: s.cost,
       };
     });
-    const response = await api.post(
-      `/court-mana/updateServiceToPlayer?playerName=${playerName}`,
-      payload
-    );
+    const response = await api
+      .post(`/court-mana/updateServiceToPlayer?playerName=${playerName}`, payload)
+      .catch(() => null);
     if (responseDataTrue(response)) {
       setPlayerServiceMap((prev) => ({
         ...prev,
@@ -666,11 +969,11 @@ const saveServiceToPlayer = async(playerName, serviceName, cost) => {
       }));
       return;
     }
-    alert(`Thay đổi dich vu không thành công.`);
+    emitApiError(`Thay đổi dich vu không thành công.`);
     console.log(`Thay đổi dich vu không thành công.`);
   };
 
-  const onPayConfirm = (playerName, type, serviceList, expense) => {
+  const onPayCancel = (playerName, type, serviceList, expense) => {
     // show dialog type: pay, cancel.
     let title = `Xác nhận XOÁ người chơi [${playerName}] : [${expense} ${VN_CURRENCY}] ?`;
     if (TYPE.PAY === type) {
@@ -689,77 +992,158 @@ const saveServiceToPlayer = async(playerName, serviceName, cost) => {
   const handlePayment = (data) => {
     console.log(`handle: ${data.title}`);
 
+    // Delete player without payment
+    if (data.type === TYPE.CANCEL) {
+      api
+        .post(`/api/v1/pay/cancel`, { playerName: data.playerName })
+        .then((res) => {
+          const result = res?.data;
+          if (result && result.success && result.data === true) {
+            setPaySuccessMsg("Đã xoá người chơi khỏi phiên.");
+            setPaySuccess(true);
+            setShowPayConfirmDialog(false);
+            setShowDialog(false);
+            setAvailablePlayers((prev) => prev.filter((p) => p !== data.playerName));
+          } else if (result) {
+            // HTTP 200 but business error
+            emitApiError(result.errorMessage || "Không thể xoá người chơi. Vui lòng thử lại.");
+          }
+          // res === null: the interceptor already alerted on 5xx errors
+        })
+        .catch(() => {
+          // The interceptor already alerted on 4xx/network errors; keep the dialog open for retry
+        });
+      return;
+    }
+
+    // Calculate total expense of services (excluding advance service)
+    const servicesWithoutAdvance = data.services.filter(s => s.serviceName !== ADVANCE_SERVICE_NAME);
+    const totalExpense = servicesWithoutAdvance.reduce((sum, item) => sum + (item.cost || 0), 0);
+
+    const recordedDebt = data.debitAmount || 0;
+
+    // Everything settled by this payment: today's services + the old debts
+    // picked in the dialog, minus the amount converted into a NEW debt.
+    // (PayConfirm's SỐ TIỀN is only the cash collected now — the advance may
+    // have covered part of this.)
+    const totalPaid = totalExpense + (data.payDebits?.totalPayAmount || 0) - recordedDebt;
+
     // send api pay
+    api
+      .post(`/api/v1/pay/payToPlayer`, {
+        playerName: data.playerName,
+        serviceRequests: data.services,
+        totalExpense: String(totalPaid),
+        // payment method picked in PayConfirm (CASH/TRANSFER); cancel keeps "CANCEL"
+        payType: data.paymentMethod || data.type,
+        debitRequest: recordedDebt > 0 ? {
+          playerName: data.playerName,
+          debitAmount: recordedDebt,
+          currency: VN_CURRENCY,
+          note: data.debitNote || "Ghi nợ",
+          // createdTime is parsed as LocalDateTime in UTC+7 (no timezone suffix)
+          createdTime: new Date().toLocaleString("sv-SE", { timeZone: "Asia/Ho_Chi_Minh" }).replace(" ", "T"),
+        } : null,
+        // existing debts selected in DebitListDialog, settled with this payment
+        payDebits: data.payDebits || null,
+      })
+      .then((res) => {
+        const result = res?.data;
+        if (result && result.success) {
+          setPaySuccessMsg("Thanh toán thành công");
+          setPaySuccess(true);
+          setShowPayConfirmDialog(false);
+          setShowDialog(false);
+          setAvailablePlayers((prev) => prev.filter((p) => p !== data.playerName));
+        } else if (result) {
+          // HTTP 200 but business error, e.g. invalid debit request, player not found
+          emitApiError(result.errorMessage || "Thanh toán không thành công. Vui lòng thử lại.");
+        }
+        // res === null: the interceptor already alerted on 5xx errors
+      })
+      .catch(() => {
+        // The interceptor already alerted on 4xx/network errors; keep the dialog open for retry
+      });
+  };
 
-    // send api cancel.
-
-    api.post(`/api/v1/pay/payToPlayer`, {
-      playerName: data.playerName,
-      serviceRequests: data.services,
-      totalExpense: data.expense,
-      payType: data.type,
-    });
-    setShowPayConfirmDialog(false);
-    setShowDialog(false);
-    setAvailablePlayers((prev) => prev.filter((p) => p !== data.playerName));
+  // find player name from court
+  const findPlayerNameFromCourt = (courtId) => {
+    const court = courts[courtId];
+    if (court) {
+      return Object.values(court).find((areaKey) => areaKey !== null);
+    }
+    return null;
   };
 
   return (
     <DndProvider backend={HTML5Backend}>
-      <div style={{ display: "flex", flexDirection: "row", height: "100vh" }}>
-        <div
-          style={{
+      <Box sx={{ display: "flex", flexDirection: "row", height: "100vh" }}>
+        <Paper
+          elevation={0}
+          square
+          sx={{
+            width: "20%",
+            minWidth: { xs: 180, sm: 220 },
+            p: 1,
+            borderRight: 1,
+            borderColor: "divider",
             display: "flex",
             flexDirection: "column",
-            width: "20%",
-            padding: "3px",
-            borderRight: "1px solid #ccc",
-            transition: "background-color 2s ease",
+            gap: 1,
+            bgcolor: "grey.50",
           }}
         >
-          <div
-            className="service-area"
-            style={{
-              // backgroundColor: "rgb(239 242 244)",
-              color: "white",
-              border: "1px solid #cde",
-              margin: "5px 5px 5px 5px",
-              padding: "5px 10px 5px",
+          <Paper
+            variant="outlined"
+            sx={{
+              color: "common.white",
+              borderColor: "#cde",
+              p: 1.25,
               backgroundImage: 'url("whatsapp-wallpaper-3.jpg")',
               backgroundSize: "cover",
-              fontSize: "16px",
             }}
           >
-            <h5> Tiền sân và Cầu: </h5>
-            <b>
+            <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+              Tiền sân và Cầu:
+            </Typography>
+            <Typography variant="body2" fontWeight={600} display="block">
               Tiền sân: {formatVND(costInPerson)} {VN_CURRENCY}
-            </b>
-            <br></br>
-            {selectedBall !== "" && (
-              <b>
+            </Typography>
+            {selectedBall !== "" && selectedBallVO && (
+              <Typography variant="body2" fontWeight={600} sx={{ mt: 0.5 }}>
                 Cầu: {selectedBallVO.shuttleName} - {selectedBallVO.costFormat}{" "}
                 {selectedBallVO.currency}
-              </b>
+              </Typography>
             )}
-          </div>
-          <div className="service-area">
-            <h5 style={{ margin: "15px 0 0 5px" }}> Thay đổi cầu: </h5>
-            <select
-              id="ballOptionId"
-              name="ballOptions"
-              value={selectedBall}
-              onChange={(e) => handleSelectedBall(e.target.value)}
-              className="court-select selection-box"
-            >
-              {ballOptions.map((ball, index) => (
-                <option key={ball.shuttleName} value={index}>
-                  {ball.shuttleName} - {ball.costFormat} {ball.currency}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="service-area">
-            <h5 style={{ margin: "15px 0 0 5px" }}>Chọn dịch vụ: </h5>
+          </Paper>
+
+          <Box sx={{ px: 0.5 }}>
+            <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+              Thay đổi cầu:
+            </Typography>
+            <FormControl fullWidth size="small">
+              <InputLabel id="ballOptionLabel">Loại cầu</InputLabel>
+              <Select
+                labelId="ballOptionLabel"
+                label="Loại cầu"
+                id="ballOptionId"
+                name="ballOptions"
+                value={selectedBall}
+                onChange={(e) => handleSelectedBall(Number(e.target.value))}
+              >
+                {ballOptions.map((ball, index) => (
+                  <MenuItem key={ball.shuttleName} value={index}>
+                    {ball.shuttleName} - {ball.costFormat} {ball.currency}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
+
+          <Box sx={{ px: 0.5, flex: 1, overflow: "auto" }}>
+            <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+              Chọn dịch vụ:
+            </Typography>
             {services.map((s) => (
               <DraggableService
                 key={s.serviceName}
@@ -769,9 +1153,10 @@ const saveServiceToPlayer = async(playerName, serviceName, cost) => {
                 currency={s.currency}
               />
             ))}
-          </div>
-        </div>
-        <div className="court-container" ref={scrollRef}>
+          </Box>
+        </Paper>
+
+        <Box className="court-container" ref={scrollRef}>
           <div className="column court-bar">
             <PlayerArea
               availablePlayers={availablePlayers}
@@ -788,57 +1173,95 @@ const saveServiceToPlayer = async(playerName, serviceName, cost) => {
               playerName={selectedPlayer}
               services={playerServiceMap[selectedPlayer] || []}
               onClose={() => setShowDialog(false)}
-              onPay={onPayConfirm}
-              onDelete={onPayConfirm}
+              onPay={onPayCancel}
+              onDelete={onPayCancel}
               onUpdateServices={handleUpdateServices}
+              onUpdatePlayerName={handleUpdatePlayerName}
+              canEditPlayerName={true}
+              hideActions={dialogHideActions}
+              serviceOptions={services}
             />
           )}
 
-          <div className="column left-column">
-            {leftColumn
-              .slice()
-              .reverse()
-              .map(({ courtId, courtName }) => (
-                <div key={courtId} className="image-card">
-                  <Court
-                    key={courtId}
-                    id={courtId}
-                    name={courtName}
-                    players={courts[courtId]}
-                    onDropPlayer={onDropPlayerOntoCourt}
-                    occupied={occupied}
-                    isLocked={lockedCourts[courtId]}
-                    onStart={startGame}
-                    showAddedBallDialog={showAddedBallDialog}
-                    onFinish={onFinish}
-                    onCancel={() => onCancelGame(courtId)}
-                    onDropService={handleDropService}
-                  />
-                </div>
-              ))}
-          </div>
-          <div className="column right-column">
-            {rightColumn
-              .slice()
-              .reverse()
-              .map(({ courtId, courtName }) => (
-                <div key={courtId} className="image-card">
-                  <Court
-                    key={courtId}
-                    id={courtId}
-                    name={courtName}
-                    players={courts[courtId]}
-                    onDropPlayer={onDropPlayerOntoCourt}
-                    occupied={occupied}
-                    isLocked={lockedCourts[courtId]}
-                    onStart={startGame}
-                    showAddedBallDialog={showAddedBallDialog}
-                    onFinish={onFinish}
-                    onCancel={() => onCancelGame(courtId)}
-                    onDropService={handleDropService}
-                  />
-                </div>
-              ))}
+          <div className="courts-wrapper">
+            {totalTabs > 1 && (
+              <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 1, px: 1 }}>
+                <Tabs
+                  value={activeTab}
+                  onChange={(_, v) => setActiveTab(v)}
+                  variant="scrollable"
+                  scrollButtons="auto"
+                  sx={{ "& .MuiTab-root": { minWidth: 80, textTransform: "none", fontSize: "0.85rem" } }}
+                >
+                  {Array.from({ length: totalTabs }, (_, i) => (
+                    <Tab key={i} label={`Trang ${i + 1}`} />
+                  ))}
+                </Tabs>
+              </Box>
+            )}
+
+            <div className="courts-row">
+              <div className="column left-column">
+                {tabLeftColumn
+                  .slice()
+                  .reverse()
+                  .map(({ courtId, courtName }) => (
+                    <div key={courtId} className="image-card">
+                      <Court
+                        key={courtId}
+                        id={courtId}
+                        name={courtName}
+                        players={courts[courtId]}
+                        onDropPlayer={onDropPlayerOntoCourt}
+                        occupied={occupied}
+                        isLocked={lockedCourts[courtId]}
+                        onStart={startGame}
+                        showAddedBallDialog={showAddedBallDialog}
+                        onFinish={onFinish}
+                        onCancel={() => onCancelGame(courtId)}
+                        onDropService={handleDropService}
+                        availablePlayers={availablePlayers}
+                        onClickPlayer={handleCourtPlayerClick}
+                        rentalInfo={rentalInfoMap[courtId]}
+                        onRentByTime={handleRentByTime}
+                        onFinishRent={handleFinishRent}
+                        onCancelRent={handleCancelRent}
+                        onUpdateRent={handleUpdateRent}
+                      />
+                    </div>
+                  ))}
+              </div>
+              <div className="column right-column">
+                {tabRightColumn
+                  .slice()
+                  .reverse()
+                  .map(({ courtId, courtName }) => (
+                    <div key={courtId} className="image-card">
+                      <Court
+                        key={courtId}
+                        id={courtId}
+                        name={courtName}
+                        players={courts[courtId]}
+                        onDropPlayer={onDropPlayerOntoCourt}
+                        occupied={occupied}
+                        isLocked={lockedCourts[courtId]}
+                        onStart={startGame}
+                        showAddedBallDialog={showAddedBallDialog}
+                        onFinish={onFinish}
+                        onCancel={() => onCancelGame(courtId)}
+                        onDropService={handleDropService}
+                        availablePlayers={availablePlayers}
+                        onClickPlayer={handleCourtPlayerClick}
+                        rentalInfo={rentalInfoMap[courtId]}
+                        onRentByTime={handleRentByTime}
+                        onFinishRent={handleFinishRent}
+                        onCancelRent={handleCancelRent}
+                        onUpdateRent={handleUpdateRent}
+                      />
+                    </div>
+                  ))}
+              </div>
+            </div>
           </div>
 
           {/* Show add shuttle ball dialog */}
@@ -870,8 +1293,51 @@ const saveServiceToPlayer = async(playerName, serviceName, cost) => {
             onConfirm={handlePayment}
             onExit={() => setShowPayConfirmDialog(false)}
           />
-        </div>
-      </div>
+          <AdvancePaymentDialog
+            show={showAdvanceDialog}
+            playerName={pendingPlayerName}
+            onConfirm={handleAdvanceConfirm}
+            onSkip={handleAdvanceSkip}
+            onClose={() => setShowAdvanceDialog(false)}
+          />
+          <RentByTimeDialog
+            show={showRentDialog}
+            courtId={rentCourtId}
+            courtName={rentCourtName}
+            playerName={rentPlayerName}
+            ballOptions={ballOptions}
+            editMode={rentEditMode}
+            initialData={rentInitialData}
+            hourlyRate={rentByTime || 100000}
+            onConfirm={handleRentConfirm}
+            onExit={() => setShowRentDialog(false)}
+          />
+          <RentFinishConfirm
+            show={showFinishConfirm}
+            rental={rentalInfoMap[finishRentCourtId]}
+            onConfirm={handleConfirmFinishRent}
+            onExit={handleExitFinishConfirm}
+          />
+          <Snackbar
+            open={paySuccess}
+            autoHideDuration={2000}
+            anchorOrigin={{ vertical: "top", horizontal: "center" }}
+            onClose={(_, reason) => {
+              if (reason === "clickaway") return;
+              setPaySuccess(false);
+            }}
+          >
+            <Alert
+              severity="success"
+              variant="filled"
+              onClose={() => setPaySuccess(false)}
+              sx={{ width: "100%" }}
+            >
+              {paySuccessMsg}
+            </Alert>
+          </Snackbar>
+        </Box>
+      </Box>
     </DndProvider>
   );
 }

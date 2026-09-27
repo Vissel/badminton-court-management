@@ -1,7 +1,24 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import Stack from "@mui/material/Stack";
+import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
+import Button from "@mui/material/Button";
+import ButtonGroup from "@mui/material/ButtonGroup";
+import Menu from "@mui/material/Menu";
+import MenuItem from "@mui/material/MenuItem";
+import AddIcon from "@mui/icons-material/Add";
+import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
 import DropZone from "./DropZone";
 
 const areaKeys = ["A", "C", "B", "D"];
+
+function formatTime(totalSeconds) {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return ` (${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")})`;
+}
+
 export default function Court({
   id,
   name,
@@ -14,62 +31,102 @@ export default function Court({
   onFinish,
   onCancel,
   onDropService,
+  availablePlayers,
+  onClickPlayer,
+  rentalInfo,
+  onRentByTime,
+  onFinishRent,
+  onCancelRent,
+  onUpdateRent,
 }) {
   const [hovering, setHovering] = useState(false);
-  const [readyToStart, setReadyToStart] = useState(false);
-  const filledPlayers = Object.values(players).filter(Boolean);
+  const [menuAnchor, setMenuAnchor] = useState(null);
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
 
-  const initReadyMap = () => {
-    return Object.fromEntries(areaKeys.map((item) => [item, false]));
+  const isRental = !!rentalInfo;
+  const effectivelyLocked = isLocked || isRental;
+
+  // Countdown timer for rental time
+  useEffect(() => {
+    if (isRental && (rentalInfo.remainingMinutes >= 0 || rentalInfo.remainingSeconds >= 0)) {
+      // Store the initial timestamp when the rental info was received
+      const initialTimestamp = Date.now();
+      // Calculate total remaining seconds from both remainingMinutes and remainingSeconds
+      const initialTotalSeconds = (rentalInfo.remainingMinutes * 60) + rentalInfo.remainingSeconds;
+
+      const timerId = setInterval(() => {
+        const elapsedSeconds = Math.floor((Date.now() - initialTimestamp) / 1000);
+        const currentRemainingSeconds = Math.max(0, initialTotalSeconds - elapsedSeconds);
+        setRemainingSeconds(currentRemainingSeconds);
+
+        if (currentRemainingSeconds <= 0) {
+          clearInterval(timerId);
+        }
+      }, 1000);
+
+      // Set initial value immediately
+      setRemainingSeconds(initialTotalSeconds);
+
+      return () => clearInterval(timerId);
+    } else {
+      setRemainingSeconds(0);
+    }
+  }, [isRental, rentalInfo?.remainingMinutes, rentalInfo?.remainingSeconds]);
+
+  const handleMenuOpen = (e) => {
+    e.stopPropagation();
+    setMenuAnchor(e.currentTarget);
   };
-  // A, C, B, D
+  const handleMenuClose = () => setMenuAnchor(null);
 
   return (
-    <div
-      style={{ width: "100%", position: "relative" }}
+    <Box
+      sx={{ width: "100%", position: "relative" }}
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
     >
-      <div class="d-flex">
-        <div
-          style={{
-            left: "0%",
-            height: "45px",
-          }}
-        >
-          {name} {isLocked && "(Đang diễn ra ...)"}{" "}
-        </div>
+      <Stack
+        direction="row"
+        alignItems="flex-start"
+        justifyContent="space-between"
+        sx={{ pr: effectivelyLocked ? (isRental ? 26 : 18) : 0 }}
+      >
+        <Typography variant="body2" sx={{ py: 0.5 }}>
+          {name}
+          {isRental && remainingSeconds >= 0 && formatTime(remainingSeconds)}
+          {isLocked && !isRental && "(Đang diễn ra ...)"}
+        </Typography>
 
-        {/* Finish and Cancel buttons */}
-        {isLocked && (
-          <div
-            style={{
-              position: "absolute",
-              // top: "50%",
-              // left: "50%",
-              right: "0%",
-              // transform: "translate(-50%, -50%)",
-              display: "flex",
-              gap: "10px",
-              zIndex: 2,
-              transition: "opacity 2s ease",
-            }}
-          >
-            <button className="btn btn-success" onClick={() => onFinish(id)}>
-              Kết thúc
-            </button>
-            <button
-              className="btn btn-outline-danger"
-              onClick={() => onCancel(id)}
-            >
-              Huỷ
-            </button>
-          </div>
+        {effectivelyLocked && (
+          <Stack direction="row" spacing={1} sx={{ position: "absolute", right: 0, top: 0, zIndex: 2 }}>
+            {isRental ? (
+              <>
+                <Button variant="contained" color="success" size="small" onClick={() => onFinishRent(id)}>
+                  Kết thúc
+                </Button>
+                <Button variant="outlined" color="primary" size="small" onClick={() => onUpdateRent(id)}>
+                  Cập nhật
+                </Button>
+                <Button variant="outlined" color="error" size="small" onClick={() => onCancelRent(id)}>
+                  Huỷ
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="contained" color="success" size="small" onClick={() => onFinish(id)}>
+                  Kết thúc
+                </Button>
+                <Button variant="outlined" color="error" size="small" onClick={() => onCancel(id)}>
+                  Huỷ
+                </Button>
+              </>
+            )}
+          </Stack>
         )}
-      </div>
-      <div>
-        <div
-          style={{
+      </Stack>
+      <Box>
+        <Box
+          sx={{
             backgroundColor: "white",
             backgroundImage: 'url("bad-court2.jpg")',
             backgroundSize: "cover",
@@ -80,7 +137,7 @@ export default function Court({
             gridTemplateColumns: "repeat(2, 1fr)",
             gridTemplateRows: "repeat(2, 1fr)",
             gap: "5px",
-            padding: "10px",
+            p: "10px",
             position: "relative",
             transition: "all 2s ease",
           }}
@@ -93,70 +150,69 @@ export default function Court({
               player={players[areaKey]}
               onDropPlayer={onDropPlayer}
               occupied={occupied}
-              isLocked={isLocked}
+              isLocked={effectivelyLocked}
               onDropService={onDropService}
+              availablePlayers={availablePlayers}
+              onClickPlayer={onClickPlayer}
             />
           ))}
-          {/* Start button */}
-          {!isLocked && hovering && (
-            <button
-              onClick={() => onStart(id)}
-              style={{
+          {!effectivelyLocked && hovering && (
+            <ButtonGroup
+              variant="contained"
+              sx={{
                 position: "absolute",
                 top: "50%",
                 left: "50%",
                 transform: "translate(-50%, -50%)",
-                padding: "10px 20px",
-                backgroundColor: "#4198f7",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
                 zIndex: 1,
-                transition: "opacity 2s ease",
               }}
             >
-              Bắt đầu
-            </button>
+              <Button onClick={() => onStart(id)}>Bắt đầu</Button>
+              <Button size="small" onClick={handleMenuOpen} sx={{ px: 0.5, minWidth: 0 }}>
+                <ArrowDropDownIcon />
+              </Button>
+            </ButtonGroup>
           )}
-          {isLocked && hovering && (
-            <button
+          {isLocked && !isRental && hovering && (
+            <Button
               onClick={() => showAddedBallDialog(id)}
-              style={{
+              title="Thêm cầu"
+              sx={{
                 position: "absolute",
                 top: "50%",
                 left: "50%",
                 transform: "translate(-50%, -50%)",
-                padding: "7px 7px",
-                backgroundColor: "white",
-                color: "#4198f7",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
                 zIndex: 1,
-                transition: "opacity 4s ease",
+                bgcolor: "white",
+                color: "primary.main",
+                minWidth: 0,
+                px: 1,
               }}
-              title="Thêm cầu"
             >
-              <svg
-                width="25px"
-                fill="currentColor"
-                class="bi bi-plus"
-                viewBox="0 0 16 16"
-              >
-                <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4" />
-              </svg>
-              <img
-                src="icon.png"
-                style={{
-                  width: "25px",
-                  height: "auto",
-                }}
-              ></img>
-            </button>
+              <Stack direction="row" alignItems="center" spacing={0.5}>
+                <AddIcon fontSize="small" />
+                <Box
+                  component="img"
+                  src="icon.png"
+                  alt=""
+                  sx={{ width: 25, height: "auto" }}
+                />
+              </Stack>
+            </Button>
           )}
-        </div>
-      </div>
-    </div>
+        </Box>
+      </Box>
+
+      <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={handleMenuClose}>
+        <MenuItem
+          onClick={() => {
+            onRentByTime(id);
+            handleMenuClose();
+          }}
+        >
+          Thuê theo giờ
+        </MenuItem>
+      </Menu>
+    </Box>
   );
 }

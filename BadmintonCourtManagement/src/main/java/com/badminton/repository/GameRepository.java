@@ -15,8 +15,12 @@ public interface GameRepository extends JpaRepository<Game, Integer> {
 
     List<Game> findAllByStateInAndEndedDateIsNull(Set<String> stateIncludes);
 
+
     @Query("select g from Game g where g.court.courtId = ?1 and g.endedDate is null")
     Optional<Game> findByCourtIdAndEndedDateIsNull(int idOfCourt);
+
+    @Query("select g from Game g where g.court.courtId = ?1 and g.endedDate is null and g.state = ?2")
+    Optional<Game> findByCourtIdAndEndedDateIsNullAndGameStateNotStart(int idOfCourt, String gameState);
 
     @Query("select g from Game g where g.court.courtId = ?1 and g.endedDate is null")
     List<Game> findAllByCourtIdAndEndedDateIsNull(int idOfCourt);

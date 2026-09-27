@@ -2,6 +2,7 @@
 import React, { createContext, useState, useEffect } from "react";
 import Cookies from "js-cookie";
 import api from "../api";
+import { emitApiError } from "../api/errorBus";
 import { authRef } from "./authRef";
 
 export const AuthContext = createContext();
@@ -50,9 +51,9 @@ export const AuthProvider = ({ children }) => {
   }, []);
   const logout = async () => {
     console.log("Calling logout.");
-    const res = await api.post(`/logout`, {});
+    const res = await api.post(`/logout`, {}).catch(() => null);
 
-    if (res.status === 200) {
+    if (res && res.status === 200) {
       setAuthenticated(false);
       setCsrfToken(null);
       sessionStorage.clear();
@@ -64,7 +65,7 @@ export const AuthProvider = ({ children }) => {
     setAuthenticated(false);
     setCsrfToken(null);
     sessionStorage.clear();
-    alert("Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại!");
+    emitApiError("Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại!");
     window.location.replace("/#/login");
   };
 

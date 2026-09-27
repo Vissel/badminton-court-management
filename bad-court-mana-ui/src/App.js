@@ -1,54 +1,53 @@
 import "./App.css";
 import React from "react";
 import { Route, HashRouter as Router, Routes } from "react-router";
+import Box from "@mui/material/Box";
 import LoginPage from "./page/LoginPage";
 
 import HomePage from "./page/HomePage";
 import SetupPage from "./page/SetupPage";
 import ReportPage from "./page/ReportPage";
+import DebtManagementPage from "./page/DebtManagementPage";
 import Footer from "./Footer";
 import Header from "./Header";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./context/ProtectedRoute";
-import HomePage2 from "./page/HomePage_mess";
-import HomePageError from "./page/HomePage_error";
 
 import DateTimeBar from "./DateTimeBar";
+import ErrorPopup from "./ErrorPopup";
 import SuperAdminPage from "./page/SuperAdminPage";
 
 function App() {
   return (
     <AuthProvider>
       <Router>
-        <div>
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            minHeight: "100vh",
+            bgcolor: "background.default",
+          }}
+        >
           <Header />
-          <main className="flex-grow-1 py-2 row-space">
+          <ErrorPopup />
+          <Box
+            component="main"
+            sx={{
+              flexGrow: 1,
+              py: 1,
+              px: { xs: 1, sm: 2 },
+              pb: "calc(30px + 12px)",
+            }}
+          >
             <DateTimeBar />
             <Routes>
               <Route path="/login" element={<LoginPage />} />
-              {/* Protected routes */}
-              {/* <Route element={<ProtectedRoute />}> */}
               <Route
                 path="/home"
                 element={
                   <ProtectedRoute>
                     <HomePage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/home-2"
-                element={
-                  <ProtectedRoute>
-                    <HomePage2 />
-                  </ProtectedRoute>
-                }
-              />
-               <Route
-                path="/home-3"
-                element={
-                  <ProtectedRoute>
-                    <HomePageError />
                   </ProtectedRoute>
                 }
               />
@@ -69,6 +68,14 @@ function App() {
                 }
               />
               <Route
+                path="/debtManagement"
+                element={
+                  <ProtectedRoute>
+                    <DebtManagementPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
                 path="/super-admin"
                 element={
                   <ProtectedRoute>
@@ -76,12 +83,11 @@ function App() {
                   </ProtectedRoute>
                 }
               />
-              {/* </Route > */}
               <Route path="*" element={<LoginPage />} />
             </Routes>
-          </main>
+          </Box>
           <Footer />
-        </div>
+        </Box>
       </Router>
     </AuthProvider>
   );

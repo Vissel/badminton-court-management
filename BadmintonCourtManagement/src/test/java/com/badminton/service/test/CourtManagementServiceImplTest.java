@@ -1,7 +1,7 @@
 package com.badminton.service.test;
 
-import com.badminton.requestmodel.CourtManagementDTO;
-import com.badminton.service.CourtServicesServiceImpl;
+import com.badminton.response.CourtManagementResponse;
+import com.badminton.service.CourtServicesService;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,11 +11,11 @@ import org.springframework.boot.test.context.SpringBootTest;
 public class CourtManagementServiceImplTest {
 
     @Autowired
-    private CourtServicesServiceImpl service;
+    private CourtServicesService service;
 
     @Test
     public void testGetCourtManagement() {
-        CourtManagementDTO res = service.getCourtManagement();
+        CourtManagementResponse res = service.getCourtManagement();
         Assertions.assertTrue(res != null);
 //		Assertions.assertTrue(!res.getGames().isEmpty());
 //		Assertions.assertTrue(!res.getRemainPlayers().isEmpty());
