@@ -83,6 +83,8 @@ public class DebitReportRepositoryImpl implements DebitReportRepositoryCustom {
                                                          String playerNameFilter,
                                                          Instant from,
                                                          Instant to,
+                                                         BigDecimal amountFrom,
+                                                         BigDecimal amountTo,
                                                          String sortClause) {
         StringBuilder jpql = new StringBuilder(
                 "SELECT p.playerId, p.playerName, " +
@@ -93,6 +95,7 @@ public class DebitReportRepositoryImpl implements DebitReportRepositoryCustom {
                 "COUNT(d.debitId) " +
                 "FROM Debit d JOIN d.player p " +
                 "WHERE d.createdDate >= :from AND d.createdDate <= :to ");
+        appendAmountFilter(jpql, amountFrom, amountTo);
         appendScopeAndFilter(jpql, playerId, playerNameFilter);
         jpql.append("GROUP BY p.playerId, p.playerName ");
         jpql.append("ORDER BY ").append(sortClause);
@@ -100,6 +103,7 @@ public class DebitReportRepositoryImpl implements DebitReportRepositoryCustom {
         Query query = entityManager.createQuery(jpql.toString(), Object[].class)
                 .setParameter("from", from)
                 .setParameter("to", to);
+        setAmountFilterParams(query, amountFrom, amountTo);
         setScopeAndFilterParams(query, playerId, playerNameFilter);
 
         List<Object[]> rows = query.getResultList();
@@ -113,6 +117,8 @@ public class DebitReportRepositoryImpl implements DebitReportRepositoryCustom {
                                                          String playerNameFilter,
                                                          Instant from,
                                                          Instant to,
+                                                         BigDecimal amountFrom,
+                                                         BigDecimal amountTo,
                                                          String sortClause,
                                                          int limit,
                                                          int offset) {
@@ -121,6 +127,7 @@ public class DebitReportRepositoryImpl implements DebitReportRepositoryCustom {
                 "d.status, d.currency, d.note " +
                 "FROM Debit d JOIN d.player p " +
                 "WHERE d.createdDate >= :from AND d.createdDate <= :to ");
+        appendAmountFilter(jpql, amountFrom, amountTo);
         appendScopeAndFilter(jpql, playerId, playerNameFilter);
         jpql.append("ORDER BY ").append(sortClause);
 
@@ -129,12 +136,31 @@ public class DebitReportRepositoryImpl implements DebitReportRepositoryCustom {
                 .setParameter("to", to)
                 .setFirstResult(offset)
                 .setMaxResults(limit);
+        setAmountFilterParams(query, amountFrom, amountTo);
         setScopeAndFilterParams(query, playerId, playerNameFilter);
 
         List<Object[]> rows = query.getResultList();
         return rows.stream()
                 .map(this::toHistoryDetailRow)
                 .collect(Collectors.toList());
+    }
+
+    private void appendAmountFilter(StringBuilder jpql, BigDecimal amountFrom, BigDecimal amountTo) {
+        if (amountFrom != null) {
+            jpql.append("AND d.debtAmount >= :amountFrom ");
+        }
+        if (amountTo != null) {
+            jpql.append("AND d.debtAmount <= :amountTo ");
+        }
+    }
+
+    private void setAmountFilterParams(Query query, BigDecimal amountFrom, BigDecimal amountTo) {
+        if (amountFrom != null) {
+            query.setParameter("amountFrom", amountFrom);
+        }
+        if (amountTo != null) {
+            query.setParameter("amountTo", amountTo);
+        }
     }
 
     private void appendScopeAndFilter(StringBuilder jpql, Integer playerId, String playerNameFilter) {

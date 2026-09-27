@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from "react";
+import { utils as excelUtils, write as writeExcel } from "xlsx";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import TextField from "@mui/material/TextField";
@@ -64,16 +65,66 @@ const getExportFileName = (response, fallback) => {
   return disposition.match(/filename="?([^";]+)"?/i)?.[1] || fallback;
 };
 
-const downloadExport = (response, fallback) => {
-  if (!response?.data) throw new Error("Empty export response");
-  const url = window.URL.createObjectURL(response.data);
+export const downloadBlob = (blob, fileName) => {
+  const url = window.URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = getExportFileName(response, fallback);
+  link.download = fileName;
   document.body.appendChild(link);
   link.click();
   link.remove();
   window.URL.revokeObjectURL(url);
+};
+
+export const downloadExport = (response, fallback) => {
+  if (!response?.data) throw new Error("Empty export response");
+  downloadBlob(response.data, getExportFileName(response, fallback));
+};
+
+const safeExcelText = (value) => {
+  const text = String(value ?? "");
+  return /^[=+@-]/.test(text) ? `'${text}` : text;
+};
+
+const exportTableToExcel = (title, headers, rows, fileName) => {
+  const worksheet = excelUtils.aoa_to_sheet([[title], [], headers, ...rows]);
+  worksheet["!cols"] = headers.map((header, columnIndex) => ({
+    wch: Math.max(
+      String(header).length + 4,
+      ...rows.map((row) => String(row[columnIndex] ?? "").length + 2),
+      12
+    ),
+  }));
+  worksheet["!merges"] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: Math.max(headers.length - 1, 0) } },
+  ];
+  worksheet["!autofilter"] = {
+    ref: excelUtils.encode_range({
+      s: { r: 2, c: 0 },
+      e: { r: Math.max(rows.length + 2, 2), c: headers.length - 1 },
+    })
+  };
+
+  rows.forEach((row, rowIndex) => {
+    row.forEach((cell, columnIndex) => {
+      const address = excelUtils.encode_cell({ r: rowIndex + 3, c: columnIndex });
+      if (typeof cell === "number") {
+        worksheet[address] = { t: "n", v: cell, z: "#,##0" };
+      } else {
+        worksheet[address] = { t: "s", v: safeExcelText(cell) };
+      }
+    });
+  });
+
+  const workbook = excelUtils.book_new();
+  excelUtils.book_append_sheet(workbook, worksheet, "Chi tiết");
+  const bytes = writeExcel(workbook, { type: "array", bookType: "xlsx" });
+  downloadBlob(
+    new Blob([bytes], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }),
+    fileName
+  );
 };
 
 // Accent-insensitive match — staff usually type names without diacritics
@@ -138,7 +189,6 @@ export default function DebtManagementPage() {
   const [remoteSearching, setRemoteSearching] = useState(false);
   const remoteSearchedRef = useRef(new Set()); // `${mode}|${name}` already tried
   const [exportingPage, setExportingPage] = useState(false);
-  const [exportingPlayers, setExportingPlayers] = useState(() => new Set());
 
   // FLIP: playerName -> tr element / its last measured natural top / in-flight
   // glide animation. After each render we diff positions and glide rows that
@@ -551,42 +601,28 @@ export default function DebtManagementPage() {
     if (expandedRows.has(playerName)) fetchDetails(playerName);
   };
 
-  const reportRequest = (playerName) => ({
+  const reportRequest = () => ({
     mode: isHistory ? "HISTORY" : "CURRENT",
-    scope: playerName ? "PLAYER" : "ALL_PLAYERS",
-    playerName: playerName || null,
-    playerNameFilter: playerName ? null : query.playerName.trim() || null,
-    from: REMAINING_DEBTS_FILTER.from,
-    to: REMAINING_DEBTS_FILTER.to,
+    scope: "ALL_PLAYERS",
+    playerName: null,
+    playerNameFilter: query.playerName.trim() || null,
+    ...REMAINING_DEBTS_FILTER,
     sortField: query.sortField === "totalDebt" ? "TOTAL_DEBT" : "PLAYER_NAME",
     sortDirection: query.sortDir.toUpperCase(),
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh",
   });
 
-  const handleExport = async (playerName) => {
-    if (playerName) {
-      setExportingPlayers((current) => new Set(current).add(playerName));
-    } else {
-      setExportingPage(true);
-    }
+  const handleExport = async () => {
+    setExportingPage(true);
     try {
-      const response = await exportDebtReport(reportRequest(playerName));
+      const response = await exportDebtReport(reportRequest());
       const type = isHistory ? "lich-su-cong-no" : "cong-no-hien-tai";
-      const suffix = playerName ? `_${normalizeVN(playerName).replace(/[^a-z0-9]+/g, "-")}` : "";
-      downloadExport(response, `${type}${suffix}.xlsx`);
+      downloadExport(response, `${type}.xlsx`);
     } catch (e) {
       console.error("Failed to export debt report", e);
       emitApiError("Xuất báo cáo công nợ thất bại. Vui lòng thử lại.");
     } finally {
-      if (playerName) {
-        setExportingPlayers((current) => {
-          const next = new Set(current);
-          next.delete(playerName);
-          return next;
-        });
-      } else {
-        setExportingPage(false);
-      }
+      setExportingPage(false);
     }
   };
 
@@ -658,25 +694,48 @@ export default function DebtManagementPage() {
     PENDING: { label: "Chưa trả", color: "default" },
   };
 
-  // Per-player export — text link styled like "Tìm thêm", icon kept.
-  const renderPlayerExportButton = (playerName) => (
+  const renderPlayerExportButton = (playerName, exportMode, rows, page = 1) => (
     <Button
       size="small"
       variant="text"
-      startIcon={
-        exportingPlayers.has(playerName)
-          ? <CircularProgress size={14} />
-          : <FileDownloadIcon fontSize="small" />
-      }
-      disabled={exportingPlayers.has(playerName)}
+      startIcon={<FileDownloadIcon fontSize="small" />}
       onClick={(e) => {
         e.stopPropagation();
-        handleExport(playerName);
+        const slug = normalizeVN(playerName).replace(/[^a-z0-9]+/g, "-");
+        if (exportMode === MODE.HISTORY) {
+          exportTableToExcel(
+            `Lịch sử công nợ - ${playerName}`,
+            ["#", "Ngày ghi nợ", "Số tiền nợ (VND)", "Còn lại (VND)", "Ghi chú", "Đã trả (VND)", "Ngày trả", "Trạng thái"],
+            rows.slice(0, 10).map((item, index) => [
+              (page - 1) * 10 + index + 1,
+              formatVNDateTime(item.debtDateTime),
+              item.debtAmount || 0,
+              item.remainingAmount || 0,
+              item.note || "",
+              item.paidAmount || 0,
+              item.paidDateTime ? formatVNDateTime(item.paidDateTime) : "—",
+              STATUS_META[item.status]?.label || item.status || "—",
+            ]),
+            `lich-su-cong-no_${slug}.xlsx`
+          );
+        } else {
+          exportTableToExcel(
+            `Nợ hiện tại - ${playerName}`,
+            ["#", "Ngày ghi nợ", "Số tiền còn lại (VND)", "Ghi chú"],
+            rows.slice(0, 10).map((debt, index) => [
+              index + 1,
+              formatVNDateTime(debt.dateTime),
+              debt.money?.amount || 0,
+              debt.note || "",
+            ]),
+            `cong-no-hien-tai_${slug}.xlsx`
+          );
+        }
       }}
       aria-label={`Xuất Excel ${playerName}`}
       sx={{ textTransform: "none", p: 0, minWidth: 0 }}
     >
-      {exportingPlayers.has(playerName) ? "Đang xuất" : "Excel"}
+      Excel
     </Button>
   );
 
@@ -748,7 +807,7 @@ export default function DebtManagementPage() {
               Tìm thêm
             </Button>
           )}
-          {renderPlayerExportButton(playerName)}
+          {renderPlayerExportButton(playerName, MODE.HISTORY, items, detail.page)}
           <Box sx={{ flexGrow: 1 }} />
           {histSummaries[playerName] && (
             <Typography variant="body2" color="text.secondary">
@@ -906,7 +965,7 @@ export default function DebtManagementPage() {
               Tìm thêm
             </Button>
           )}
-          {renderPlayerExportButton(playerName)}
+          {renderPlayerExportButton(playerName, MODE.CURRENT, debits)}
           <Box sx={{ flexGrow: 1 }} />
           {selected.size > 0 && (
             <Typography variant="body2" color="text.secondary">

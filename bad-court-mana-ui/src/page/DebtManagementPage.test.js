@@ -129,6 +129,8 @@ test("exports all filtered players in current mode", async () => {
     scope: "ALL_PLAYERS",
     playerName: null,
     playerNameFilter: "An",
+    from: "2000-01-01",
+    to: "9999-12-31",
     sortField: "PLAYER_NAME",
     sortDirection: "ASC",
   }));
@@ -136,7 +138,7 @@ test("exports all filtered players in current mode", async () => {
   expect(window.URL.revokeObjectURL).toHaveBeenCalledWith("blob:debt-report");
 });
 
-test("exports one player from the expanded history panel", async () => {
+test("exports the visible history table locally without calling the report API", async () => {
   listDebitHistory.mockResolvedValue({
     data: {
       success: true,
@@ -167,11 +169,38 @@ test("exports one player from the expanded history panel", async () => {
   await screen.findByRole("button", { name: "Xuất Excel An" });
   await userEvent.click(screen.getByRole("button", { name: "Xuất Excel An" }));
 
-  await waitFor(() => expect(exportDebtReport).toHaveBeenCalledTimes(1));
-  expect(exportDebtReport).toHaveBeenCalledWith(expect.objectContaining({
-    mode: "HISTORY",
-    scope: "PLAYER",
-    playerName: "An",
-    playerNameFilter: null,
-  }));
+  expect(exportDebtReport).not.toHaveBeenCalled();
+  const historyBlob = window.URL.createObjectURL.mock.calls[0][0];
+  expect(historyBlob.type).toBe("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  expect(historyBlob.size).toBeGreaterThan(1000);
+  expect(window.URL.revokeObjectURL).toHaveBeenCalledWith("blob:debt-report");
+});
+
+test("exports the visible current-debt table locally without calling the report API", async () => {
+  listRemainingDebts.mockResolvedValue({
+    data: {
+      success: true,
+      data: {
+        remainingDebits: [
+          {
+            dateTime: "2026-09-26T10:00:00Z",
+            money: { amount: 100, currency: "VND" },
+            note: "ghi nợ",
+          },
+        ],
+      },
+    },
+  });
+  render(<DebtManagementPage />);
+
+  await screen.findByText("An");
+  await userEvent.click(screen.getByText("An"));
+  await screen.findByText("ghi nợ");
+  await userEvent.click(screen.getByRole("button", { name: "Xuất Excel An" }));
+
+  expect(exportDebtReport).not.toHaveBeenCalled();
+  const currentBlob = window.URL.createObjectURL.mock.calls.at(-1)[0];
+  expect(currentBlob.type).toBe("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  expect(currentBlob.size).toBeGreaterThan(1000);
+  expect(window.URL.revokeObjectURL).toHaveBeenCalledWith("blob:debt-report");
 });

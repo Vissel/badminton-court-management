@@ -2,5 +2,6 @@ package com.badminton.enums;
 
 public enum DebitReportSortField {
     PLAYER_NAME,
-    TOTAL_DEBT
+    TOTAL_DEBT,
+    DEBT_DATE
 }

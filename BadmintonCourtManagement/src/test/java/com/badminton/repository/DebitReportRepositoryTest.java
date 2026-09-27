@@ -138,7 +138,7 @@ class DebitReportRepositoryTest {
     void historySummaryIncludesAllDebtStatuses() {
         List<DebtPlayerSummaryRow> rows = debitReportRepository.findHistorySummary(
                 null, null, baseTime.minusSeconds(1), baseTime.plusSeconds(300000),
-                "p.playerName ASC");
+                null, null, "p.playerName ASC");
 
         assertEquals(2, rows.size());
         DebtPlayerSummaryRow an = rows.stream().filter(r -> r.getPlayerName().equals("Nguyễn Văn An")).findFirst().orElseThrow();
@@ -163,7 +163,7 @@ class DebitReportRepositoryTest {
     void historyDetailsReturnOneRowPerDebit() {
         List<DebtHistoryReportRow> rows = debitReportRepository.findHistoryDetails(
                 playerAn.getPlayerId(), null, baseTime.minusSeconds(1), baseTime.plusSeconds(300000),
-                "d.debitId ASC", 100, 0);
+                null, null, "d.debitId ASC", 100, 0);
 
         assertEquals(3, rows.size());
         DebtHistoryReportRow partial = rows.stream()

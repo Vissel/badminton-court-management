@@ -4,6 +4,7 @@ import com.badminton.model.report.DebtCurrentReportRow;
 import com.badminton.model.report.DebtHistoryReportRow;
 import com.badminton.model.report.DebtPlayerSummaryRow;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
@@ -27,12 +28,16 @@ public interface DebitReportRepositoryCustom {
                                                   String playerNameFilter,
                                                   Instant from,
                                                   Instant to,
+                                                  BigDecimal amountFrom,
+                                                  BigDecimal amountTo,
                                                   String sortClause);
 
     List<DebtHistoryReportRow> findHistoryDetails(Integer playerId,
                                                   String playerNameFilter,
                                                   Instant from,
                                                   Instant to,
+                                                  BigDecimal amountFrom,
+                                                  BigDecimal amountTo,
                                                   String sortClause,
                                                   int limit,
                                                   int offset);

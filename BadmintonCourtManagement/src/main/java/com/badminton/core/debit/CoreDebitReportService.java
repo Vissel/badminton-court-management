@@ -70,12 +70,15 @@ public class CoreDebitReportService {
         List<DebtCurrentReportRow> currentDetails = new ArrayList<>();
         List<DebtHistoryReportRow> historyDetails = new ArrayList<>();
 
+        BigDecimal amountFrom = resolveAmountBound(request.getAmountFrom());
+        BigDecimal amountTo = resolveAmountBound(request.getAmountTo());
+
         if (mode == DebitReportMode.CURRENT) {
             summaries = debitReportRepository.findCurrentSummary(playerId, playerNameFilter, from, to, summarySortClause);
             fetchCurrentDetailsInChunks(playerId, playerNameFilter, from, to, detailSortClause, currentDetails);
         } else {
-            summaries = debitReportRepository.findHistorySummary(playerId, playerNameFilter, from, to, summarySortClause);
-            fetchHistoryDetailsInChunks(playerId, playerNameFilter, from, to, detailSortClause, historyDetails);
+            summaries = debitReportRepository.findHistorySummary(playerId, playerNameFilter, from, to, amountFrom, amountTo, summarySortClause);
+            fetchHistoryDetailsInChunks(playerId, playerNameFilter, from, to, amountFrom, amountTo, detailSortClause, historyDetails);
         }
 
         return DebitReportData.builder()
@@ -120,6 +123,13 @@ public class CoreDebitReportService {
         }
     }
 
+    private static BigDecimal resolveAmountBound(Float value) {
+        if (value == null || value <= 0) {
+            return null;
+        }
+        return BigDecimal.valueOf(value);
+    }
+
     private static Instant clampToMysqlRange(Instant instant) {
         if (instant.isBefore(MYSQL_TIMESTAMP_MIN)) {
             return MYSQL_TIMESTAMP_MIN;
@@ -155,12 +165,14 @@ public class CoreDebitReportService {
                                             String playerNameFilter,
                                             Instant from,
                                             Instant to,
+                                            BigDecimal amountFrom,
+                                            BigDecimal amountTo,
                                             String sortClause,
                                             List<DebtHistoryReportRow> accumulator) {
         int offset = 0;
         while (true) {
             List<DebtHistoryReportRow> chunk = debitReportRepository.findHistoryDetails(
-                    playerId, playerNameFilter, from, to, sortClause, DETAIL_CHUNK_SIZE, offset);
+                    playerId, playerNameFilter, from, to, amountFrom, amountTo, sortClause, DETAIL_CHUNK_SIZE, offset);
             if (chunk == null || chunk.isEmpty()) {
                 break;
             }
@@ -196,6 +208,8 @@ public class CoreDebitReportService {
         String primary;
         if (sortField == DebitReportSortField.PLAYER_NAME) {
             primary = "p.playerName";
+        } else if (sortField == DebitReportSortField.DEBT_DATE) {
+            primary = "MAX(d.createdDate)";
         } else if (mode == DebitReportMode.CURRENT) {
             primary = "SUM(d.remainingAmount)";
         } else {
@@ -211,6 +225,8 @@ public class CoreDebitReportService {
         String primary;
         if (sortField == DebitReportSortField.PLAYER_NAME) {
             primary = "p.playerName";
+        } else if (sortField == DebitReportSortField.DEBT_DATE) {
+            primary = "d.createdDate";
         } else if (mode == DebitReportMode.CURRENT) {
             primary = "d.remainingAmount";
         } else {

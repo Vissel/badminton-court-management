@@ -10,6 +10,8 @@ public class DebitReportExportRequest {
     private String playerNameFilter;
     private String from;
     private String to;
+    private Float amountFrom;
+    private Float amountTo;
     private String sortField;
     private String sortDirection;
     private String timeZone;

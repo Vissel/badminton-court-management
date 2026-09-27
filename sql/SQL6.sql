@@ -32,15 +32,22 @@ select distinct a. pay_type
  from available_player a ;
 
 -- available players
-select a.ava_id, p.player_id, p. player_name, a.services, a. pay_type, a.is_canceled
+select a.ava_id, p.player_id, p. player_name, a.services, a. pay_type, a.is_canceled, a.session_id
  from available_player a inner join player p on a.player_id = p.player_id
-where p.player_name ='nguoi choi 4';
+where p.player_name ='nguoi choi 2';
 
 select * from player
 where player_name ='nguoi choi 008';
 
 select * from available_player
-where session_id = 129;
+where session_id in (114,108);
+
+select * from session
+where session_id in (
+	select a.session_id
+ from available_player a inner join player p on a.player_id = p.player_id
+where p.player_name ='nguoi choi 2' and pay_type is null
+);
 
 -- DB changelog
 select * from databasechangelog
