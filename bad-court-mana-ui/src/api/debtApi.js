@@ -110,6 +110,6 @@ export const exportDebtReport = (request) =>
   api.post("/api/v1/debit/report/export", request, {
     responseType: "blob",
     headers: {
-      Accept: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      Accept: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/json",
     },
   });

@@ -20,9 +20,11 @@ import Pagination from "@mui/material/Pagination";
 import Chip from "@mui/material/Chip";
 import CircularProgress from "@mui/material/CircularProgress";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
+import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import api from "../../api/index";
 import { emitApiError } from "../../api/errorBus";
-import { listDebitHistory, REMAINING_DEBTS_FILTER } from "../../api/debtApi";
+import { listDebitHistory, exportDebtReport, REMAINING_DEBTS_FILTER } from "../../api/debtApi";
+import { downloadExport } from "../DebtManagementPage";
 import { VN_CURRENCY, formatVND } from "../MoneyUtils";
 import { formatVNDateTime, parseServerDateTime, toServerDateTimeString } from "../DateTimeUtils";
 import DraggableResizablePaper, { DIALOG_DRAG_HANDLE } from "./DraggableResizablePaper";
@@ -49,6 +51,13 @@ const STATUS_META = {
   PARTIALLY_PAID: { label: "Trả một phần", color: "warning" },
   PENDING: { label: "Chưa trả", color: "default" },
 };
+
+const normalizeVN = (s) =>
+  (s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d");
 
 const DebitListDialog = ({ show, playerName, onClose, onPaid, preselectedDebits, onAddToPayment, readOnly = false, historyMode = false }) => {
   const isReadOnly = readOnly || historyMode;
@@ -78,6 +87,7 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid, preselectedDebits,
   const [histPage, setHistPage] = useState(1);
   const [histData, setHistData] = useState({ list: [], totalPage: 0, total: 0 });
   const [histLoading, setHistLoading] = useState(false);
+  const [exportingHistory, setExportingHistory] = useState(false);
   const [filterInput, setFilterInput] = useState(EMPTY_HISTORY_FILTER);
   const [appliedFilter, setAppliedFilter] = useState(REMAINING_DEBTS_FILTER);
 
@@ -102,6 +112,7 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid, preselectedDebits,
       setHistPage(1);
       setHistData({ list: [], totalPage: 0, total: 0 });
       setHistLoading(false);
+      setExportingHistory(false);
       setFilterInput(EMPTY_HISTORY_FILTER);
       setAppliedFilter(REMAINING_DEBTS_FILTER);
       if (successCloseTimerRef.current) {
@@ -191,6 +202,29 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid, preselectedDebits,
       .catch(() => setHistData({ list: [], totalPage: 0, total: 0 }))
       .finally(() => setHistLoading(false));
   }, [historyMode, show, playerName, histPage, appliedFilter]);
+
+  const handleHistoryExport = async () => {
+    if (exportingHistory) return;
+    setExportingHistory(true);
+    try {
+      const response = await exportDebtReport({
+        mode: "HISTORY",
+        scope: "PLAYER",
+        playerName,
+        ...appliedFilter,
+        sortField: "DEBT_DATE",
+        sortDirection: "DESC",
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh",
+      });
+      const slug = normalizeVN(playerName).replace(/[^a-z0-9]+/g, "-");
+      downloadExport(response, `lich-su-cong-no_${slug}.xlsx`);
+    } catch (e) {
+      console.error("Failed to export debt history", e);
+      emitApiError("Xuất lịch sử nợ thất bại. Vui lòng thử lại.");
+    } finally {
+      setExportingHistory(false);
+    }
+  };
 
   const numericPay = payAmount ? Number(payAmount) : 0;
   const { remainingDebits = [], debitSummary } = debtData;
@@ -520,9 +554,21 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid, preselectedDebits,
                 </Typography>
               ) : (
                 <>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                    Tổng cộng {histData.total} khoản
-                  </Typography>
+                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      Tổng cộng {histData.total} khoản
+                    </Typography>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={exportingHistory ? <CircularProgress size={14} /> : <FileDownloadIcon />}
+                      disabled={exportingHistory}
+                      onClick={handleHistoryExport}
+                      sx={{ whiteSpace: "nowrap" }}
+                    >
+                      {exportingHistory ? "Đang xuất..." : "Excel"}
+                    </Button>
+                  </Box>
                   <List dense disablePadding>
                     {histData.list.map((it, idx) => {
                       const meta = STATUS_META[it.status] || { label: it.status || "—", color: "default" };
