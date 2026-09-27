@@ -46,6 +46,8 @@ const ShuttleBallDialog = ({
             cost: b.cost,
             costFormat: b.costFormat,
             currency: b.currency,
+            itemId: b.itemId,
+            stockOnHand: b.stockOnHand,
           }))
         );
         setSelectedIndex(0);
@@ -69,6 +71,15 @@ const ShuttleBallDialog = ({
     }
     const intQuantity = parseInt(quantity, 10);
     const selectedValue = options[selectedIndex];
+    if (selectedValue?.itemId != null) {
+      const already = addedItems.find(
+        (it) => it.shuttleName === selectedValue.shuttleName
+      );
+      const totalQty = (already?.quantity || 0) + intQuantity;
+      if ((selectedValue.stockOnHand ?? 0) < totalQty) {
+        return;
+      }
+    }
 
     setAddedItems((prev) => {
       const existing = prev.find(
@@ -123,11 +134,16 @@ const ShuttleBallDialog = ({
             onChange={(e) => setSelectedIndex(Number(e.target.value))}
             sx={{ flex: 1 }}
           >
-            {options.map((ball, index) => (
-              <MenuItem key={ball.shuttleName} value={index}>
-                {ball.shuttleName} - {ball.costFormat} {ball.currency}
-              </MenuItem>
-            ))}
+            {options.map((ball, index) => {
+              const outOfStock = ball.itemId != null && (ball.stockOnHand ?? 0) <= 0;
+              return (
+                <MenuItem key={ball.shuttleName} value={index} disabled={outOfStock}>
+                  {ball.shuttleName} - {ball.costFormat} {ball.currency}
+                  {ball.itemId != null &&
+                    (outOfStock ? " (hết hàng)" : ` (còn ${ball.stockOnHand})`)}
+                </MenuItem>
+              );
+            })}
           </TextField>
           <TextField
             type="number"

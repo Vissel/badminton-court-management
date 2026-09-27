@@ -68,6 +68,9 @@ public class SessionServiceImpl {
     private DebitService debitService;
 
     @Autowired
+    private InventoryService inventoryService;
+
+    @Autowired
     private TransactionTemplate transactionTemplate;
 
     /**
@@ -362,6 +365,7 @@ public class SessionServiceImpl {
         avaPlayerRepo.saveAll(availablePlayerList);
         return Boolean.TRUE;
     }
+
 
     private float calculateRemainingDebt(AvailablePlayer availablePlayer) {
         List<ServiceDTO> services = ServiceUtil.convertStringToListService(availablePlayer.getCurrentServices());

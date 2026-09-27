@@ -29,6 +29,14 @@ public class Service {
     @Column(name = "is_active")
     private boolean isActive;
 
+    /**
+     * Stock item for sellable goods; null for pure pricing rows
+     * (costInPerson, rentByTime and other non-stockable services).
+     */
+    @ManyToOne
+    @JoinColumn(name = "item_id")
+    private InventoryItem item;
+
     public Service(String name, float cost) {
         super();
         this.serName = name;

@@ -14,6 +14,15 @@ public class ShuttleBallResponse {
     private final String currency = MoneyUtils.CURRENCY_VN;
     private boolean selected;
 
+    /** Linked stock item id; null when the ball is not linked to inventory. */
+    private Integer itemId;
+
+    /** Current stock in base units (quả); null when the ball is not linked to inventory. */
+    private Long stockOnHand;
+
+    /** True when stockOnHand is non-null and <= 10. */
+    private Boolean lowStock;
+
     public ShuttleBallResponse(String shuttleName, float cost, boolean isSelected) {
         this.shuttleName = shuttleName;
         this.cost = cost;
@@ -23,6 +32,7 @@ public class ShuttleBallResponse {
 
     public ShuttleBallResponse(ShuttleBall ball) {
         this(ball.getShuttleName(), ball.getCost(), ball.isSelected());
+        this.itemId = ball.getItem() != null ? ball.getItem().getItemId() : null;
 
     }
 

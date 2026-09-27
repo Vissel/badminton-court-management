@@ -71,9 +71,12 @@ public class CourtServicesService {
     private CourtRepositoty courtRepo;
     @Autowired
     private TeamRepository teamRepo;
+    @Autowired
+    private InventoryService inventoryService;
 
     private static final Long NULL_OF_LONG = -1L;
     private static final int FIRST = 0;
+    private static final int LOW_STOCK_THRESHOLD = 10;
 
     CourtServicesService(BadmintonCourtManagementApplication badmintonCourtManagementApplication) {
         this.badmintonCourtManagementApplication = badmintonCourtManagementApplication;
@@ -81,7 +84,20 @@ public class CourtServicesService {
 
     public List<ServiceResponse> getActiveServices() {
         List<Service> activeServices = serviceRepo.findAllByIsActive(true);
-        return activeServices.stream().map(s -> new ServiceResponse(s)).collect(Collectors.toList());
+        return activeServices.stream().map(s -> {
+            ServiceResponse response = new ServiceResponse(s);
+            enrichStock(response, s.getItem());
+            return response;
+        }).collect(Collectors.toList());
+    }
+
+    private void enrichStock(ServiceResponse response, InventoryItem item) {
+        if (item == null) {
+            return;
+        }
+        long stock = inventoryService.getStockOnHand(item);
+        response.setStockOnHand(stock);
+        response.setLowStock(stock <= LOW_STOCK_THRESHOLD);
     }
 
     /**
@@ -340,6 +356,7 @@ public class CourtServicesService {
             availablePlayer
                     .setServices(ServiceUtil.addServiceToJsonArray(availablePlayer.getCurrentServices(), serviceDTO));
             avaPlayerRepo.save(availablePlayer);
+            inventoryService.recordRetailSales(List.of(serviceDTO), availablePlayer.getAvaId());
             return true;
         }
         return false;
@@ -363,6 +380,7 @@ public class CourtServicesService {
             // ServiceUtil.buildService(serviceDTO.getServiceName(),
             // serviceDTO.getCost())));
             avaPlayerRepo.save(availablePlayer);
+            inventoryService.recordServiceReturns(List.of(serviceDTO), availablePlayer.getAvaId());
             return true;
         }
         return false;
@@ -381,6 +399,8 @@ public class CourtServicesService {
             List<ServiceDTO> listServiceDTO = listServiceRequest.stream()
                     .map(req -> ServiceConverter.convertRequestToDTO(req))
                     .collect(Collectors.toList());
+            List<ServiceDTO> previous = ServiceUtil.convertStringToListService(availablePlayer.getCurrentServices());
+            recordServiceDeltas(previous, listServiceDTO, availablePlayer.getAvaId());
             String listServiceString = ServiceUtil.buildJsonArrayStr(listServiceDTO);
             // listServiceDTO.stream().map(serviceDTO ->
             // ServiceUtil.buildJsonService(serviceDTO))
@@ -390,6 +410,50 @@ public class CourtServicesService {
             return true;
         }
         return false;
+    }
+
+    /**
+     * Net the previous service list against the new one and emit RETAIL_SALE
+     * / RETURN movements for the difference per stockable item.
+     */
+    private void recordServiceDeltas(List<ServiceDTO> previous, List<ServiceDTO> current, Long refId) {
+        Map<String, Integer> net = new HashMap<>();
+        for (ServiceDTO dto : previous) {
+            net.merge(serviceDeltaKey(dto), dto.getQuantity() != null && dto.getQuantity() > 0 ? dto.getQuantity() : 1, Integer::sum);
+        }
+        for (ServiceDTO dto : current) {
+            net.merge(serviceDeltaKey(dto), -(dto.getQuantity() != null && dto.getQuantity() > 0 ? dto.getQuantity() : 1), Integer::sum);
+        }
+        for (Map.Entry<String, Integer> entry : net.entrySet()) {
+            int delta = entry.getValue();
+            if (delta == 0) {
+                continue;
+            }
+            ServiceDTO dto = keyToDto(entry.getKey());
+            dto.setQuantity(Math.abs(delta));
+            if (delta > 0) {
+                inventoryService.recordServiceReturns(List.of(dto), refId);
+            } else {
+                inventoryService.recordRetailSales(List.of(dto), refId);
+            }
+        }
+    }
+
+    private String serviceDeltaKey(ServiceDTO dto) {
+        if (dto.getItemId() != null) {
+            return "ID:" + dto.getItemId();
+        }
+        return dto.getServiceName();
+    }
+
+    private ServiceDTO keyToDto(String key) {
+        ServiceDTO dto = new ServiceDTO();
+        if (key.startsWith("ID:")) {
+            dto.setItemId(Integer.valueOf(key.substring(3)));
+        } else {
+            dto.setServiceName(key);
+        }
+        return dto;
     }
 
     /**
@@ -496,6 +560,7 @@ public class CourtServicesService {
      *
      * @return
      */
+    @Transactional
     public Boolean changeGameState(GameDTO gameDTO) {
         try {
             log.info("Changing GameState {}", CommonConstant.START);
@@ -518,6 +583,13 @@ public class CourtServicesService {
                 if (validGameState && isStartGame) {
                     game.setState(stateChange);
                     setSelectedBallIntoGame(game, gameDTO.getShuttleBalls(), stateChange);
+                    if (GameState.START.equals(changeGameState)) {
+                        try {
+                            inventoryService.warnLowStockForGame(game);
+                        } catch (RuntimeException e) {
+                            log.warn("Low-stock check failed for game {}", game.getGameId(), e);
+                        }
+                    }
                     if (gameDTO.getGameType() != null) {
                         game.setGtype(GameType.getGameTypeString(gameDTO.getGameType()));
 
@@ -528,6 +600,14 @@ public class CourtServicesService {
                         game.setEndedDate(session.getUTCPlus7Instant());
                         // calculate and save the expense of game.
                         gameCalculator.calculateGameResult(game);
+                        if (GameState.FINISH.equals(changeGameState)) {
+                            try {
+                                inventoryService.recordGameConsumption(game);
+                            } catch (RuntimeException e) {
+                                // stock deduction must not break game completion
+                                log.error("Stock deduction failed for game {}", game.getGameId(), e);
+                            }
+                        }
                     }
                     gameRepo.save(game);
                     return true;

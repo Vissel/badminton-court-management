@@ -8,6 +8,8 @@ public class ServiceConverter {
         ServiceDTO dto = new ServiceDTO();
         dto.setServiceName(request.getServiceName());
         dto.setCost(Float.valueOf(request.getCost()));
+        dto.setItemId(request.getItemId());
+        dto.setQuantity(request.getQuantity());
         return dto;
     }
 }

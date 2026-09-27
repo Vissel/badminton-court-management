@@ -16,6 +16,8 @@ import List from "@mui/material/List";
 import ListItem from "@mui/material/ListItem";
 import ListItemText from "@mui/material/ListItemText";
 import Chip from "@mui/material/Chip";
+import Tooltip from "@mui/material/Tooltip";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import PlayerDebtSection from "./PlayerDebtSection";
 import DraggableResizablePaper, { DIALOG_DRAG_HANDLE } from "./DraggableResizablePaper";
 import { TYPE, ADVANCE_SERVICE_NAME } from "../HomePage";
@@ -36,6 +38,8 @@ const ServiceDialog = ({
   const [totalCost, setTotalCost] = useState(0);
   const [serviceName, setServiceName] = useState("");
   const [serviceCost, setServiceCost] = useState("");
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [serviceQty, setServiceQty] = useState("1");
   const [isEditingName, setIsEditingName] = useState(false);
   const [editPlayerName, setEditPlayerName] = useState(playerName || "");
   const [editError, setEditError] = useState("");
@@ -71,24 +75,35 @@ const ServiceDialog = ({
     return total;
   }, []);
 
+  const qtyNum = Math.max(1, parseInt(serviceQty, 10) || 1);
+
   const handleAddService = useCallback(() => {
     if (!serviceName || !serviceCost) return;
 
+    // For stockable goods cost is the line total = unit price × quantity.
+    const lineCost = Number(serviceCost) * (selectedItem ? qtyNum : 1);
     const newService = {
       serviceName: serviceName,
-      cost: Number(serviceCost),
-      costFormat: formatVND(serviceCost),
+      cost: lineCost,
+      costFormat: formatVND(lineCost),
+      ...(selectedItem
+        ? { itemId: selectedItem.itemId, quantity: qtyNum }
+        : {}),
     };
     const updated = [...services, newService];
 
     onUpdateServices(playerName, updated);
     setServiceName("");
     setServiceCost("");
-  }, [serviceName, serviceCost, services, playerName, onUpdateServices]);
+    setSelectedItem(null);
+    setServiceQty("1");
+  }, [serviceName, serviceCost, services, playerName, onUpdateServices, selectedItem, qtyNum]);
 
   const handleSelectOption = useCallback((option) => {
     setServiceName(option.serviceName);
     setServiceCost(option.cost);
+    setSelectedItem(option.itemId != null ? option : null);
+    setServiceQty("1");
   }, []);
 
   const onPreDelete = () => {
@@ -301,7 +316,13 @@ const ServiceDialog = ({
                 label="Tên dịch vụ"
                 placeholder="Tên dịch vụ"
                 value={serviceName}
-                onChange={(e) => setServiceName(e.target.value)}
+                onChange={(e) => {
+                  setServiceName(e.target.value);
+                  if (selectedItem && e.target.value !== selectedItem.serviceName) {
+                    setSelectedItem(null);
+                    setServiceQty("1");
+                  }
+                }}
                 sx={{ flex: 2 }}
               />
               <TextField
@@ -317,6 +338,20 @@ const ServiceDialog = ({
               </Button>
             </Stack>
 
+            {selectedItem && (
+              <TextField
+                size="small"
+                label="Số lượng"
+                type="number"
+                value={serviceQty}
+                onChange={(e) => setServiceQty(e.target.value)}
+                sx={{ width: 120, mt: 1 }}
+                helperText={`Còn ${selectedItem.stockOnHand} · = ${formatVND(Number(serviceCost || 0) * qtyNum)} ${VN_CURRENCY}`}
+                error={qtyNum > (selectedItem.stockOnHand ?? 0)}
+                slotProps={{ htmlInput: { min: 1 } }}
+              />
+            )}
+
             {/* Dropdown of matching service options */}
             {filteredServiceOptions.length > 0 && (
               <Paper
@@ -331,26 +366,54 @@ const ServiceDialog = ({
                   mt: 0.25,
                 }}
               >
-                {filteredServiceOptions.map((opt, idx) => (
-                  <Box
-                    key={idx}
-                    onClick={() => handleSelectOption(opt)}
-                    sx={{
-                      px: 1.5,
-                      py: 0.75,
-                      cursor: "pointer",
-                      fontSize: "0.85rem",
-                      display: "flex",
-                      justifyContent: "space-between",
-                      "&:hover": { bgcolor: "action.hover" },
-                    }}
-                  >
-                    <span>{opt.serviceName}</span>
-                    <span style={{ color: "text.secondary" }}>
-                      {opt.costFormat} {opt.currency}
-                    </span>
-                  </Box>
-                ))}
+                {filteredServiceOptions.map((opt, idx) => {
+                  const isStockable = opt.itemId != null;
+                  const outOfStock = isStockable && (opt.stockOnHand ?? 0) <= 0;
+                  const lowStock =
+                    isStockable && !outOfStock && opt.stockOnHand <= 5;
+                  const row = (
+                    <Box
+                      onClick={outOfStock ? undefined : () => handleSelectOption(opt)}
+                      sx={{
+                        px: 1.5,
+                        py: 0.75,
+                        cursor: outOfStock ? "not-allowed" : "pointer",
+                        fontSize: "0.85rem",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: 1,
+                        opacity: outOfStock ? 0.5 : 1,
+                        "&:hover": { bgcolor: "action.hover" },
+                      }}
+                    >
+                      <span>{opt.serviceName}</span>
+                      <Box
+                        component="span"
+                        sx={{ display: "flex", alignItems: "center", gap: 0.75, color: "text.secondary" }}
+                      >
+                        {lowStock && (
+                          <Tooltip title={`Còn ${opt.stockOnHand}`} arrow>
+                            <WarningAmberIcon
+                              color="warning"
+                              sx={{ fontSize: 16, display: "block" }}
+                            />
+                          </Tooltip>
+                        )}
+                        <span>
+                          {opt.costFormat} {opt.currency}
+                        </span>
+                      </Box>
+                    </Box>
+                  );
+                  return outOfStock ? (
+                    <Tooltip key={idx} title="Hết hàng" placement="right" arrow>
+                      {row}
+                    </Tooltip>
+                  ) : (
+                    <React.Fragment key={idx}>{row}</React.Fragment>
+                  );
+                })}
               </Paper>
             )}
           </Box>
@@ -391,6 +454,7 @@ const ServiceDialog = ({
                           )}
                           <Typography variant="body2" sx={{ fontWeight: isAdvance ? 600 : 400 }}>
                             {displayServiceName(service.serviceName)}
+                            {service.quantity > 1 ? ` ×${service.quantity}` : ""}
                           </Typography>
                         </Stack>
                       }

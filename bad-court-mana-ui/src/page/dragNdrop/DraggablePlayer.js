@@ -11,13 +11,13 @@ function DraggablePlayer({ name, isLocked, onDropService, onClick, courtId, area
       canDrag: !isLocked,
       collect: (monitor) => ({ isDragging: !!monitor.isDragging() }),
     }),
-    [isLocked,courtId, areaKey]
+    [isLocked, courtId, areaKey]
   );
   const [, drop] = useDrop(
     () => ({
       accept: ItemTypes.SERVICE,
       drop: (item) => {
-        onDropService?.(name, item.serviceName, item.cost, item.costFormat);
+        onDropService?.(name, item.serviceName, item.cost, item.costFormat, item);
         // trigger highlight animation
         setAnimate(true);
         setTimeout(() => setAnimate(false), 600);

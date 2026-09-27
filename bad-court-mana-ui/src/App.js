@@ -8,6 +8,8 @@ import HomePage from "./page/HomePage";
 import SetupPage from "./page/SetupPage";
 import ReportPage from "./page/ReportPage";
 import DebtManagementPage from "./page/DebtManagementPage";
+import ProductPage from "./page/ProductPage";
+import InventoryPage from "./page/InventoryPage";
 import Footer from "./Footer";
 import Header from "./Header";
 import { AuthProvider } from "./context/AuthContext";
@@ -80,6 +82,22 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <SuperAdminPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/products"
+                element={
+                  <ProtectedRoute requireRoot>
+                    <ProductPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/inventory"
+                element={
+                  <ProtectedRoute requireRoot>
+                    <InventoryPage />
                   </ProtectedRoute>
                 }
               />

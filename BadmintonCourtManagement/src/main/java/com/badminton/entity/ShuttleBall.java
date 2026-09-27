@@ -32,6 +32,14 @@ public class ShuttleBall {
     @Column(name = "is_selected")
     private boolean isSelected;
 
+    /**
+     * Stable stock identity this price row belongs to. Stock moves on the item,
+     * not on this catalog row (which is recreated on price changes).
+     */
+    @ManyToOne
+    @JoinColumn(name = "item_id")
+    private InventoryItem item;
+
     public ShuttleBall(String name, float cost) {
         super();
         this.shuttleName = name;

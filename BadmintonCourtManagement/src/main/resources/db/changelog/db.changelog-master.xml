@@ -40,4 +40,10 @@
     <changeSet id="022" author="thach">
         <sqlFile path="db/changelog/migrate-available-player-pay-type.sql"/>
     </changeSet>
+    <changeSet id="023" author="thach">
+        <sqlFile path="db/changelog/inventory-tables.sql"/>
+    </changeSet>
+    <changeSet id="024" author="thach">
+        <sqlFile path="db/changelog/inventory-units.sql"/>
+    </changeSet>
 </databaseChangeLog>

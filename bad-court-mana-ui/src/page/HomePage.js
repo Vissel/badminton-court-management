@@ -16,6 +16,7 @@ import Alert from "@mui/material/Alert";
 import "../App.css";
 import api from "../api/index";
 import { emitApiError } from "../api/errorBus";
+import { checkStockItem } from "../api/inventoryApi";
 
 import DraggableService from "./dragNdrop/DraggableService";
 import Court from "./dragNdrop/Court";
@@ -737,7 +738,7 @@ function HomePage() {
   const [showDialog, setShowDialog] = useState(false);
 
   // set a service to player, no api call
-  const setServiceToPlayer = (playerName, serviceName, cost, costFormat) => {
+  const setServiceToPlayer = (playerName, serviceName, cost, costFormat, meta = {}) => {
     if (!playerName) return;
     setPlayerServiceMap((prev) => {
       const existing = prev[playerName] || [];
@@ -750,18 +751,22 @@ function HomePage() {
             serviceName: serviceName,
             cost: cost,
             costFormat: costFormat,
+            ...(meta.itemId != null
+              ? { itemId: meta.itemId, quantity: meta.quantity ?? 1 }
+              : {}),
           },
         ],
       };
     });
   }
 
-  const handleDropService = (playerName, serviceName, cost, costFormat) => {
+  const handleDropService = (playerName, serviceName, cost, costFormat, serviceItem) => {
+    const meta = serviceItem || {};
     // add to db
-    saveServiceToPlayer(playerName, serviceName, cost, costFormat);
+    saveServiceToPlayer(playerName, serviceName, cost, meta);
 
     // player: Array[Services]
-    setServiceToPlayer(playerName, serviceName, cost, costFormat);
+    setServiceToPlayer(playerName, serviceName, cost, costFormat, meta);
   };
 
   // Handle clicking on player
@@ -779,12 +784,47 @@ function HomePage() {
     setDialogHideActions(true);
     setShowDialog(true);
   };
-  const saveServiceToPlayer = async (playerName, serviceName, cost) => {
+  // After a successful add/update/remove, re-check stock for the affected
+  // items and patch the service options in place - no page reload needed.
+  const refreshItemStock = useCallback(async (itemIds) => {
+    const ids = [...new Set((itemIds || []).filter((id) => id != null))];
+    if (ids.length === 0) return;
+    const results = await Promise.all(
+      ids.map((id) => checkStockItem({ itemId: id }).catch(() => null))
+    );
+    setServices((prev) =>
+      prev.map((s) => {
+        const hit = results.find(
+          (r) => r?.data?.success && r.data.data?.itemId === s.itemId
+        );
+        if (!hit) return s;
+        const d = hit.data.data;
+        return {
+          ...s,
+          stockOnHand: d.stockOnHand,
+          lowStock: d.lowStock,
+          outOfStock: d.outOfStock,
+        };
+      })
+    );
+  }, []);
+
+  const saveServiceToPlayer = async (playerName, serviceName, cost, meta = {}) => {
     if (!playerName) return;
-    return await api.post(`/court-mana/addServiceToPlayer?playerName=${playerName}`, {
-      serviceName: serviceName,
-      cost: cost,
-    });
+    const response = await api
+      .post(`/court-mana/addServiceToPlayer?playerName=${playerName}`, {
+        serviceName: serviceName,
+        cost: cost,
+        ...(meta.itemId != null
+          ? { itemId: meta.itemId, quantity: meta.quantity ?? 1 }
+          : {}),
+      })
+      .catch(() => null);
+    if (responseSuccess(response) && meta.itemId != null) {
+      // stock changed on the backend (RETAIL_SALE) - refresh the option
+      refreshItemStock([meta.itemId]);
+    }
+    return response;
   };
 
   // HomePage useEffect
@@ -957,6 +997,9 @@ function HomePage() {
       return {
         serviceName: s.serviceName,
         cost: s.cost,
+        ...(s.itemId != null
+          ? { itemId: s.itemId, quantity: s.quantity ?? 1 }
+          : {}),
       };
     });
     const response = await api
@@ -967,6 +1010,13 @@ function HomePage() {
         ...prev,
         [playerName]: updatedServices,
       }));
+      // stock changed on the backend (RETAIL_SALE / RETURN net delta) - refresh
+      // the union of the previous + new lists: a removed item's id is absent
+      // from updatedServices, so its RETURN would never trigger a checkStock.
+      const prevServices = playerServiceMap[playerName] || [];
+      refreshItemStock(
+        [...prevServices, ...updatedServices].map((s) => s.itemId)
+      );
       return;
     }
     emitApiError(`Thay đổi dich vu không thành công.`);
@@ -1151,6 +1201,8 @@ function HomePage() {
                 cost={s.cost}
                 costFormat={s.costFormat}
                 currency={s.currency}
+                itemId={s.itemId}
+                stockOnHand={s.stockOnHand}
               />
             ))}
           </Box>

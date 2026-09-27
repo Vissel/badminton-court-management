@@ -29,6 +29,8 @@ public class ShuttleBallServiceImpl {
     @Autowired
     private ShuttleBallRepositoty ballRepo;
     @Autowired
+    private InventoryService inventoryService;
+    @Autowired
     private GameRepository gameRepo;
     @Autowired
     private GameShuttleMapRepository gameShuttleMapRepo;
@@ -39,7 +41,15 @@ public class ShuttleBallServiceImpl {
 
     public List<ShuttleBallResponse> getListActiveShuttleBallDTOs() {
         List<ShuttleBall> activeBalls = ballRepo.findAllByIsActive(true);
-        return activeBalls.stream().map(b -> new ShuttleBallResponse(b)).collect(Collectors.toList());
+        return activeBalls.stream().map(b -> {
+            ShuttleBallResponse response = new ShuttleBallResponse(b);
+            if (b.getItem() != null) {
+                long stock = inventoryService.getStockOnHand(b.getItem());
+                response.setStockOnHand(stock);
+                response.setLowStock(stock <= 10);
+            }
+            return response;
+        }).collect(Collectors.toList());
     }
 
     public Boolean addListOfShuttleBallIntoCourt(int courtId, List<ShuttleBallRequest> listBallRequest) {

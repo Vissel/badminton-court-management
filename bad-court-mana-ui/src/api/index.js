@@ -19,7 +19,12 @@ api.interceptors.request.use((config) => {
   if (csrfToken) {
     config.headers["X-XSRF-TOKEN"] = csrfToken;
   }
-  config.headers["Content-Type"] = "application/json";
+  // FormData uploads must let the browser set the multipart boundary.
+  if (config.data instanceof FormData) {
+    delete config.headers["Content-Type"];
+  } else {
+    config.headers["Content-Type"] = "application/json";
+  }
   return config;
 });
 

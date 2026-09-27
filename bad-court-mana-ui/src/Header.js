@@ -28,6 +28,12 @@ function Header() {
     { label: "Cài đặt", path: "/setup" },
     { label: "Thống kê", path: "/report" },
     { label: "Quản lý nợ", path: "/debtManagement" },
+    ...(isRoot
+      ? [
+        { label: "Quản lý hàng", path: "/products" },
+        { label: "Quản lý kho", path: "/inventory" },
+      ]
+      : []),
     ...(isRoot ? [{ label: "Super Admin", path: "/super-admin" }] : []),
     { label: "Đăng xuất", path: null, action: "logout" },
   ];

@@ -13,6 +13,7 @@ import com.badminton.model.dto.PaymentDTO;
 import com.badminton.model.dto.ServiceDTO;
 import com.badminton.model.payment.PaymentModel;
 import com.badminton.repository.AvailablePlayerRepository;
+import com.badminton.service.InventoryService;
 import com.badminton.service.SessionServiceImpl;
 import com.badminton.util.ServiceUtil;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +37,9 @@ public class CorePaymentService {
 
     @Autowired
     SessionServiceImpl sessionService;
+
+    @Autowired
+    InventoryService inventoryService;
 
     @Transactional
     public PaymentModel payForPlayerAndCreateDebt(PaymentDTO paymentDTO) throws BusinessException {
@@ -79,6 +83,8 @@ public class CorePaymentService {
             availablePlayer.setPayAmount(Float.valueOf(paymentDTO.getTotalPay()));
 
             AvailablePlayer savedPlayer = availablePlayerRepository.save(availablePlayer);
+
+            // Stock is already deducted when services are added/updated; payment only finalizes billing.
 
             paymentModel = new PaymentModel();
             paymentModel.setPayFor(savedPlayer.getPlayer().getPlayerName());
