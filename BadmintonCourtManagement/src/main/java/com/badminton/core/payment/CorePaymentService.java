@@ -3,6 +3,7 @@ package com.badminton.core.payment;
 import com.badminton.constant.ServiceConstants;
 import com.badminton.core.debit.CoreDebitService;
 import com.badminton.entity.AvailablePlayer;
+import com.badminton.entity.Payment;
 import com.badminton.enums.PaymentStatus;
 import com.badminton.exception.BusinessException;
 import com.badminton.exception.enums.ErrorCodeEnum;
@@ -11,8 +12,10 @@ import com.badminton.exception.validation.DebitCheck;
 import com.badminton.model.dto.AllocateDebitPaymentResponse;
 import com.badminton.model.dto.PaymentDTO;
 import com.badminton.model.dto.ServiceDTO;
+import com.badminton.model.payment.PaymentDebitModel;
 import com.badminton.model.payment.PaymentModel;
 import com.badminton.repository.AvailablePlayerRepository;
+import com.badminton.repository.PaymentRepository;
 import com.badminton.service.SessionServiceImpl;
 import com.badminton.util.ServiceUtil;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,10 +24,12 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.interceptor.TransactionAspectSupport;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class CorePaymentService {
@@ -37,9 +42,12 @@ public class CorePaymentService {
     @Autowired
     SessionServiceImpl sessionService;
 
+    @Autowired
+    PaymentRepository paymentRepository;
+
     @Transactional
-    public PaymentModel payForPlayerAndCreateDebt(PaymentDTO paymentDTO) throws BusinessException {
-        PaymentModel paymentModel = null;
+    public PaymentDebitModel payForPlayerAndCreateDebt(PaymentDTO paymentDTO) throws BusinessException {
+        PaymentDebitModel paymentDebitModel = null;
         try {
             // create new debit
             if (paymentDTO.getDebit() != null) {
@@ -80,25 +88,46 @@ public class CorePaymentService {
 
             AvailablePlayer savedPlayer = availablePlayerRepository.save(availablePlayer);
 
-            paymentModel = new PaymentModel();
-            paymentModel.setPayFor(savedPlayer.getPlayer().getPlayerName());
-            paymentModel.setPayType(savedPlayer.getPayType());
-            paymentModel.setPayAmount(BigDecimal.valueOf(savedPlayer.getPayAmount()));
-            paymentModel.setPayTime(savedPlayer.getLeaveTime());
-            paymentModel.setServices(savedPlayer.getCurrentServices());
-            paymentModel.setDebitAmount(paymentDTO.getDebit() != null ? paymentDTO.getDebit().getDebitAmount() : null);
+            paymentDebitModel = new PaymentDebitModel();
+            paymentDebitModel.setPayFor(savedPlayer.getPlayer().getPlayerName());
+            paymentDebitModel.setPayType(savedPlayer.getPayType());
+            paymentDebitModel.setPayAmount(BigDecimal.valueOf(savedPlayer.getPayAmount()));
+            paymentDebitModel.setPayTime(savedPlayer.getLeaveTime());
+            paymentDebitModel.setServices(savedPlayer.getCurrentServices());
+            paymentDebitModel.setDebitAmount(paymentDTO.getDebit() != null ? paymentDTO.getDebit().getDebitAmount() : null);
             if (payDebitsResponse != null) {
-                paymentModel.setPaidDebts(payDebitsResponse.getPaidDebts());
-                paymentModel.setRemainingDebts(payDebitsResponse.getRemainingDebts());
-                paymentModel.setNumPaidDebts(payDebitsResponse.getNumPaidDebts());
-                paymentModel.setNumRemainingDebts(payDebitsResponse.getNumRemainingDebts());
-                paymentModel.setPayDebitsMessage(payDebitsResponse.getMessage());
+                paymentDebitModel.setPaidDebts(payDebitsResponse.getPaidDebts());
+                paymentDebitModel.setRemainingDebts(payDebitsResponse.getRemainingDebts());
+                paymentDebitModel.setNumPaidDebts(payDebitsResponse.getNumPaidDebts());
+                paymentDebitModel.setNumRemainingDebts(payDebitsResponse.getNumRemainingDebts());
+                paymentDebitModel.setPayDebitsMessage(payDebitsResponse.getMessage());
             }
-            return paymentModel;
+            return paymentDebitModel;
         } catch (BusinessException e) {
             TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
             throw e;
         }
+    }
+
+    /**
+     * Query payment records whose paymentDate falls within [dateStart, dayEnd]
+     * and map them to lightweight {@link PaymentModel}s for reporting.
+     */
+    public List<PaymentModel> findPaymentsBetween(Instant dateStart, Instant dayEnd) {
+        return paymentRepository.findByPaymentDateBetween(dateStart, dayEnd).stream()
+                .map(this::toPaymentModel)
+                .collect(Collectors.toList());
+    }
+
+    private PaymentModel toPaymentModel(Payment payment) {
+        PaymentModel model = new PaymentModel();
+        model.setAmount(payment.getAmount());
+        model.setCurrency(payment.getCurrency());
+        model.setPaymentDate(payment.getPaymentDate());
+        model.setNote(payment.getNote());
+        model.setPayType(payment.getPayType());
+        model.setPayFor(payment.getPlayer() != null ? payment.getPlayer().getPlayerName() : null);
+        return model;
     }
 
     @Transactional

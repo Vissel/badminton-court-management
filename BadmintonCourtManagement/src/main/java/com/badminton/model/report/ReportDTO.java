@@ -1,6 +1,5 @@
 package com.badminton.model.report;
 
-import com.badminton.entity.AvailablePlayer;
 import com.badminton.entity.Game;
 import com.badminton.entity.Session;
 import com.badminton.model.dto.ReportCost;
@@ -16,15 +15,15 @@ import java.util.List;
 @AllArgsConstructor
 public class ReportDTO {
     private Session session;
-    private List<AvailablePlayer> availablePlayers;
+    private List<PlayerRptModel> playerRptModelList;
     private List<Game> games;
     private List<ReportCost> listCost;
     private List<RptShuttle> listTotalShuttle;
     private List<RptService> listTotalService;
 
-    public ReportDTO(Session session, List<AvailablePlayer> availablePlayers, List<Game> games) {
+    public ReportDTO(Session session, List<PlayerRptModel> playerReportList, List<Game> games) {
         this.session = session;
-        this.availablePlayers = availablePlayers;
+        this.playerRptModelList = playerReportList;
         this.games = games;
 //        convertToListCost(games);
     }

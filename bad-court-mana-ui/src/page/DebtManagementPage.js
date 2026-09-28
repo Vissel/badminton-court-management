@@ -147,6 +147,39 @@ const runPool = (items, worker, concurrency = 6) => {
   );
 };
 
+// Wide page for date-filtered history scans: `total` stays accurate beyond
+// it, but the paid/unpaid split is derived from the fetched items.
+const FILTERED_HISTORY_PAGE = { current: 1, pageSize: 100, totalPage: 0 };
+
+// Under a date range /listRemainingDebts' debitSummary stays all-time — the
+// filtered debit page itself is the source of truth for the row.
+const summaryFromDebits = (playerName, debits) => ({
+  playerName,
+  totalDebts: {
+    amount: debits.reduce((sum, d) => sum + (d?.money?.amount || 0), 0),
+    currency: debits[0]?.money?.currency || VN_CURRENCY,
+  },
+  numberDebit: debits.length,
+});
+
+// Same idea for history mode: /summaryHistory takes no filter, so derive the
+// accumulate fields from the filtered /history page (paid ⇔ remaining = 0).
+const histSummaryFromItems = (playerName, data) => {
+  const items = data?.list || [];
+  const total = data?.total ?? items.length;
+  const numPaidDebits = items.filter((i) => (i?.remainingAmount || 0) <= 0).length;
+  return {
+    playerName,
+    numDebits: total,
+    numPaidDebits,
+    numUnpaidDebits: Math.max(total - numPaidDebits, 0),
+    totalDebitAmount: items.reduce((s, i) => s + (i?.debtAmount || 0), 0),
+    totalPaidAmount: items.reduce((s, i) => s + (i?.paidAmount || 0), 0),
+    totalRemainingAmount: items.reduce((s, i) => s + (i?.remainingAmount || 0), 0),
+    currency: items[0]?.currency || VN_CURRENCY,
+  };
+};
+
 export default function DebtManagementPage() {
   const [query, setQuery] = useState(DEFAULT_QUERY);
   const [searchInput, setSearchInput] = useState("");
@@ -189,6 +222,25 @@ export default function DebtManagementPage() {
   const [remoteSearching, setRemoteSearching] = useState(false);
   const remoteSearchedRef = useRef(new Set()); // `${mode}|${name}` already tried
   const [exportingPage, setExportingPage] = useState(false);
+
+  // ── Date-range filter (history mode only) ──
+  // Raw input vs the applied filter sent to the backend. The ref mirrors the
+  // state so queued pool workers — which hold stale callback identities —
+  // still read the live filter. `filterEpochRef` is bumped on every history
+  // reset; responses issued under an older epoch land dead instead of writing
+  // stale data into the new scan's maps.
+  const [dateInput, setDateInput] = useState({ from: "", to: "" });
+  const [activeFilter, setActiveFilterState] = useState(REMAINING_DEBTS_FILTER);
+  const activeFilterRef = useRef(REMAINING_DEBTS_FILTER);
+  const filterEpochRef = useRef(0);
+  // Tất cả / Lọc promote the history stream from the debtor seed to the full
+  // roster — tracked so "Thử lại" re-runs the same scan.
+  const [histScanAll, setHistScanAll] = useState(false);
+
+  const setActiveFilter = (filter) => {
+    activeFilterRef.current = filter;
+    setActiveFilterState(filter);
+  };
 
   // FLIP: playerName -> tr element / its last measured natural top / in-flight
   // glide animation. After each render we diff positions and glide rows that
@@ -323,16 +375,50 @@ export default function DebtManagementPage() {
   // ── history fetches (only ever called after entering history mode or
   //    clicking the per-player "Xem lịch sử" link) ──
   const fetchHistSummary = useCallback((playerName) => {
+    const epoch = filterEpochRef.current;
     setHistPending((n) => n + 1);
     return getDebitHistorySummary(playerName)
       .then((r) => {
+        if (epoch !== filterEpochRef.current) return;
         const b = r?.data;
         setHistSummaries((s) => ({
           ...s,
           [playerName]: b?.success && b.data ? b.data : null,
         }));
       })
-      .catch(() => setHistSummaries((s) => ({ ...s, [playerName]: null })))
+      .catch(() => {
+        if (epoch !== filterEpochRef.current) return;
+        setHistSummaries((s) => ({ ...s, [playerName]: null }));
+      })
+      .finally(() => setHistPending((n) => n - 1));
+  }, []);
+
+  // Date-range mode: /summaryHistory takes no filter, so the stream scans the
+  // player's filtered /history page — the response seeds both the row's
+  // accumulate fields and the expanded panel.
+  const fetchHistFiltered = useCallback((playerName) => {
+    const epoch = filterEpochRef.current;
+    setHistPending((n) => n + 1);
+    return listDebitHistory(playerName, FILTERED_HISTORY_PAGE, activeFilterRef.current)
+      .then((res) => {
+        if (epoch !== filterEpochRef.current) return;
+        const b = res?.data;
+        const data = b?.success ? b.data : null;
+        setHistSummaries((s) => ({
+          ...s,
+          [playerName]: data ? histSummaryFromItems(playerName, data) : null,
+        }));
+        if (data) {
+          setHistDetails((d) => ({
+            ...d,
+            [playerName]: { loading: false, page: 1, data },
+          }));
+        }
+      })
+      .catch(() => {
+        if (epoch !== filterEpochRef.current) return;
+        setHistSummaries((s) => ({ ...s, [playerName]: null }));
+      })
       .finally(() => setHistPending((n) => n - 1));
   }, []);
 
@@ -340,12 +426,15 @@ export default function DebtManagementPage() {
     (playerName) => {
       if (histRequestedRef.current.has(playerName)) return;
       histRequestedRef.current.add(playerName);
-      return fetchHistSummary(playerName);
+      return activeFilterRef.current !== REMAINING_DEBTS_FILTER
+        ? fetchHistFiltered(playerName)
+        : fetchHistSummary(playerName);
     },
-    [fetchHistSummary]
+    [fetchHistSummary, fetchHistFiltered]
   );
 
   const fetchHistory = useCallback((playerName, page = 1) => {
+    const epoch = filterEpochRef.current;
     setHistDetails((d) => ({
       ...d,
       [playerName]: { ...(d[playerName] || {}), loading: true },
@@ -353,9 +442,10 @@ export default function DebtManagementPage() {
     listDebitHistory(
       playerName,
       { current: page, pageSize: 10, totalPage: 0 },
-      REMAINING_DEBTS_FILTER
+      activeFilterRef.current
     )
       .then((res) => {
+        if (epoch !== filterEpochRef.current) return;
         const b = res?.data;
         setHistDetails((d) => ({
           ...d,
@@ -367,12 +457,13 @@ export default function DebtManagementPage() {
           },
         }));
       })
-      .catch(() =>
+      .catch(() => {
+        if (epoch !== filterEpochRef.current) return;
         setHistDetails((d) => ({
           ...d,
           [playerName]: { loading: false, error: true },
-        }))
-      );
+        }));
+      });
   }, []);
 
   const ensurePlayer = useCallback((playerName) => {
@@ -395,22 +486,10 @@ export default function DebtManagementPage() {
           if (!found) return;
           ensurePlayer(name);
           requestedSummariesRef.current.add(name);
-          if (data.debitSummary) {
-            setSummaries((s) => ({ ...s, [name]: data.debitSummary }));
-          } else {
-            const amount = data.remainingDebits.reduce(
-              (sum, d) => sum + (d?.money?.amount || 0),
-              0
-            );
-            setSummaries((s) => ({
-              ...s,
-              [name]: {
-                playerName: name,
-                totalDebts: { amount, currency: data.remainingDebits[0]?.money?.currency || VN_CURRENCY },
-                numberDebit: data.remainingDebits.length,
-              },
-            }));
-          }
+          setSummaries((s) => ({
+            ...s,
+            [name]: data.debitSummary || summaryFromDebits(name, data.remainingDebits || []),
+          }));
           setDetails((d) => ({ ...d, [name]: { loading: false, data } }));
         })
         .catch(() => {
@@ -422,19 +501,28 @@ export default function DebtManagementPage() {
   );
 
   // history mode → /history (page 1) for the typed name + /summaryHistory for
-  // the row's accumulate fields
+  // the row's accumulate fields (derived from the page itself when filtered,
+  // since /summaryHistory has no date bounds)
   const remoteLookupHistory = useCallback(
     (name) => {
       setRemoteSearching(true);
-      listDebitHistory(name, { current: 1, pageSize: 10, totalPage: 0 }, REMAINING_DEBTS_FILTER)
+      const epoch = filterEpochRef.current;
+      const filtered = activeFilterRef.current !== REMAINING_DEBTS_FILTER;
+      listDebitHistory(name, { current: 1, pageSize: 10, totalPage: 0 }, activeFilterRef.current)
         .then((res) => {
+          if (epoch !== filterEpochRef.current) return;
           const b = res?.data;
           const data = b?.success ? b.data : null;
           if (!data || !(data.list?.length > 0 || data.total > 0)) return;
           ensurePlayer(name);
           histRequestedRef.current.add(name);
           setHistDetails((d) => ({ ...d, [name]: { loading: false, page: 1, data } }));
+          if (filtered) {
+            setHistSummaries((s) => ({ ...s, [name]: histSummaryFromItems(name, data) }));
+            return;
+          }
           return getDebitHistorySummary(name).then((r) => {
+            if (epoch !== filterEpochRef.current) return;
             const sb = r?.data;
             setHistSummaries((s) => ({
               ...s,
@@ -586,8 +674,33 @@ export default function DebtManagementPage() {
     }
   };
 
+  // History-mode scan over the whole roster (Tất cả / Lọc theo ngày): find
+  // all players, then stream a per-player summary — each row lands as soon as
+  // its response arrives instead of waiting for the whole batch.
+  const streamAllHistory = async () => {
+    const list = await loadPlayers();
+    if (list.length) runPool(list, (p) => fetchHistSummaryOnce(p.playerName));
+  };
+
+  // Clears history caches so a new scan re-streams cleanly; the epoch bump
+  // makes in-flight responses from the old scan land dead. Expanded rows are
+  // collapsed so no panel is left spinning on wiped detail data.
+  const resetHistoryData = () => {
+    filterEpochRef.current += 1;
+    setHistSummaries({});
+    setHistDetails({});
+    setExpandedRows(new Set());
+    setHistoryView(new Set());
+    histRequestedRef.current = new Set();
+    remoteSearchedRef.current = new Set();
+  };
+
   const refresh = () => {
     if (mode === MODE.CURRENT) return loadDebtors();
+    if (histScanAll) {
+      resetHistoryData();
+      return streamAllHistory();
+    }
     // Roster missing — reload it together with the current-mode summaries the
     // history seed derives from; the mode effect starts the stream as they land.
     if (players.length === 0) return loadDebtors();
@@ -601,12 +714,41 @@ export default function DebtManagementPage() {
     if (expandedRows.has(playerName)) fetchDetails(playerName);
   };
 
+  const applyDateFilter = () => {
+    if (!isHistory) return;
+    const { from, to } = dateInput;
+    if (!from && !to) return;
+    setHistScanAll(true);
+    resetHistoryData();
+    setActiveFilter({
+      from: from || REMAINING_DEBTS_FILTER.from,
+      // A bare YYYY-MM-DD parses to start-of-day on the backend — push "to" to
+      // end-of-day so the picked date itself is included.
+      to: to ? `${to}T23:59:59` : REMAINING_DEBTS_FILTER.to,
+      amountFrom: 0,
+      amountTo: 0,
+    });
+    streamAllHistory();
+  };
+
+  // "Tất cả" — scan every player's full history (no date bounds).
+  const clearDateFilter = () => {
+    if (!isHistory) return;
+    setHistScanAll(true);
+    resetHistoryData();
+    setDateInput({ from: "", to: "" });
+    setActiveFilter(REMAINING_DEBTS_FILTER);
+    streamAllHistory();
+  };
+
   const reportRequest = () => ({
     mode: isHistory ? "HISTORY" : "CURRENT",
     scope: "ALL_PLAYERS",
     playerName: null,
     playerNameFilter: query.playerName.trim() || null,
-    ...REMAINING_DEBTS_FILTER,
+    // The date range is a history-mode concept — current-mode exports stay
+    // unfiltered even if a range was applied on the history tab.
+    ...(isHistory ? activeFilterRef.current : REMAINING_DEBTS_FILTER),
     sortField: query.sortField === "totalDebt" ? "TOTAL_DEBT" : "PLAYER_NAME",
     sortDirection: query.sortDir.toUpperCase(),
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh",
@@ -777,6 +919,9 @@ export default function DebtManagementPage() {
       );
     }
     const totalPage = detail.data?.pagination?.totalPage || 1;
+    // Filtered prefetches arrive on a wide page — total, not totalPage, tells
+    // whether the slice shown here has more behind it.
+    const totalItems = detail.data?.total || 0;
 
     return (
       <>
@@ -794,7 +939,7 @@ export default function DebtManagementPage() {
               ← Quay lại nợ hiện tại
             </Button>
           )}
-          {totalPage > 1 && (
+          {(totalItems > 10 || totalPage > 1) && (
             <Button
               size="small"
               variant="text"
@@ -1052,7 +1197,19 @@ export default function DebtManagementPage() {
           size="small"
           exclusive
           value={mode}
-          onChange={(_, v) => v && setMode(v)}
+          onChange={(_, v) => {
+            if (!v) return;
+            setMode(v);
+            // Date filtering is history-only — drop an applied range (and its
+            // cached results) so the next history entry re-streams fresh and
+            // current mode never runs under a hidden filter.
+            if (v === MODE.CURRENT && activeFilterRef.current !== REMAINING_DEBTS_FILTER) {
+              resetHistoryData();
+              setHistScanAll(false);
+              setDateInput({ from: "", to: "" });
+              setActiveFilter(REMAINING_DEBTS_FILTER);
+            }
+          }}
           sx={{
             p: 0.5,
             gap: 0.5,
@@ -1090,12 +1247,61 @@ export default function DebtManagementPage() {
             Lịch sử
           </ToggleButton>
         </ToggleButtonGroup>
+        {isHistory && (
+          <>
+            <TextField
+              type="date"
+              size="small"
+              label="Từ ngày"
+              value={dateInput.from}
+              onChange={(e) => setDateInput((d) => ({ ...d, from: e.target.value }))}
+              slotProps={{ inputLabel: { shrink: true } }}
+              sx={{ width: { xs: "100%", md: 150 } }}
+            />
+            <TextField
+              type="date"
+              size="small"
+              label="Đến ngày"
+              value={dateInput.to}
+              onChange={(e) => setDateInput((d) => ({ ...d, to: e.target.value }))}
+              slotProps={{ inputLabel: { shrink: true } }}
+              sx={{ width: { xs: "100%", md: 150 } }}
+            />
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={applyDateFilter}
+              sx={{ whiteSpace: "nowrap" }}
+            >
+              Lọc
+            </Button>
+            <Button
+              variant="contained"
+              size="small"
+              onClick={clearDateFilter}
+              disabled={!isHistory}
+              sx={{ whiteSpace: "nowrap" }}
+            >
+              Tất cả
+            </Button>
+          </>
+        )}
+
+        {activeFilter !== REMAINING_DEBTS_FILTER && (
+          <Chip
+            size="small"
+            color="primary"
+            variant="outlined"
+            label={`Lọc: ${activeFilter.from} → ${String(activeFilter.to).slice(0, 10)}`}
+            sx={{ alignSelf: "center" }}
+          />
+        )}
         <TextField
           size="small"
           placeholder="Tìm theo tên người chơi..."
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
-          sx={{ minWidth: { md: 280 }, flex: { md: "1 1 280px" } }}
+          sx={{ minWidth: { md: 200 }, maxWidth:{md:300}, flex: { md: "1 1 280px" } }}
           slotProps={{
             input: {
               startAdornment: (

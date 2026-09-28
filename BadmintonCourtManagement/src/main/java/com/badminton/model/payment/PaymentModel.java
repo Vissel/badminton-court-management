@@ -1,22 +1,25 @@
 package com.badminton.model.payment;
 
 import com.badminton.constant.PayType;
+import com.badminton.model.dto.ServiceDTO;
 import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 
 @Data
 public class PaymentModel {
-    private String payFor;
+    private BigDecimal amount;
+
+    private String currency = "VND";
+
+    private Instant paymentDate;
+
+    private String note;
+
     private PayType payType;
-    private BigDecimal payAmount;
-    private Instant payTime;
-    private String services;
-    private BigDecimal debitAmount;
-    private BigDecimal paidDebts;
-    private BigDecimal remainingDebts;
-    private Integer numPaidDebts;
-    private Integer numRemainingDebts;
-    private String payDebitsMessage;
+
+    private String payFor;
+
 }

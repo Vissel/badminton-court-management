@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import DebtManagementPage from "./DebtManagementPage";
 import {
@@ -136,6 +136,83 @@ test("exports all filtered players in current mode", async () => {
   }));
   expect(window.URL.createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
   expect(window.URL.revokeObjectURL).toHaveBeenCalledWith("blob:debt-report");
+});
+
+test("history mode: Tất cả scans the whole roster via /summaryHistory, Lọc filters via /history", async () => {
+  // Only An currently owes money → the entry seed stream covers An alone.
+  getDebitSummary.mockImplementation((name) =>
+    Promise.resolve({
+      data: {
+        success: true,
+        data: {
+          playerName: name,
+          totalDebts: { amount: name === "An" ? 100 : 0, currency: "VND" },
+          numberDebit: name === "An" ? 2 : 0,
+        },
+      },
+    })
+  );
+  getDebitHistorySummary.mockImplementation((name) =>
+    Promise.resolve({
+      data: {
+        success: true,
+        data: {
+          playerName: name,
+          numDebits: name === "An" ? 4 : 1,
+          numPaidDebits: 1,
+          numUnpaidDebits: name === "An" ? 3 : 0,
+          totalDebitAmount: 500,
+        },
+      },
+    })
+  );
+  // Under the date range only An has a history item.
+  listDebitHistory.mockImplementation((name) =>
+    Promise.resolve({
+      data: {
+        success: true,
+        data: {
+          list:
+            name === "An"
+              ? [{ debtAmount: 100, debtDateTime: "2026-09-05 10:00:00", paidAmount: 0, remainingAmount: 100, status: "PENDING", currency: "VND", note: "" }]
+              : [],
+          total: name === "An" ? 1 : 0,
+          pagination: { totalPage: 1 },
+        },
+      },
+    })
+  );
+  render(<DebtManagementPage />);
+
+  await screen.findByText("An");
+
+  // The date controls are disabled outside history mode
+  expect(screen.getByLabelText("Từ ngày")).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Tất cả" })).toBeDisabled();
+
+  await userEvent.click(screen.getByRole("button", { name: "Lịch sử" }));
+  // Seed stream: only the current debtor (An) is history-fetched on entry
+  await waitFor(() => expect(getDebitHistorySummary).toHaveBeenCalledWith("An"));
+  expect(getDebitHistorySummary).not.toHaveBeenCalledWith("Binh");
+
+  // "Tất cả" = full history scan: roster reload + /summaryHistory per player
+  await userEvent.click(screen.getByRole("button", { name: "Tất cả" }));
+  await waitFor(() => expect(listAllPlayers).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(getDebitHistorySummary).toHaveBeenCalledWith("Binh"));
+  await screen.findByText("Binh");
+
+  // "Lọc theo ngày" scans the roster through /history with the range;
+  // "Đến ngày" is pushed to end-of-day so the picked date is included.
+  fireEvent.change(screen.getByLabelText("Từ ngày"), { target: { value: "2026-09-01" } });
+  fireEvent.change(screen.getByLabelText("Đến ngày"), { target: { value: "2026-09-30" } });
+  await userEvent.click(screen.getByRole("button", { name: "Lọc theo ngày" }));
+
+  const expectedFilter = { from: "2026-09-01", to: "2026-09-30T23:59:59", amountFrom: 0, amountTo: 0 };
+  await waitFor(() => expect(listDebitHistory).toHaveBeenCalledTimes(2));
+  expect(listDebitHistory).toHaveBeenCalledWith("An", { current: 1, pageSize: 100, totalPage: 0 }, expectedFilter);
+  expect(listDebitHistory).toHaveBeenCalledWith("Binh", { current: 1, pageSize: 100, totalPage: 0 }, expectedFilter);
+  await waitFor(() => expect(screen.queryByText("Binh")).not.toBeInTheDocument());
+  expect(screen.getByText("An")).toBeInTheDocument();
 });
 
 test("exports the visible history table locally without calling the report API", async () => {
