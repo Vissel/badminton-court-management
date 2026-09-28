@@ -10,6 +10,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.util.Assert;
 
 import com.badminton.entity.Session;
+import com.badminton.repository.SessionRepository;
 import com.badminton.service.SessionServiceImpl;
 
 @SpringBootTest
@@ -17,6 +18,9 @@ public class SessionServiceImplTest {
 
 	@Autowired
 	SessionServiceImpl sessionService;
+
+	@Autowired
+	SessionRepository sessionRepo;
 
 	@Test
 	@org.springframework.transaction.annotation.Transactional
@@ -27,7 +31,11 @@ public class SessionServiceImplTest {
 	}
 
 	@Test
+	@org.springframework.transaction.annotation.Transactional
 	public void testCheckAvailableSession() {
+		// create a session started "now" so the check does not depend on ambient DB state;
+		// rolled back by @Transactional after the test
+		sessionRepo.save(new Session());
 		Assert.isTrue(sessionService.checkAvailableSession(), "Check available must be true");
 	}
 }
