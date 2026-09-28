@@ -3,6 +3,9 @@ package com.badminton.entity;
 import java.time.Instant;
 import java.util.List;
 
+import org.hibernate.annotations.Generated;
+import org.hibernate.generator.EventType;
+
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -15,7 +18,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 @Entity
-@Table(name = "`session`", schema = "`bad-court-management-db`")
+@Table(name = "`session`")
 @Getter
 @Setter
 //@NoArgsConstructor
@@ -25,6 +28,7 @@ public class Session {
 	private int sessionId;
 
 	@Column(updatable = false, insertable = false)
+	@Generated(event = EventType.INSERT)
 	private Instant fromTime;
 
 	@Column(updatable = true, insertable = true, nullable = true)
