@@ -5,6 +5,7 @@ import com.badminton.constant.ErrorConstant;
 import com.badminton.constant.GameConstant;
 import com.badminton.constant.RentConstant;
 import com.badminton.constant.ServiceConstants;
+import com.badminton.core.payment.CorePaymentService;
 import com.badminton.entity.*;
 import com.badminton.exception.BusinessException;
 import com.badminton.exception.enums.ErrorCodeEnum;
@@ -12,10 +13,10 @@ import com.badminton.model.dto.RentShuttleDTO;
 import com.badminton.model.dto.ReportCost;
 import com.badminton.model.dto.ServiceDTO;
 import com.badminton.model.dto.TeamDTO;
+import com.badminton.model.payment.PaymentModel;
 import com.badminton.model.report.*;
 import com.badminton.repository.AvailablePlayerRepository;
 import com.badminton.repository.GameRepository;
-import com.badminton.repository.PaymentRepository;
 import com.badminton.repository.RentByTimeRepository;
 import com.badminton.requestmodel.ExportReportRequest;
 import com.badminton.requestmodel.Pagination;
@@ -51,6 +52,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -72,7 +74,7 @@ public class ExcelExportService implements ExportService {
     @Autowired
     RentByTimeRepository rentByTimeRepo;
     @Autowired
-    PaymentRepository paymentRepo;
+    CorePaymentService corePaymentService;
 
     private static final int HEADER_ROW_INDEX = 0;
     private static final int HEADER_CELL_INDEX = HEADER_ROW_INDEX;
@@ -222,7 +224,7 @@ public class ExcelExportService implements ExportService {
                     firstDate = sessionDate;
                 if (lastDate == null || sessionDate.isAfter(lastDate))
                     lastDate = sessionDate;
-                totalPayAcc += totalPayOf(report.getAvailablePlayers());
+                totalPayAcc += totalPayOf(report.getPlayerRptModelList());
                 accumulate(shuttleAcc, report.getListTotalShuttle(), RptShuttle::getShuttleName);
                 accumulate(serviceAcc, report.getListTotalService(), RptService::getServiceName);
 
@@ -250,8 +252,12 @@ public class ExcelExportService implements ExportService {
         }));
     }
 
-    private double totalPayOf(List<AvailablePlayer> players) {
-        return players.stream().mapToDouble(p -> p.getPayAmount() != null ? p.getPayAmount() : 0).sum();
+    private double totalPayOf(List<PlayerRptModel> players) {
+        return players.stream()
+                .map(PlayerRptModel::getPayAmount)
+                .filter(Objects::nonNull)
+                .mapToDouble(BigDecimal::doubleValue)
+                .sum();
     }
 
     private void writeMultiSessionHeader(SXSSFSheet sheet, Workbook workbook, Instant firstDate, Instant lastDate,
@@ -309,11 +315,8 @@ public class ExcelExportService implements ExportService {
      */
     private int writeReportData(ReportDTO reportData, int rowIndex, int[] playerNoArray, SXSSFSheet sheet) {
         Session session = reportData.getSession();
-        List<AvailablePlayer> players = reportData.getAvailablePlayers();
+        List<PlayerRptModel> players = reportData.getPlayerRptModelList();
         List<Game> games = reportData.getGames();
-
-        Map<Long, String> partnerMap = players.stream()
-                .collect(Collectors.toMap(AvailablePlayer::getAvaId, p -> p.getPlayer().getPlayerName(), (a, b) -> a));
 
         String date = TimeUtils.toDateDisplay(session.getFromTime(), TimeUtils.newVNLocal());
         String dateFormat = TimeUtils.toVNDateFormat(session.getFromTime());
@@ -324,7 +327,7 @@ public class ExcelExportService implements ExportService {
         int currentRowI = rowIndex;
         SXSSFRow row;
         SXSSFRow rowNumber;
-        for (AvailablePlayer avaPlayer : players) {
+        for (PlayerRptModel player : players) {
 
             // --- ROW N: Basic Info + Game Headers ---
             row = sheet.createRow(currentRowI++);
@@ -336,24 +339,24 @@ public class ExcelExportService implements ExportService {
                 totalAmtCell = row.createCell(TOTAL_COL); // set value later
             }
             row.createCell(PLAYER_NO_COL).setCellValue(playerNoArray[0]++);
-            row.createCell(PLAYER_NAME_COL).setCellValue(avaPlayer.getPlayer().getPlayerName());
-            row.createCell(PAY_AMT_COL).setCellValue(getPayAmount(avaPlayer));
-            row.createCell(LEAVE_TIME_COL).setCellValue(TimeUtils.convertInstantToTimeStr(avaPlayer.getLeaveTime()));
+            row.createCell(PLAYER_NAME_COL).setCellValue(player.getPlayerName());
+            row.createCell(PAY_AMT_COL).setCellValue(getPayAmount(player));
+            row.createCell(LEAVE_TIME_COL).setCellValue(TimeUtils.convertInstantToTimeStr(player.getLeaveTime()));
             row.createCell(COURT_FEE_COL);
 
             // --- ROW N+1: set duplicated value for filter.
             rowNumber = sheet.createRow(currentRowI++);
             rowNumber.createCell(DATE_COL).setCellValue(date);
             rowNumber.createCell(DATE_FORMAT_COL).setCellValue(dateFormat);
-            rowNumber.createCell(COURT_FEE_COL).setCellValue(extractCourtFee(avaPlayer.getServices()));
+            rowNumber.createCell(COURT_FEE_COL).setCellValue(extractCourtFee(currentServiceDTOs(player)));
             rowNumber.createCell(PLAYER_NO_COL).setCellValue(playerNoArray[0] - 1);
-            rowNumber.createCell(PLAYER_NAME_COL).setCellValue(avaPlayer.getPlayer().getPlayerName());
+            rowNumber.createCell(PLAYER_NAME_COL).setCellValue(player.getPlayerName());
 
             int colIndex = row.getLastCellNum();
-            colIndex = writeGameInfoColumns(games, avaPlayer, partnerMap, colIndex, row, rowNumber);
-            setRemainingServices(avaPlayer.getServices(), colIndex, row, rowNumber);
+            colIndex = writeGameInfoColumns(games, player, colIndex, row, rowNumber);
+            setRemainingServices(currentServiceDTOs(player), colIndex, row, rowNumber);
             // sum player payAmount
-            totalAmt = Float.sum(totalAmt, getPayAmount(avaPlayer));
+            totalAmt = Float.sum(totalAmt, getPayAmount(player));
         }
         if (totalAmtCell != null) {
             totalAmtCell.setCellValue(totalAmt);
@@ -369,7 +372,7 @@ public class ExcelExportService implements ExportService {
 
     public byte[] generateSingleXlsxReport(ReportDTO reportDTO) throws BusinessException {
         Session session = reportDTO.getSession();
-        List<AvailablePlayer> players = reportDTO.getAvailablePlayers();
+        List<PlayerRptModel> players = reportDTO.getPlayerRptModelList();
         List<Game> games = reportDTO.getGames();
         // List<ReportCost> listCost = reportDTO.getListCost();
         String title = TITLE_VN + TimeUtils.toDateDisplay(session.getFromTime(), TimeUtils.newVNLocal());
@@ -386,31 +389,26 @@ public class ExcelExportService implements ExportService {
         for (int i = 0; i < tblHeaders.length; i++)
             tableHeader.createCell(i).setCellValue(tblHeaders[i]);
 
-        // 3. Map for Partner Names (AvaId -> Name)
-        Map<Long, String> partnerMap = players.stream().collect(
-                Collectors.toMap(AvailablePlayer::getAvaId,
-                        p -> p.getPlayer().getPlayerName(), (a, b) -> a));
-
         int currentRow = START_BODY_TABLE_DATA_ROW_RPT_INDEX;
         int no = 1;
 
-        for (AvailablePlayer avaPlayer : players) {
+        for (PlayerRptModel player : players) {
             // --- ROW N: Basic Info + Game Headers ---
             Row rowHeader = sheet.createRow(currentRow++);
             rowHeader.createCell(0).setCellValue(no++);
-            rowHeader.createCell(1).setCellValue(avaPlayer.getPlayer().getPlayerName());
-            rowHeader.createCell(2).setCellValue(getPayAmount(avaPlayer));
-            rowHeader.createCell(3).setCellValue(TimeUtils.convertInstantToTimeStr(avaPlayer.getLeaveTime()));
+            rowHeader.createCell(1).setCellValue(player.getPlayerName());
+            rowHeader.createCell(2).setCellValue(getPayAmount(player));
+            rowHeader.createCell(3).setCellValue(TimeUtils.convertInstantToTimeStr(player.getLeaveTime()));
             rowHeader.createCell(4);
 
             // --- ROW N+1: Empty A-E + Game Values ---
             Row rowNumber = sheet.createRow(currentRow++);
             rowNumber.createCell(0).setCellValue(no - 1);
-            rowNumber.createCell(1).setCellValue(avaPlayer.getPlayer().getPlayerName());
-            rowNumber.createCell(4).setCellValue(extractCourtFee(avaPlayer.getServices()));
+            rowNumber.createCell(1).setCellValue(player.getPlayerName());
+            rowNumber.createCell(4).setCellValue(extractCourtFee(currentServiceDTOs(player)));
             int colIndex = 5;
-            colIndex = writeGameInfoColumns(games, avaPlayer, partnerMap, colIndex, rowHeader, rowNumber);
-            setRemainingServices(avaPlayer.getServices(), colIndex, rowHeader, rowNumber);
+            colIndex = writeGameInfoColumns(games, player, colIndex, rowHeader, rowNumber);
+            setRemainingServices(currentServiceDTOs(player), colIndex, rowHeader, rowNumber);
             // for (ReportCost rptCost : listCost) {
             // setServiceValueIntoNextTwoColumn(rptCost, avaPlayer, partnerMap, colIndex,
             // rowHeader, rowNumber);
@@ -450,21 +448,21 @@ public class ExcelExportService implements ExportService {
         }
     }
 
-    private int writeGameInfoColumns(List<Game> games, AvailablePlayer avaPlayer, Map<Long, String> partnerMap,
+    private int writeGameInfoColumns(List<Game> games, PlayerRptModel player,
                                      int colIndex, Row row, Row rowNumber) {
         for (Game game : games) {
             try {
-                setServiceValueIntoNextTwoColumn(game, avaPlayer, partnerMap, colIndex, row, rowNumber);
+                setServiceValueIntoNextTwoColumn(game, player, colIndex, row, rowNumber);
                 colIndex += 2;
             } catch (NullPointerException e) {
-                log.warn("{} There is no matching data.", ErrorConstant.ERROR_EXPORT_RPT_WRITE_DATA);
+                log.debug("{} There is no matching data.", ErrorConstant.ERROR_EXPORT_RPT_WRITE_DATA);
             }
         }
         return colIndex;
     }
 
-    private void setRemainingServices(String services, int colIndex, Row row, Row rowNumber) {
-        List<ServiceDTO> remainServices = ServiceUtil.convertStringToListService(services).stream()
+    private void setRemainingServices(List<ServiceDTO> services, int colIndex, Row row, Row rowNumber) {
+        List<ServiceDTO> remainServices = services.stream()
                 .filter(s -> !s.getServiceName().toLowerCase().contains(GameConstant.COST_IN_PERSON_VN.toLowerCase()))
                 .collect(Collectors.toList());
         for (ServiceDTO serviceDTO : remainServices) {
@@ -474,9 +472,9 @@ public class ExcelExportService implements ExportService {
         }
     }
 
-    private void setServiceValueIntoNextTwoColumn(Game game, AvailablePlayer avaPlayer, Map<Long, String> partnerMap,
+    private void setServiceValueIntoNextTwoColumn(Game game, PlayerRptModel player,
                                                   int colIndex, Row row, Row rowNumber) throws NullPointerException {
-        Team matchingTeam = getPlayerTeamInGame(avaPlayer, game);
+        Team matchingTeam = getPlayerTeamInGame(player, game);
 
         String gameTitle = String.format("%s (%s - %s) %s:", game.getCourt().getCourtName(),
                 TimeUtils.convertInstantToTimeStr(game.getCreatedDate()),
@@ -485,17 +483,16 @@ public class ExcelExportService implements ExportService {
         row.createCell(colIndex).setCellValue(gameTitle);
 
         // Row N: "Court (Time):" and "partner: Name"
-        String partnerName = getPartnerName(avaPlayer, matchingTeam, partnerMap);
+        String partnerName = getPartnerName(player, matchingTeam);
         row.createCell(colIndex + 1)
                 .setCellValue(GameConstant.PARTNER_VN.concat(CommonConstant.COLON).concat(partnerName));
-        rowNumber.createCell(colIndex).setCellValue(getExpenseValue(avaPlayer, matchingTeam));
+        rowNumber.createCell(colIndex).setCellValue(getExpenseValue(player, matchingTeam));
 
     }
 
-    private void setServiceValueIntoNextTwoColumn(ReportCost rptCost, AvailablePlayer avaPlayer,
-                                                  Map<Long, String> partnerMap,
+    private void setServiceValueIntoNextTwoColumn(ReportCost rptCost, PlayerRptModel player,
                                                   int colIndex, Row row, Row rowNumber) {
-        TeamDTO matchingTeam = getPlayerTeamInGame(avaPlayer, rptCost);
+        TeamDTO matchingTeam = getPlayerTeamInGame(player, rptCost);
 
         String gameTitle = String.format("%s (%s - %s) %s:",
                 rptCost.getCourtName(), rptCost.getStart(),
@@ -505,69 +502,70 @@ public class ExcelExportService implements ExportService {
         row.createCell(colIndex).setCellValue(gameTitle);
 
         // Row N: "Court (Time):" and "partner: Name"
-        String partnerName = getPartnerName(avaPlayer, matchingTeam);
+        String partnerName = getPartnerName(player, matchingTeam);
 
         row.createCell(colIndex + 1)
                 .setCellValue(GameConstant.PARTNER_VN.concat(CommonConstant.COLON).concat(partnerName));
-        rowNumber.createCell(colIndex).setCellValue(getExpenseValue(avaPlayer, null));
+        rowNumber.createCell(colIndex).setCellValue(getExpenseValue(player, null));
     }
 
-    private String getPartnerName(AvailablePlayer currAvaPlayer, Team matchingTeam, Map<Long, String> partnerMap) {
-        AvailablePlayer anotherPlayer = getAnotherPlayer(currAvaPlayer, matchingTeam);
-        return anotherPlayer != null ? partnerMap.getOrDefault(anotherPlayer.getAvaId(), GameConstant.NO_PARTNER)
+    private String getPartnerName(PlayerRptModel currPlayer, Team matchingTeam) {
+        AvailablePlayer anotherPlayer = getAnotherPlayer(currPlayer, matchingTeam);
+        return anotherPlayer != null && anotherPlayer.getPlayer() != null
+                ? anotherPlayer.getPlayer().getPlayerName()
                 : GameConstant.NO_PARTNER;
     }
 
-    private String getPartnerName(AvailablePlayer currAvaPlayer, TeamDTO matchingTeam) {
-        final long availableId = currAvaPlayer.getAvaId();
+    private String getPartnerName(PlayerRptModel currPlayer, TeamDTO matchingTeam) {
         String partnerName;
-        if (matchingTeam.getPlayer1().getId() == availableId) {
-            partnerName = matchingTeam.getPlayer2().getName();
-        } else if (matchingTeam.getPlayer2().getId() == availableId) {
-            partnerName = matchingTeam.getPlayer1().getName();
+        if (matchingTeam.getPlayer1() != null
+                && Objects.equals(matchingTeam.getPlayer1().getName(), currPlayer.getPlayerName())) {
+            partnerName = matchingTeam.getPlayer2() != null ? matchingTeam.getPlayer2().getName()
+                    : GameConstant.NO_PARTNER;
+        } else if (matchingTeam.getPlayer2() != null
+                && Objects.equals(matchingTeam.getPlayer2().getName(), currPlayer.getPlayerName())) {
+            partnerName = matchingTeam.getPlayer1() != null ? matchingTeam.getPlayer1().getName()
+                    : GameConstant.NO_PARTNER;
         } else {
             partnerName = GameConstant.NO_PARTNER;
         }
         return partnerName;
     }
 
-    private float getExpenseValue(AvailablePlayer currAvaPlayer, Team matchingTeam) {
+    private float getExpenseValue(PlayerRptModel currPlayer, Team matchingTeam) {
         float expense = MoneyUtils.DEFAULT;
         try {
-            if (matchingTeam.getPlayerOne() != null && matchingTeam.getPlayerOne().equals(currAvaPlayer)) {
+            if (isSamePlayer(matchingTeam.getPlayerOne(), currPlayer)) {
                 expense = matchingTeam.getExpenseOne();
-            } else if (matchingTeam.getPlayerTwo() != null && matchingTeam.getPlayerTwo().equals(currAvaPlayer)) {
+            } else if (isSamePlayer(matchingTeam.getPlayerTwo(), currPlayer)) {
                 expense = matchingTeam.getExpenseTwo();
             }
         } catch (NullPointerException e) {
-            log.warn("{} Failed to get expense value for availablePlayerId={}, teamId={}",
-                    ErrorConstant.ERROR_EXPORT_RPT_WRITE_DATA, currAvaPlayer.getAvaId(), matchingTeam.getTeamId());
+            log.warn("{} Failed to get expense value for player={}, teamId={}",
+                    ErrorConstant.ERROR_EXPORT_RPT_WRITE_DATA, currPlayer.getPlayerName(), matchingTeam.getTeamId());
         }
         return expense;
     }
 
-    private String getAnotherPlayer(AvailablePlayer currAvaPlayer, Team matchingTeam, Map<Long, String> partnerMap) {
+    private AvailablePlayer getAnotherPlayer(PlayerRptModel currPlayer, Team matchingTeam) {
         AvailablePlayer anotherPlayer = matchingTeam.getPlayerOne();
-        if (matchingTeam.getPlayerOne().equals(currAvaPlayer)) {
-            anotherPlayer = matchingTeam.getPlayerTwo();
-        }
-        return partnerMap.getOrDefault(anotherPlayer.getAvaId(), GameConstant.NO_PARTNER);
-    }
-
-    private AvailablePlayer getAnotherPlayer(AvailablePlayer currAvaPlayer, Team matchingTeam) {
-        AvailablePlayer anotherPlayer = matchingTeam.getPlayerOne();
-        if (anotherPlayer != null && anotherPlayer.equals(currAvaPlayer)) {
+        if (isSamePlayer(anotherPlayer, currPlayer)) {
             return matchingTeam.getPlayerTwo();
         }
         anotherPlayer = matchingTeam.getPlayerTwo();
-        if (anotherPlayer != null && anotherPlayer.equals(currAvaPlayer)) {
+        if (isSamePlayer(anotherPlayer, currPlayer)) {
             return matchingTeam.getPlayerOne();
         }
         return anotherPlayer;
     }
 
-    private void writeHeader(Sheet sheet, Workbook workbook, Session session, List<AvailablePlayer> players) {
-        double totalPay = players.stream().mapToDouble(p -> p.getPayAmount() != null ? p.getPayAmount() : 0).sum();
+    private boolean isSamePlayer(AvailablePlayer avaPlayer, PlayerRptModel player) {
+        return ServiceUtil.availablePlayerNotNull(avaPlayer)
+                && Objects.equals(avaPlayer.getPlayer().getPlayerName(), player.getPlayerName());
+    }
+
+    private void writeHeader(Sheet sheet, Workbook workbook, Session session, List<PlayerRptModel> players) {
+        double totalPay = totalPayOf(players);
 
         Row r1 = sheet.createRow(START_HEADER_ROW_INDEX); // Row 3
         r1.createCell(DATE_COL).setCellValue(DATE_VN);
@@ -608,33 +606,35 @@ public class ExcelExportService implements ExportService {
         return tblHeaderStyle;
     }
 
-    private float extractCourtFee(String services) {
-        List<ServiceDTO> listService = ServiceUtil.convertStringToListService(services);
+    private float extractCourtFee(List<ServiceDTO> listService) {
         Optional<ServiceDTO> costInPerService = listService.stream()
                 .filter(s -> GameConstant.COST_IN_PERSON_VN.equals(s.getServiceName())).findFirst();
         return costInPerService.isPresent() ? costInPerService.get().getCost() : MoneyUtils.DEFAULT;
     }
 
-    private Team getPlayerTeamInGame(AvailablePlayer p, Game g) throws NullPointerException {
+    private Team getPlayerTeamInGame(PlayerRptModel p, Game g) throws NullPointerException {
         if (g.getTeamOne() != null
-                && (p.equals(g.getTeamOne().getPlayerOne()) || p.equals(g.getTeamOne().getPlayerTwo())))
+                && (isSamePlayer(g.getTeamOne().getPlayerOne(), p) || isSamePlayer(g.getTeamOne().getPlayerTwo(), p)))
             return g.getTeamOne();
         if (g.getTeamTwo() != null
-                && (p.equals(g.getTeamTwo().getPlayerOne()) || p.equals(g.getTeamTwo().getPlayerTwo())))
+                && (isSamePlayer(g.getTeamTwo().getPlayerOne(), p) || isSamePlayer(g.getTeamTwo().getPlayerTwo(), p)))
             return g.getTeamTwo();
         throw new NullPointerException();
     }
 
-    private TeamDTO getPlayerTeamInGame(AvailablePlayer p, ReportCost rptCost) throws NullPointerException {
-        final long availableId = p.getAvaId();
+    private TeamDTO getPlayerTeamInGame(PlayerRptModel p, ReportCost rptCost) throws NullPointerException {
+        final String playerName = p.getPlayerName();
 
-        if (rptCost.getTeam1() != null && (availableId == rptCost.getTeam1().getPlayer1().getId()
-                || availableId == rptCost.getTeam1().getPlayer2().getId()))
+        if (rptCost.getTeam1() != null && isPlayerInTeamDTO(playerName, rptCost.getTeam1()))
             return rptCost.getTeam1();
-        if (rptCost.getTeam2() != null && (availableId == rptCost.getTeam2().getPlayer1().getId()
-                || availableId == rptCost.getTeam2().getPlayer2().getId()))
+        if (rptCost.getTeam2() != null && isPlayerInTeamDTO(playerName, rptCost.getTeam2()))
             return rptCost.getTeam2();
         throw new NullPointerException();
+    }
+
+    private boolean isPlayerInTeamDTO(String playerName, TeamDTO team) {
+        return (team.getPlayer1() != null && Objects.equals(team.getPlayer1().getName(), playerName))
+                || (team.getPlayer2() != null && Objects.equals(team.getPlayer2().getName(), playerName));
     }
 
     private List<ReportResponse> convertToListReportResponse(List<Session> listSession) {
@@ -648,15 +648,19 @@ public class ExcelExportService implements ExportService {
         rptResponse.setSessionId(s.getSessionId());
         rptResponse.setDate(s.getFromTime());
         rptResponse.setDuring(TimeUtils.convertInstantsToString(s.getFromTime(), s.getToTime()));
-        float revenue = getTotalGrossRevenue(applyDebitPayments(s.getAvailablePlayers(), findSessionPayments(s)));
+        float revenue = getTotalGrossRevenue(
+                applyDebitPayments(toPlayerRptModels(s.getAvailablePlayers()), findSessionPayments(s)));
         rptResponse.setGrossRevenue(revenue);
         rptResponse.setGrossRevenueFormat(MoneyUtils.formatToVND(revenue));
         return rptResponse;
     }
 
-    private float getTotalGrossRevenue(List<AvailablePlayer> availablePlayers) {
-        return availablePlayers.stream().filter(player -> player.getPayAmount() != null)
-                .map(AvailablePlayer::getPayAmount).reduce(0f, Float::sum);
+    private float getTotalGrossRevenue(List<PlayerRptModel> players) {
+        return players.stream()
+                .map(PlayerRptModel::getPayAmount)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .floatValue();
     }
 
     private void validatePagination(ReportListRequest request) {
@@ -670,21 +674,20 @@ public class ExcelExportService implements ExportService {
 
     }
 
-    private Float getPlayerExpenseForGame(AvailablePlayer player, Game game) {
+    private Float getPlayerExpenseForGame(PlayerRptModel player, Game game) {
         // Match player to Team 1
-        if (game.getTeamOne() != null && isPlayerInTeam(player, game.getTeamOne())) {
+        if (game.getTeamOne() != null
+                && (isSamePlayer(game.getTeamOne().getPlayerOne(), player)
+                || isSamePlayer(game.getTeamOne().getPlayerTwo(), player))) {
             return game.getTeamOne().getExpenseOne();
         }
         // Match player to Team 2
-        if (game.getTeamTwo() != null && isPlayerInTeam(player, game.getTeamTwo())) {
+        if (game.getTeamTwo() != null
+                && (isSamePlayer(game.getTeamTwo().getPlayerOne(), player)
+                || isSamePlayer(game.getTeamTwo().getPlayerTwo(), player))) {
             return game.getTeamTwo().getExpenseTwo();
         }
         return null;
-    }
-
-    private boolean isPlayerInTeam(AvailablePlayer avaPlayer, Team team) {
-        Long pid = avaPlayer.getAvaId();
-        return pid.equals(team.getPlayerOne()) || pid.equals(team.getPlayerTwo());
     }
 
     public ReportDTO retrieveReport(String sessionId) {
@@ -697,103 +700,127 @@ public class ExcelExportService implements ExportService {
         List<RentByTime> rentals = avaIds.stream()
                 .flatMap(avaId -> rentByTimeRepo.findByAvailablePlayerAvaId(avaId).stream())
                 .collect(Collectors.toList());
-        List<AvailablePlayer> reportPlayers = applyDebitPayments(availablePlayers, findSessionPayments(session));
+        List<PlayerRptModel> reportPlayers = applyDebitPayments(toPlayerRptModels(availablePlayers),
+                findSessionPayments(session));
         return buildReportModel(session, reportPlayers, games, rentals);
+    }
+
+    private List<PlayerRptModel> toPlayerRptModels(List<AvailablePlayer> players) {
+        if (players == null) {
+            return new ArrayList<>();
+        }
+        return players.stream().map(this::toPlayerRptModel).collect(Collectors.toCollection(ArrayList::new));
+    }
+
+    private PlayerRptModel toPlayerRptModel(AvailablePlayer player) {
+        PlayerRptModel model = new PlayerRptModel();
+        model.setPlayerName(player.getPlayer() != null ? player.getPlayer().getPlayerName() : null);
+        model.setSessionId(player.getSession() != null ? player.getSession().getSessionId() : 0);
+        model.setLeaveTime(player.getLeaveTime());
+        model.setServiceDTOs(new ArrayList<>(ServiceUtil.convertStringToListService(player.getCurrentServices())));
+        model.setPayAmount(player.getPayAmount() != null ? BigDecimal.valueOf(player.getPayAmount()) : null);
+        model.setPayType(player.getPayType());
+        model.setAdvancePay(player.getAdvancePayment() != null ? BigDecimal.valueOf(player.getAdvancePayment()) : null);
+        return model;
+    }
+
+    private List<ServiceDTO> currentServiceDTOs(PlayerRptModel player) {
+        return player.getServiceDTOs() != null ? player.getServiceDTOs() : List.of();
     }
 
     /**
      * Debt payments are stored as Payment rows without a session link, so they are
-     * scoped to a session by paymentDate falling inside [fromTime, toTime].
+     * scoped to a session by paymentDate falling on the same calendar date as the
+     * session. The DebtManagementPage pay flow can create payments outside the
+     * session time window (e.g. for a player who is not in the session), so the
+     * whole day must be queried, not just [fromTime, toTime].
      */
-    private List<Payment> findSessionPayments(Session session) {
-        Instant to = session.getToTime() != null ? session.getToTime() : Instant.now();
-        return paymentRepo.findByPaymentDateBetween(session.getFromTime(), to);
+    private List<PayDebitModel> findSessionPayments(Session session) {
+        Instant from = session.getFromTime() != null ? session.getFromTime() : Instant.now();
+        LocalDate sessionDate = from.atZone(ZoneOffset.UTC).toLocalDate();
+        Instant dayStart = sessionDate.atStartOfDay(ZoneOffset.UTC).toInstant();
+        Instant dayEnd = sessionDate.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant().minusMillis(1);
+        return corePaymentService.findPaymentsBetween(dayStart, dayEnd).stream()
+                .map(this::toPayDebitModel)
+                .collect(Collectors.toList());
+    }
+
+    private PayDebitModel toPayDebitModel(PaymentModel paymentModel) {
+        PayDebitModel model = new PayDebitModel();
+        model.setPaymentModel(paymentModel);
+        return model;
     }
 
     /**
-     * Reflect session-scope debt payments into the report's player list using
-     * detached copies only (never persists report data):
-     * - session player already carrying the PAY_DEBIT_VN service: the payment was
-     *   already included at checkout, ignore it.
-     * - session player without it: append the service and add the paid total to
-     *   payAmount so revenue includes it.
-     * - payer not present in this session: synthesize a player row carrying the
-     *   PAY_DEBIT_VN service with the paid total.
+     * Reflect session-scope debt payments into the report's player list (report
+     * models only, never persists entity data). Payments are never summed: each
+     * unreported payment record produces its own appended row carrying a single
+     * PAY_DEBIT_VN service.
+     * - session player has a PAY_DEBIT_VN service with a cost equal to the
+     *   payment amount: it was already included at checkout, so the record is
+     *   flagged addedToRpt and skipped.
+     * - otherwise (no matching service, or payer not in this session): a new
+     *   report row is created for the player including the payment record, and
+     *   the record is flagged addedToRpt.
      */
-    private List<AvailablePlayer> applyDebitPayments(List<AvailablePlayer> players, List<Payment> payments) {
-        List<AvailablePlayer> result = new ArrayList<>(players);
+    private List<PlayerRptModel> applyDebitPayments(List<PlayerRptModel> players, List<PayDebitModel> payments) {
+        List<PlayerRptModel> result = new ArrayList<>(players);
         if (payments == null || payments.isEmpty()) {
             return result;
         }
-        Map<Integer, List<Payment>> paymentsByPlayer = payments.stream()
-                .collect(Collectors.groupingBy(p -> p.getPlayer().getPlayerId(), LinkedHashMap::new,
+        Map<String, List<PayDebitModel>> paymentsByPlayer = payments.stream()
+                .collect(Collectors.groupingBy(p -> p.getPaymentModel().getPayFor(), LinkedHashMap::new,
                         Collectors.toList()));
 
-        paymentsByPlayer.forEach((playerId, playerPayments) -> {
-            AvailablePlayer source = result.stream()
-                    .filter(p -> p.getPlayer().getPlayerId() == playerId)
-                    .findFirst()
-                    .orElse(null);
-            if (source == null) {
-                result.add(buildDebitPayer(playerPayments));
-            } else if (!hasPayDebitService(source)) {
-                float paid = sumPayments(playerPayments);
-                AvailablePlayer copy = copyForReport(source);
-                List<ServiceDTO> services = new ArrayList<>(
-                        ServiceUtil.convertStringToListService(copy.getCurrentServices()));
-                services.add(new ServiceDTO(ServiceConstants.PAY_DEBIT_VN, paid));
-                copy.setServices(ServiceUtil.buildJsonArrayStr(services));
-                copy.setPayAmount((copy.getPayAmount() != null ? copy.getPayAmount() : 0f) + paid);
-                result.set(result.indexOf(source), copy);
+        paymentsByPlayer.forEach((playerName, playerPayments) -> {
+            List<PlayerRptModel> sources = result.stream()
+                    .filter(p -> Objects.equals(p.getPlayerName(), playerName))
+                    .collect(Collectors.toList());
+            for (PayDebitModel payDebit : playerPayments) {
+                PaymentModel payment = payDebit.getPaymentModel();
+                boolean alreadyInReport = sources.stream()
+                        .anyMatch(s -> matchesPayDebitService(s, payment.getAmount()));
+                if (alreadyInReport) {
+                    payDebit.setAddedToRpt(true);
+                    continue;
+                }
+                result.add(buildDebitPayer(payment, sources.isEmpty() ? null : sources.get(0)));
+                payDebit.setAddedToRpt(true);
             }
         });
         return result;
     }
 
-    private boolean hasPayDebitService(AvailablePlayer player) {
-        return ServiceUtil.convertStringToListService(player.getCurrentServices()).stream()
-                .anyMatch(s -> ServiceConstants.PAY_DEBIT_VN.equalsIgnoreCase(s.getServiceName()));
+    private boolean matchesPayDebitService(PlayerRptModel player, BigDecimal amount) {
+        return amount != null && currentServiceDTOs(player).stream()
+                .anyMatch(s -> ServiceConstants.PAY_DEBIT_VN.equalsIgnoreCase(s.getServiceName())
+                        && BigDecimal.valueOf(s.getCost()).compareTo(amount) == 0);
     }
 
-    private AvailablePlayer copyForReport(AvailablePlayer src) {
-        AvailablePlayer copy = new AvailablePlayer(src.getPlayer(), src.getSession());
-        copy.setAvaId(src.getAvaId());
-        copy.setServices(src.getServices());
-        copy.setPayAmount(src.getPayAmount());
-        copy.setPayType(src.getPayType());
-        copy.setLeaveTime(src.getLeaveTime());
-        copy.setAdvancePayment(src.getAdvancePayment());
-        copy.setIsCanceled(src.getIsCanceled());
-        return copy;
-    }
-
-    private AvailablePlayer buildDebitPayer(List<Payment> payments) {
-        Payment latest = payments.stream()
-                .max(Comparator.comparing(Payment::getPaymentDate))
-                .orElse(payments.get(0));
-        AvailablePlayer payer = new AvailablePlayer(latest.getPlayer());
-        payer.setLeaveTime(latest.getPaymentDate());
-        payer.setPayType(latest.getPayType());
-        float paid = sumPayments(payments);
-        payer.setPayAmount(paid);
-        payer.setServices(ServiceUtil.buildJsonArrayStr(
-                List.of(new ServiceDTO(ServiceConstants.PAY_DEBIT_VN, paid))));
+    /**
+     * Build one report row for a single payment record. When the payer is a
+     * session player, the session fields (sessionId, leaveTime) are carried
+     * over from their row.
+     */
+    private PlayerRptModel buildDebitPayer(PaymentModel payment, PlayerRptModel source) {
+        PlayerRptModel payer = new PlayerRptModel();
+        payer.setPlayerName(payment.getPayFor());
+        if (source != null) {
+            payer.setSessionId(source.getSessionId());
+            payer.setLeaveTime(source.getLeaveTime());
+        }
+        payer.setPayType(payment.getPayType());
+        payer.setPayAmount(payment.getAmount());
+        float amount = payment.getAmount() != null ? payment.getAmount().floatValue() : 0f;
+        payer.setServiceDTOs(new ArrayList<>(List.of(new ServiceDTO(ServiceConstants.PAY_DEBIT_VN, amount))));
         return payer;
     }
 
-    private float sumPayments(List<Payment> payments) {
-        return payments.stream()
-                .map(Payment::getAmount)
-                .filter(Objects::nonNull)
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .floatValue();
-    }
-
-    private ReportDTO buildReportModel(Session session, List<AvailablePlayer> availablePlayers, List<Game> games,
+    private ReportDTO buildReportModel(Session session, List<PlayerRptModel> players, List<Game> games,
                                        List<RentByTime> rentals) {
         List<RptShuttle> listTotalShuttle = buildListTotalShuttle(games, rentals);
-        List<RptService> listTotalService = buildListTotalService(availablePlayers);
-        return new ReportDTO(session, availablePlayers, games, null, listTotalShuttle, listTotalService);
+        List<RptService> listTotalService = buildListTotalService(players);
+        return new ReportDTO(session, players, games, null, listTotalShuttle, listTotalService);
     }
 
     private List<RptShuttle> buildListTotalShuttle(List<Game> games, List<RentByTime> rentals) {
@@ -839,9 +866,9 @@ public class ExcelExportService implements ExportService {
         return new ArrayList<>(shuttleMap.values());
     }
 
-    private List<RptService> buildListTotalService(List<AvailablePlayer> availablePlayers) {
-        return new ArrayList<>(availablePlayers.stream()
-                .flatMap(p -> ServiceUtil.convertStringToListService(p.getCurrentServices()).stream())
+    private List<RptService> buildListTotalService(List<PlayerRptModel> players) {
+        return new ArrayList<>(players.stream()
+                .flatMap(p -> currentServiceDTOs(p).stream())
                 .filter(s -> !s.getServiceName().toLowerCase().contains(GameConstant.COST_IN_PERSON_VN.toLowerCase()))
                 .filter(s -> !s.getServiceName().toLowerCase().contains(GameConstant.ADVANCE_PAYMENT_VN.toLowerCase()))
                 .filter(s -> !(s.getServiceName().toLowerCase().contains(RentConstant.RENT_BY_TIME_STR.toLowerCase()) ||
@@ -865,7 +892,7 @@ public class ExcelExportService implements ExportService {
                 .values());
     }
 
-    private Float getPayAmount(AvailablePlayer availablePlayer) {
-        return availablePlayer.getPayAmount() != null ? availablePlayer.getPayAmount() : MoneyUtils.DEFAULT;
+    private float getPayAmount(PlayerRptModel player) {
+        return player.getPayAmount() != null ? player.getPayAmount().floatValue() : MoneyUtils.DEFAULT;
     }
 }
