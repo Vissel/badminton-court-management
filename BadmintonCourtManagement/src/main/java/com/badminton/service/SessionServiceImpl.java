@@ -151,7 +151,7 @@ public class SessionServiceImpl {
         }
         return deactiveList;
     }
-
+    @Transactional(readOnly = true)
     public List<Session> findListCurrentSession() {
         Instant current = getUTCPlus7Instant();
         return sessionRepo.findByFromTimeLessThanAndToTimeIsNullAndIsActive(current, true,
