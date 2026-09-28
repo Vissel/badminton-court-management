@@ -6,7 +6,7 @@ import com.badminton.model.dto.AllocateDebitPaymentRequest;
 import com.badminton.model.dto.CreateDebitDTO;
 import com.badminton.model.dto.DebitPayDTO;
 import com.badminton.model.dto.PaymentDTO;
-import com.badminton.model.payment.PaymentModel;
+import com.badminton.model.payment.PaymentDebitModel;
 import com.badminton.requestmodel.PayRequest;
 import com.badminton.requestmodel.debit.PayDebitRequest;
 import com.badminton.response.PayResponse;
@@ -51,8 +51,8 @@ public class PayServiceImpl implements PayService {
             @Override
             public PayResponse process() throws BusinessException {
                 PaymentDTO paymentDTO = convertToPaymentDTO(getRequest());
-                PaymentModel paymentModel = corePaymentService.payForPlayerAndCreateDebt(paymentDTO);
-                return convertToPayResponse(paymentModel);
+                PaymentDebitModel paymentDebitModel = corePaymentService.payForPlayerAndCreateDebt(paymentDTO);
+                return convertToPayResponse(paymentDebitModel);
             }
         });
     }
@@ -130,18 +130,18 @@ public class PayServiceImpl implements PayService {
         return dto;
     }
 
-    private PayResponse convertToPayResponse(PaymentModel paymentModel) {
+    private PayResponse convertToPayResponse(PaymentDebitModel paymentDebitModel) {
         return new PayResponse(
-                paymentModel.getPayFor(),
-                paymentModel.getServices(),
-                paymentModel.getPayType(),
-                paymentModel.getPayAmount() != null ? paymentModel.getPayAmount().floatValue() : 0f,
-                paymentModel.getPayTime() != null ? paymentModel.getPayTime().toString() : null,
-                paymentModel.getDebitAmount() != null ? paymentModel.getDebitAmount().floatValue() : 0f,
-                paymentModel.getPaidDebts() != null ? paymentModel.getPaidDebts().floatValue() : null,
-                paymentModel.getRemainingDebts() != null ? paymentModel.getRemainingDebts().floatValue() : null,
-                paymentModel.getNumPaidDebts(),
-                paymentModel.getNumRemainingDebts(),
-                paymentModel.getPayDebitsMessage());
+                paymentDebitModel.getPayFor(),
+                paymentDebitModel.getServices(),
+                paymentDebitModel.getPayType(),
+                paymentDebitModel.getPayAmount() != null ? paymentDebitModel.getPayAmount().floatValue() : 0f,
+                paymentDebitModel.getPayTime() != null ? paymentDebitModel.getPayTime().toString() : null,
+                paymentDebitModel.getDebitAmount() != null ? paymentDebitModel.getDebitAmount().floatValue() : 0f,
+                paymentDebitModel.getPaidDebts() != null ? paymentDebitModel.getPaidDebts().floatValue() : null,
+                paymentDebitModel.getRemainingDebts() != null ? paymentDebitModel.getRemainingDebts().floatValue() : null,
+                paymentDebitModel.getNumPaidDebts(),
+                paymentDebitModel.getNumRemainingDebts(),
+                paymentDebitModel.getPayDebitsMessage());
     }
 }
