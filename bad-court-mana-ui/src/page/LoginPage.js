@@ -8,6 +8,7 @@ import { useNavigate } from "react-router";
 import { AuthContext } from "../context/AuthContext";
 import api from "../api";
 import { emitApiError } from "../api/errorBus";
+import { encryptPassword, withKeyRetry } from "../api/rsaCrypto";
 
 function LoginPage() {
   const { setAuthenticated, setLoading } = useContext(AuthContext);
@@ -17,37 +18,17 @@ function LoginPage() {
 
   const navigate = useNavigate();
 
-  const encryptPassword = async (plainPassword) => {
-    const res = await fetch(`${process.env.PUBLIC_URL}/public_key.pem`);
-    const pem = await res.text();
-    const der = Uint8Array.from(
-      atob(pem.replace(/-----[^-]+-----/g, "").replace(/\s/g, "")),
-      (c) => c.charCodeAt(0)
-    );
-    const key = await crypto.subtle.importKey(
-      "spki",
-      der.buffer,
-      { name: "RSA-OAEP", hash: "SHA-256" },
-      false,
-      ["encrypt"]
-    );
-    const ciphertext = await crypto.subtle.encrypt(
-      { name: "RSA-OAEP" },
-      key,
-      new TextEncoder().encode(plainPassword)
-    );
-    return btoa(String.fromCharCode(...new Uint8Array(ciphertext)));
-  };
-
   const handleLogin = async () => {
     try {
-      const inputPassword = await encryptPassword(password);
-      const res = await api.post("/login", {
-        inputUsername: username,
-        inputPassword,
+      const res = await withKeyRetry(async (cfg) => {
+        const inputPassword = await encryptPassword(password);
+        return api.post("/login", {
+          inputUsername: username,
+          inputPassword,
+        }, cfg);
       });
 
-      if (res.status === 200) {
+      if (res?.status === 200) {
         sessionStorage.setItem("csrfToken", res.data.csrfToken);
         sessionStorage.setItem("username", res.data.username);
         setAuthenticated(true);
