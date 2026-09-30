@@ -108,8 +108,9 @@ public class GameServiceImpl implements GameService {
                 // 4. set value: state, Team's expense, endedDate, gType.
                 game.setEndedDate(TimeUtils.getUTCPlus7Instant());
                 game.setState(GameState.FINISH.getValue());
-
                 gameRepository.save(game);
+                // 5. update shuttle ball quantity in stock
+                
                 return true;
             }
         });

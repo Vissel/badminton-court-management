@@ -1,6 +1,7 @@
 package com.badminton.service;
 
 import com.badminton.config.cache.AppCache;
+import com.badminton.core.player.CorePlayerService;
 import com.badminton.entity.Player;
 import com.badminton.model.CacheObject;
 import com.badminton.repository.UserRepository;
@@ -30,6 +31,9 @@ public class UserServiceImpl implements UserService {
 
     @Autowired
     private RsaKeyService rsaKeyService;
+
+    @Autowired
+    private CorePlayerService corePlayerService;
 
     @Override
     public boolean saveAdminUser(RegisterUserDTO userDTO) {
@@ -61,7 +65,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public ResponseEntity<String> generateResetPassToken(String userName) {
-        if (userRepo.findByPlayerName(userName).isEmpty()) {
+        if (!checkUserExistByName(userName)) {
             return ResponseEntity.badRequest().body("User is not present.");
         }
         final String randomString = userName + UUID.randomUUID() + System.currentTimeMillis();
@@ -108,4 +112,8 @@ public class UserServiceImpl implements UserService {
 
     }
 
+    @Override
+    public boolean checkUserExistByName(String username) {
+        return corePlayerService.checkPlayerExistByUsername(username) != null;
+    }
 }

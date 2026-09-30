@@ -13,4 +13,6 @@ public interface UserService {
     ResponseEntity<String> generateResetPassToken(String userName);
 
     ResponseEntity<String> resetPassword(ResetUserRequest resetUserRequest);
+
+    boolean checkUserExistByName(String username);
 }

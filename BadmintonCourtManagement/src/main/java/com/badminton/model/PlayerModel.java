@@ -11,4 +11,8 @@ public class PlayerModel {
     private String password;
 
     private Timestamp createdDate;
+
+    public PlayerModel(String username) {
+        this.playerName = username;
+    }
 }
