@@ -23,6 +23,24 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Extracts a human-readable message from an error body. Handles JSON error
+// payloads ({errorMessage|message}) and plain-string bodies (e.g. SuperAdmin
+// endpoints); HTML error pages fall back to the generic message.
+export const responseMessage = (data, fallback) => {
+  if (data && typeof data === "object") {
+    return data.errorMessage || data.message || fallback;
+  }
+  if (
+    typeof data === "string" &&
+    data.trim() &&
+    data.length <= 300 &&
+    !data.trimStart().startsWith("<")
+  ) {
+    return data;
+  }
+  return fallback;
+};
+
 api.interceptors.response.use(
   (response) => response,
 
@@ -81,7 +99,7 @@ api.interceptors.response.use(
     ================================ */
     if (status >= 500) {
       console.error("Server error:", error.response);
-      if (!silent) emitApiError(data?.errorMessage || data?.message || "Lỗi hệ thống. Vui lòng thử lại sau.");
+      if (!silent) emitApiError(responseMessage(data, "Lỗi hệ thống. Vui lòng thử lại sau."));
       return Promise.resolve(null);
     }
 
@@ -90,7 +108,7 @@ api.interceptors.response.use(
     ================================ */
     if (status === 400 || status > 403) {
       console.warn("Client error:", error.response);
-      if (!silent) emitApiError(data?.errorMessage || data?.message || "Yêu cầu không hợp lệ.");
+      if (!silent) emitApiError(responseMessage(data, "Yêu cầu không hợp lệ."));
     }
 
     return Promise.reject(error);

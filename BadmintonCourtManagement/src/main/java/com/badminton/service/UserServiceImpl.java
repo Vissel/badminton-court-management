@@ -6,6 +6,7 @@ import com.badminton.model.CacheObject;
 import com.badminton.repository.UserRepository;
 import com.badminton.requestmodel.RegisterUserDTO;
 import com.badminton.requestmodel.ResetUserRequest;
+import com.badminton.util.RsaKeyService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -27,6 +28,9 @@ public class UserServiceImpl implements UserService {
     @Autowired
     private AppCache appCache;
 
+    @Autowired
+    private RsaKeyService rsaKeyService;
+
     @Override
     public boolean saveAdminUser(RegisterUserDTO userDTO) {
         boolean isSaved = false;
@@ -35,7 +39,14 @@ public class UserServiceImpl implements UserService {
 
             Player user;
             if (!existedPlayer.isPresent()) {
-                user = new Player(userDTO.getUserName(), encoder.encode(userDTO.getPassword()));
+                // Password arrives as RSA ciphertext (same contract as /login).
+                String rawPassword;
+                try {
+                    rawPassword = rsaKeyService.decrypt(userDTO.getPassword());
+                } catch (IllegalArgumentException e) {
+                    return false;
+                }
+                user = new Player(userDTO.getUserName(), encoder.encode(rawPassword));
                 isSaved = userRepo.save(user).getPlayerId() != 0;
             }
         }
@@ -50,6 +61,9 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public ResponseEntity<String> generateResetPassToken(String userName) {
+        if (userRepo.findByPlayerName(userName).isEmpty()) {
+            return ResponseEntity.badRequest().body("User is not present.");
+        }
         final String randomString = userName + UUID.randomUUID() + System.currentTimeMillis();
         final String token = encoder.encode(randomString);
         CacheObject cacheObject
@@ -63,8 +77,14 @@ public class UserServiceImpl implements UserService {
         String result = "Reset password for user " + resetUserRequest.getUserName() + " successfully.";
         ResponseEntity<String> responseEntity = ResponseEntity.ok(result);
         try {
+            // Both password fields arrive as RSA ciphertext. Decrypt before
+            // validation since RSA-OAEP is probabilistic and two ciphertexts
+            // of the same plaintext never match.
+            resetUserRequest.setNewPass(rsaKeyService.decrypt(resetUserRequest.getNewPass()));
+            resetUserRequest.setRepeatNewPass(rsaKeyService.decrypt(resetUserRequest.getRepeatNewPass()));
             validateRequest(resetUserRequest);
-            Player user = userRepo.findByPlayerName(resetUserRequest.getUserName()).get();
+            Player user = userRepo.findByPlayerName(resetUserRequest.getUserName())
+                    .orElseThrow(() -> new IllegalArgumentException("User is not present."));
             user.setPassword(encoder.encode(resetUserRequest.getNewPass()));
             userRepo.save(user);
             appCache.remove(resetUserRequest.getResetToken());
@@ -79,6 +99,7 @@ public class UserServiceImpl implements UserService {
     private void validateRequest(ResetUserRequest resetUserRequest) {
         Assert.isTrue(appCache.contains(resetUserRequest.getResetToken()), "Token is invalid");
         CacheObject cacheObject = (CacheObject) appCache.get(resetUserRequest.getResetToken());
+        Assert.notNull(cacheObject, "Token is invalid");
         Assert.isTrue((System.currentTimeMillis() - cacheObject.getExpiryTime()) < 1000 * 60 * 3, "Token is expired.");
         Assert.isTrue(resetUserRequest.getUserName().equals(cacheObject.getValue()),
                 "User is not present.");

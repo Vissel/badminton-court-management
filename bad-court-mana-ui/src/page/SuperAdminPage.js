@@ -6,8 +6,11 @@ import Button from "@mui/material/Button";
 import Stack from "@mui/material/Stack";
 import Divider from "@mui/material/Divider";
 import Grid from "@mui/material/Grid";
+import Snackbar from "@mui/material/Snackbar";
+import Alert from "@mui/material/Alert";
 import api from "../api/index";
 import { emitApiError } from "../api/errorBus";
+import { encryptPassword, withKeyRetry } from "../api/rsaCrypto";
 
 const RESET_TOKEN_TTL = 3 * 60 * 1000;
 
@@ -22,6 +25,7 @@ function SuperAdminPage() {
   const [resetUserName, setResetUserName] = useState("");
   const [resetPass, setResetPass] = useState({ newPass: "", repeatNewPass: "" });
   const [secondsLeft, setSecondsLeft] = useState(0);
+  const [snackbar, setSnackbar] = useState({ open: false, message: "" });
   const timerRef = useRef(null);
   const expireRef = useRef(null);
 
@@ -52,12 +56,14 @@ function SuperAdminPage() {
       return;
     }
     try {
-      const res = await api.post("/admin/internal/registerUser", {
-        userName: reg.userName,
-        password: reg.password,
-      });
+      const res = await withKeyRetry(async (cfg) =>
+        api.post("/admin/internal/registerUser", {
+          userName: reg.userName,
+          password: await encryptPassword(reg.password),
+        }, cfg)
+      );
       if (res?.status === 200) {
-        alert("Đăng ký admin thành công!");
+        setSnackbar({ open: true, message: res.data || "Đăng ký admin thành công!" });
         setReg({ userName: "", password: "", repeatPassword: "" });
       }
     } catch (err) {
@@ -75,14 +81,20 @@ function SuperAdminPage() {
       return;
     }
     try {
-      const res = await api.post("/admin/internal/resetPassword", {
-        userName: resetUserName,
-        newPass: resetPass.newPass,
-        repeatNewPass: resetPass.repeatNewPass,
-        resetToken,
+      const res = await withKeyRetry(async (cfg) => {
+        const [newPass, repeatNewPass] = await Promise.all([
+          encryptPassword(resetPass.newPass),
+          encryptPassword(resetPass.repeatNewPass),
+        ]);
+        return api.post("/admin/internal/resetPassword", {
+          userName: resetUserName,
+          newPass,
+          repeatNewPass,
+          resetToken,
+        }, cfg);
       });
       if (res?.status === 200) {
-        alert("Đặt lại mật khẩu thành công!");
+        setSnackbar({ open: true, message: res.data || "Đặt lại mật khẩu thành công!" });
         clearResetState();
         setForgot({ userName: "" });
       }
@@ -242,6 +254,24 @@ function SuperAdminPage() {
           </Grid>
         )}
       </Grid>
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        anchorOrigin={{ vertical: "top", horizontal: "center" }}
+        onClose={(_, reason) => {
+          if (reason === "clickaway") return;
+          setSnackbar((s) => ({ ...s, open: false }));
+        }}
+      >
+        <Alert
+          severity="success"
+          variant="filled"
+          onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+          sx={{ width: "100%" }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

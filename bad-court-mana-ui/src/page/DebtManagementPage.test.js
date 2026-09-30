@@ -186,9 +186,9 @@ test("history mode: Tất cả scans the whole roster via /summaryHistory, Lọc
 
   await screen.findByText("An");
 
-  // The date controls are disabled outside history mode
-  expect(screen.getByLabelText("Từ ngày")).toBeDisabled();
-  expect(screen.getByRole("button", { name: "Tất cả" })).toBeDisabled();
+  // The date controls only render in history mode
+  expect(screen.queryByLabelText("Từ ngày")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Tất cả" })).not.toBeInTheDocument();
 
   await userEvent.click(screen.getByRole("button", { name: "Lịch sử" }));
   // Seed stream: only the current debtor (An) is history-fetched on entry
@@ -201,11 +201,11 @@ test("history mode: Tất cả scans the whole roster via /summaryHistory, Lọc
   await waitFor(() => expect(getDebitHistorySummary).toHaveBeenCalledWith("Binh"));
   await screen.findByText("Binh");
 
-  // "Lọc theo ngày" scans the roster through /history with the range;
+  // "Lọc" scans the roster through /history with the range;
   // "Đến ngày" is pushed to end-of-day so the picked date is included.
   fireEvent.change(screen.getByLabelText("Từ ngày"), { target: { value: "2026-09-01" } });
   fireEvent.change(screen.getByLabelText("Đến ngày"), { target: { value: "2026-09-30" } });
-  await userEvent.click(screen.getByRole("button", { name: "Lọc theo ngày" }));
+  await userEvent.click(screen.getByRole("button", { name: "Lọc" }));
 
   const expectedFilter = { from: "2026-09-01", to: "2026-09-30T23:59:59", amountFrom: 0, amountTo: 0 };
   await waitFor(() => expect(listDebitHistory).toHaveBeenCalledTimes(2));
