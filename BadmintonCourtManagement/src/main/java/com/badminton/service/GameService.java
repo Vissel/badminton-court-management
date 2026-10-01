@@ -10,6 +10,8 @@ import java.util.List;
 public interface GameService {
     GameResult getGameResult(int courtId);
 
+    Result<Boolean> handleChangeGameState(GameDTO gameRequest);
+
     Result<Boolean> handleFinishGame(GameDTO gameRequest);
 
     Result<Boolean> terminateGame(GameDTO gameRequest);

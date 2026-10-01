@@ -1,30 +1,17 @@
 package com.badminton.service.impl;
 
-import com.badminton.entity.Game;
-import com.badminton.entity.GameShuttleMap;
-import com.badminton.entity.InventoryItem;
-import com.badminton.entity.PurchaseLot;
-import com.badminton.entity.ShuttleBall;
-import com.badminton.entity.StockMovement;
+import com.badminton.entity.*;
 import com.badminton.enums.ImportAction;
 import com.badminton.enums.InventoryItemType;
 import com.badminton.enums.StockMovementType;
 import com.badminton.model.dto.ServiceDTO;
 import com.badminton.model.inventory.StockIntakePlan;
 import com.badminton.model.inventory.StockIntakeRow;
-import com.badminton.repository.InventoryItemRepository;
-import com.badminton.repository.PurchaseLotRepository;
-import com.badminton.repository.ServiceRepositoty;
-import com.badminton.repository.ShuttleBallRepositoty;
-import com.badminton.repository.StockMovementRepository;
+import com.badminton.repository.*;
 import com.badminton.requestmodel.inventory.AdjustmentRequest;
 import com.badminton.requestmodel.inventory.InventoryItemRequest;
 import com.badminton.requestmodel.inventory.PurchaseRequest;
-import com.badminton.response.inventory.InventoryItemResponse;
-import com.badminton.response.inventory.StockCheckResponse;
-import com.badminton.response.inventory.StockIntakePreviewResponse;
-import com.badminton.response.inventory.StockIntakeRowResponse;
-import com.badminton.response.inventory.StockMovementResponse;
+import com.badminton.response.inventory.*;
 import com.badminton.response.product.ProductImportCounts;
 import com.badminton.response.result.Result;
 import com.badminton.service.InventoryService;
@@ -44,11 +31,7 @@ import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -76,7 +59,9 @@ public class InventoryServiceImpl implements InventoryService {
      */
     private static final String UNIT_BASE = "BASE";
     private static final String UNIT_PACKAGE = "PACKAGE";
-    /** Default unit config auto-applied to new SHUTTLE_BALL items. */
+    /**
+     * Default unit config auto-applied to new SHUTTLE_BALL items.
+     */
     private static final String BALL_BASE_UNIT = "quả";
     private static final String BALL_PACKAGE_UNIT = "ống";
     private static final int BALL_UNITS_PER_PACKAGE = 12;
@@ -137,7 +122,7 @@ public class InventoryServiceImpl implements InventoryService {
     @Override
     @Transactional(readOnly = true)
     public Result<StockCheckResponse> checkStock(Integer itemId, String itemName,
-            InventoryItemType itemType) {
+                                                 InventoryItemType itemType) {
         Result<StockCheckResponse> result = new Result<>();
         try {
             InventoryItem item = null;
@@ -564,6 +549,11 @@ public class InventoryServiceImpl implements InventoryService {
         }
     }
 
+    /**
+     * look meaningless
+     *
+     * @param game
+     */
     @Override
     @Transactional(readOnly = true)
     public void warnLowStockForGame(Game game) {
@@ -577,7 +567,7 @@ public class InventoryServiceImpl implements InventoryService {
             }
             InventoryItem item = ball.getItem() != null ? ball.getItem()
                     : itemRepo.findByItemNameIgnoreCaseAndItemType(
-                            ball.getShuttleName(), InventoryItemType.SHUTTLE_BALL).orElse(null);
+                    ball.getShuttleName(), InventoryItemType.SHUTTLE_BALL).orElse(null);
             if (item == null) {
                 continue;
             }
@@ -602,7 +592,7 @@ public class InventoryServiceImpl implements InventoryService {
     }
 
     private void recordServiceMovements(List<ServiceDTO> services, Long refId,
-            StockMovementType type, int sign) {
+                                        StockMovementType type, int sign) {
         if (services == null) {
             return;
         }
@@ -728,7 +718,7 @@ public class InventoryServiceImpl implements InventoryService {
     }
 
     private StockMovement baseMovement(InventoryItem item, StockMovementType type,
-            int delta, String note) {
+                                       int delta, String note) {
         StockMovement movement = new StockMovement();
         movement.setItem(item);
         movement.setMovementType(type);
@@ -888,7 +878,9 @@ public class InventoryServiceImpl implements InventoryService {
         throw new IllegalArgumentException("Đơn vị không hợp lệ: " + raw);
     }
 
-    /** Cost per base unit (ledger unit cost). */
+    /**
+     * Cost per base unit (ledger unit cost).
+     */
     private BigDecimal baseUnitCost(BigDecimal purchasedUnitCost, int multiplier) {
         if (multiplier <= 1) {
             return purchasedUnitCost;

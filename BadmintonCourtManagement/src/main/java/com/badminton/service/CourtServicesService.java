@@ -7,7 +7,6 @@ import com.badminton.constant.GameType;
 import com.badminton.core.player.CoreAvailablePlayerService;
 import com.badminton.entity.*;
 import com.badminton.exception.BusinessException;
-import com.badminton.exception.ElementNotExistException;
 import com.badminton.exception.ErrorMess;
 import com.badminton.exception.enums.ErrorCodeEnum;
 import com.badminton.model.dto.ServiceDTO;
@@ -556,88 +555,15 @@ public class CourtServicesService {
      * Req5 - Change game state: Started, Finish, Cancel <br>
      * Flows: Not start -> Started <br>
      * Started -> Finish <br>
-     * Started -> Cancel
+     * Started -> Cancel <br>
+     * Logic is centralized in {@link GameService#handleChangeGameState(GameDTO)};
+     * this delegate keeps backward compatibility for internal callers.
      *
      * @return
      */
-    @Transactional
     public Boolean changeGameState(GameDTO gameDTO) {
-        try {
-            log.info("Changing GameState {}", CommonConstant.START);
-            final String stateChange = gameDTO.getGameState();
-            final int courtId = Integer.valueOf(gameDTO.getCourt().getCourtId());
-            Optional<Game> gameOpt = gameRepo.findByCourtIdAndEndedDateIsNull(courtId);
-            if (!gameOpt.isPresent()) {
-                throw new ElementNotExistException(ErrorCodeEnum.GAME_NOT_FOUND,
-                        String.format("No game is found by courtId [%s]", courtId));
-            }
-            Game game = gameOpt.get();
-            GameState currentGameState = GameState.getGameState(game.getState());
-            GameState changeGameState = GameState.getGameState(stateChange);
-            if (currentGameState != null && changeGameState != null) {
-                boolean validGameState = ServiceUtil.validGameStateUpdate(currentGameState, changeGameState);
-                boolean isStartGame = gameDTO.getGameType() == null
-                        ? readyToStart(changeGameState, game.getTeamOne(), game.getTeamTwo())
-                        : true;
-                // update
-                if (validGameState && isStartGame) {
-                    game.setState(stateChange);
-                    setSelectedBallIntoGame(game, gameDTO.getShuttleBalls(), stateChange);
-                    if (GameState.START.equals(changeGameState)) {
-                        try {
-                            inventoryService.warnLowStockForGame(game);
-                        } catch (RuntimeException e) {
-                            log.warn("Low-stock check failed for game {}", game.getGameId(), e);
-                        }
-                    }
-                    if (gameDTO.getGameType() != null) {
-                        game.setGtype(GameType.getGameTypeString(gameDTO.getGameType()));
-
-                    }
-
-                    // update ended time for FINISH & CANCEL state
-                    if (ServiceUtil.isEndedState(changeGameState)) {
-                        game.setEndedDate(session.getUTCPlus7Instant());
-                        // calculate and save the expense of game.
-                        gameCalculator.calculateGameResult(game);
-                        if (GameState.FINISH.equals(changeGameState)) {
-                            try {
-                                inventoryService.recordGameConsumption(game);
-                            } catch (RuntimeException e) {
-                                // stock deduction must not break game completion
-                                log.error("Stock deduction failed for game {}", game.getGameId(), e);
-                            }
-                        }
-                    }
-                    gameRepo.save(game);
-                    return true;
-                }
-
-            }
-        } catch (NumberFormatException | BusinessException e) {
-            log.error("Court id [{}] is invalid.{}", gameDTO.getCourt().getCourtId(), e.getMessage());
-        } catch (Exception e) {
-            log.error("Error:{}", e.getMessage());
-        } finally {
-            log.info("Changing GameState {}", CommonConstant.END);
-        }
-        return false;
-    }
-
-    private void setSelectedBallIntoGame(Game game, List<ShuttleBallDTO> shuttleBalls, String gameStateChange) {
-        if (GameState.START.equals(gameStateChange)) {
-            game.setShuttleMap(Arrays.asList(shuttleBallService.createGameShuttleMap(game, shuttleBalls.getFirst(),
-                    shuttleBalls.getFirst().getBallQuantity())));
-        }
-    }
-
-    private boolean readyToStart(GameState changeGameState, Team teamOne, Team teamTwo) {
-        if (changeGameState.equals(GameState.START)) {
-            boolean teamOneReady = teamOne.getPlayerOne() != null || teamOne.getPlayerTwo() != null;
-            boolean teamTwoReady = teamTwo.getPlayerOne() != null || teamTwo.getPlayerTwo() != null;
-            return teamOneReady && teamTwoReady;
-        }
-        return true;
+        Result<Boolean> result = gameService.handleChangeGameState(gameDTO);
+        return result.isSuccess() && Boolean.TRUE.equals(result.getData());
     }
 
     private Team getTeam(Game game, String area) {

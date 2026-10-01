@@ -10,6 +10,7 @@ import com.badminton.response.result.Result;
 import com.badminton.response.result.ShuttleBallResponse;
 import com.badminton.service.CourtManagementInterface;
 import com.badminton.service.CourtServicesService;
+import com.badminton.service.GameService;
 import com.badminton.service.RentByTimeService;
 import com.badminton.service.ShuttleBallServiceImpl;
 import com.badminton.util.CommonUtil;
@@ -33,6 +34,8 @@ public class CourtManagementController {
     private ShuttleBallServiceImpl ballService;
     @Autowired
     private CourtServicesService courtService;
+    @Autowired
+    private GameService gameService;
     @Autowired
     CourtManagementInterface courtManagementInterface;
     @Autowired
@@ -172,14 +175,16 @@ public class CourtManagementController {
      * Req5 - Change game state: Started, Finish, Cancel
      */
     @PostMapping(value = "/changeGameState")
-    public ResponseEntity<Boolean>
+    public ResponseEntity<Result<Boolean>>
     changeGameState(@RequestBody GameDTO gameDTO) {
         if (gameDTO != null && StringUtils.isNoneBlank(gameDTO.getGameState(), gameDTO.getCourt().getCourtId())) {
-            Boolean res = courtService.changeGameState(gameDTO);
-            // Error cases are not handled
-            return ResponseEntity.ok(res);
+            return ResponseConvertor.convert(gameService.handleChangeGameState(gameDTO));
         }
-        return ResponseEntity.badRequest().body(Boolean.FALSE);
+        Result<Boolean> error = new Result<>();
+        error.setSuccess(false);
+        error.setErrorMessage("Court id and game state must not be empty.");
+        error.setErrorCode(400);
+        return ResponseEntity.badRequest().body(error);
     }
 
     @PostMapping(value = "/changeSelectedBall")

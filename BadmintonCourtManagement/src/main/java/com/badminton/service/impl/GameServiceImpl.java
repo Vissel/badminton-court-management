@@ -13,9 +13,7 @@ import com.badminton.repository.GameRepository;
 import com.badminton.requestmodel.CourtAreaDTO;
 import com.badminton.requestmodel.GameDTO;
 import com.badminton.response.result.*;
-import com.badminton.service.GameService;
-import com.badminton.service.ProcessCallback;
-import com.badminton.service.ServiceTemplate;
+import com.badminton.service.*;
 import com.badminton.service.calculator.GameExpenseCalculator;
 import com.badminton.util.CommonUtil;
 import com.badminton.util.MoneyUtils;
@@ -25,6 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
 
 import java.time.Instant;
@@ -41,6 +40,10 @@ public class GameServiceImpl implements GameService {
     GameExpenseCalculator gameExpenseCalculator;
     @Autowired
     ServiceTemplate serviceTemple;
+    @Autowired
+    ShuttleBallServiceImpl shuttleBallService;
+    @Autowired
+    InventoryService inventoryService;
 
     @Override
     public List<Game> findAllInprogress() {
@@ -79,6 +82,46 @@ public class GameServiceImpl implements GameService {
         return result;
     }
 
+    /**
+     * Req5 - Centralized game state transition: Start, Finish, Cancel <br>
+     * Flows: Not start -> Started <br>
+     * Started -> Finish <br>
+     * Started -> Cancel
+     */
+    @Override
+    @Transactional
+    public Result<Boolean> handleChangeGameState(GameDTO gameRequest) {
+        return serviceTemple.execute(new ProcessCallback<GameDTO, Boolean>() {
+
+            @Override
+            public GameDTO getRequest() {
+                return gameRequest;
+            }
+
+            @Override
+            public void preProcess(GameDTO request) {
+                // 1. validate general game info
+                validateChangeGameStateRequest(request);
+            }
+
+            @Override
+            public Boolean process() throws BusinessException {
+                // 2. get Game
+                Game game = findActiveGame(gameRequest.getCourt().getCourtId());
+                // 3. branch the game by change state
+                GameState changeGameState = GameState.getGameState(gameRequest.getGameState());
+                return switch (changeGameState) {
+                    case START -> isRentGameType(gameRequest.getGameType())
+                            ? processStartRentGame(game, gameRequest)
+                            : processStartGame(game, gameRequest);
+                    case FINISH, CANCEL -> processEndGame(game, gameRequest, changeGameState);
+                    default -> throw new BusinessException(ErrorCodeEnum.FLOW_ERROR,
+                            "Unsupported game state: " + gameRequest.getGameState());
+                };
+            }
+        });
+    }
+
     @Override
     public Result<Boolean> handleFinishGame(GameDTO gameRequest) {
         return serviceTemple.execute(new ProcessCallback<GameDTO, Boolean>() {
@@ -110,7 +153,7 @@ public class GameServiceImpl implements GameService {
                 game.setState(GameState.FINISH.getValue());
                 gameRepository.save(game);
                 // 5. update shuttle ball quantity in stock
-                
+
                 return true;
             }
         });
@@ -353,6 +396,94 @@ public class GameServiceImpl implements GameService {
     private boolean validCourtArea(CourtAreaDTO area) {
         return area != null &&
                 area.getPlayerInArea() != null && CommonUtil.isNotNullEmpty(area.getArea(), area.getPlayerInArea().getPlayerName());
+    }
+
+    private Game findActiveGame(String courtId) throws BusinessException {
+        Optional<Game> gOption = gameRepository.findByCourtIdAndEndedDateIsNull(Integer.valueOf(courtId));
+        if (!gOption.isPresent()) {
+            throw new BusinessException(ErrorCodeEnum.GAME_NOT_FOUND, "Game is not found to execute.");
+        }
+        return gOption.get();
+    }
+
+    private void validateChangeGameStateRequest(GameDTO request) {
+        Assert.notNull(request.getCourt(), "Court must not be null.");
+        Assert.isTrue(StringUtils.isNotBlank(request.getCourt().getCourtId()), "Court id must not be empty.");
+        Assert.notNull(GameState.getGameState(request.getGameState()),
+                "Invalid game state: " + request.getGameState());
+    }
+
+    private boolean isRentGameType(String gameType) {
+        return gameType != null && GameType.RENT.name().equals(GameType.getGameTypeString(gameType));
+    }
+
+    private boolean processStartGame(Game game, GameDTO gameRequest) throws BusinessException {
+        requireTransition(game, GameState.START);
+        if (gameRequest.getGameType() == null && !readyToStart(game.getTeamOne(), game.getTeamTwo())) {
+            throw new BusinessException(ErrorCodeEnum.FLOW_ERROR, "Teams are not ready to start the game.");
+        }
+        if (gameRequest.getShuttleBalls() == null || gameRequest.getShuttleBalls().isEmpty()) {
+            throw new BusinessException(ErrorCodeEnum.SHUTTLE_BALL_NOT_FOUND,
+                    "Shuttle ball must be selected to start the game.");
+        }
+        game.setState(GameState.START.getValue());
+        setSelectedBallIntoGame(game, gameRequest.getShuttleBalls());
+        setGameTypeIfPresent(game, gameRequest.getGameType());
+        gameRepository.save(game);
+        return true;
+    }
+
+    private boolean processStartRentGame(Game game, GameDTO gameRequest) throws BusinessException {
+        requireTransition(game, GameState.START);
+        game.setState(GameState.START.getValue());
+        game.setGtype(GameType.RENT.name());
+        setSelectedBallIntoGame(game, gameRequest.getShuttleBalls());
+        gameRepository.save(game);
+        return true;
+    }
+
+    private boolean processEndGame(Game game, GameDTO gameRequest, GameState targetState) throws BusinessException {
+        requireTransition(game, targetState);
+        game.setState(targetState.getValue());
+        setGameTypeIfPresent(game, gameRequest.getGameType());
+        // update ended time for FINISH & CANCEL state
+        game.setEndedDate(TimeUtils.getUTCPlus7Instant());
+        // calculate and save the expense of game.
+        gameExpenseCalculator.calculateGameResult(game);
+        if (GameState.FINISH.equals(targetState)) {
+            inventoryService.recordGameConsumption(game);
+        }
+        gameRepository.save(game);
+        return true;
+    }
+
+    private void requireTransition(Game game, GameState targetState) throws BusinessException {
+        GameState currentState = game.getState() == null ? null : GameState.getGameState(game.getState());
+        if (currentState == null || !ServiceUtil.validGameStateUpdate(currentState, targetState)) {
+            throw new BusinessException(ErrorCodeEnum.FLOW_ERROR, String.format(
+                    "Invalid game state transition: [%s] -> [%s].", game.getState(), targetState.getValue()));
+        }
+    }
+
+    private boolean readyToStart(Team teamOne, Team teamTwo) {
+        boolean teamOneReady = teamOne != null && (teamOne.getPlayerOne() != null || teamOne.getPlayerTwo() != null);
+        boolean teamTwoReady = teamTwo != null && (teamTwo.getPlayerOne() != null || teamTwo.getPlayerTwo() != null);
+        return teamOneReady && teamTwoReady;
+    }
+
+    private void setSelectedBallIntoGame(Game game, List<ShuttleBallDTO> shuttleBalls) {
+        if (shuttleBalls == null || shuttleBalls.isEmpty()) {
+            return;
+        }
+        ShuttleBallDTO selectedBall = shuttleBalls.getFirst();
+        game.setShuttleMap(Arrays.asList(
+                shuttleBallService.createGameShuttleMap(game, selectedBall, selectedBall.getBallQuantity())));
+    }
+
+    private void setGameTypeIfPresent(Game game, String gameType) {
+        if (gameType != null) {
+            game.setGtype(GameType.getGameTypeString(gameType));
+        }
     }
 
     private ServiceDTO buildService(String courtName, float expense) {
