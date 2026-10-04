@@ -6,8 +6,8 @@ import com.badminton.enums.ProductImportMode;
 import com.badminton.enums.ProductSheet;
 import com.badminton.model.product.ProductImportPlan;
 import com.badminton.model.product.ProductImportRow;
-import com.badminton.repository.ServiceRepositoty;
-import com.badminton.repository.ShuttleBallRepositoty;
+import com.badminton.repository.ServiceRepository;
+import com.badminton.repository.ShuttleBallRepository;
 import com.badminton.response.product.ProductImportCounts;
 import com.badminton.response.product.ProductImportPreviewResponse;
 import com.badminton.response.product.ProductImportRowResponse;
@@ -29,13 +29,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
@@ -56,10 +50,10 @@ public class ProductImportExportServiceImpl implements ProductImportExportServic
     private final Map<String, ProductImportPlan> importCache = new ConcurrentHashMap<>();
 
     @Autowired
-    private ShuttleBallRepositoty shuttleRepo;
+    private ShuttleBallRepository shuttleRepo;
 
     @Autowired
-    private ServiceRepositoty serviceRepo;
+    private ServiceRepository serviceRepo;
 
     @Autowired
     private ProductExcelWriter productExcelWriter;
@@ -205,7 +199,7 @@ public class ProductImportExportServiceImpl implements ProductImportExportServic
 
         if (row.getSheet() == ProductSheet.SERVICE
                 && ProductImportApplier.PROTECTED_SERVICE_NAMES.stream()
-                        .anyMatch(p -> p.equalsIgnoreCase(row.getName()))) {
+                .anyMatch(p -> p.equalsIgnoreCase(row.getName()))) {
             row.setAction(ImportAction.ERROR);
             row.setMessage("Dịch vụ hệ thống, không được import");
             return;

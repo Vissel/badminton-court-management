@@ -19,4 +19,6 @@ public interface GameService {
     List<Game> findAllInprogress();
 
     Boolean saveAll(List<Game> gameList);
+
+    Boolean checkGameExistById(int id);
 }

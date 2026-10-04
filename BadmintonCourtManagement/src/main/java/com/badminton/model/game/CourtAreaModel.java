@@ -7,5 +7,6 @@ public class CourtAreaModel {
     private AreaEnum area;
     private String availablePlayer;
     private GameResultEnum gameResult;
+    private float expense;
 }
 

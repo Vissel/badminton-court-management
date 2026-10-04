@@ -2,6 +2,7 @@ package com.badminton.controller;
 
 import com.badminton.constant.GameState;
 import com.badminton.constant.GameType;
+import com.badminton.core.game.CoreGameService;
 import com.badminton.entity.AvailablePlayer;
 import com.badminton.entity.Court;
 import com.badminton.entity.Game;
@@ -52,8 +53,11 @@ class GameResultControllerConfirmTest {
 
     @BeforeEach
     void setUp() {
+        CoreGameService coreGameService = new CoreGameService();
+        ReflectionTestUtils.setField(coreGameService, "gameRepository", gameRepository);
         GameServiceImpl gameService = new GameServiceImpl();
         ReflectionTestUtils.setField(gameService, "gameRepository", gameRepository);
+        ReflectionTestUtils.setField(gameService, "coreGameService", coreGameService);
         ReflectionTestUtils.setField(gameService, "serviceTemple", new ServiceTemplate());
         controller = new GameResultController();
         controller.gameService = gameService;

@@ -32,12 +32,12 @@ select distinct a. pay_type
  from available_player a ;
 
 -- available players
-select a.ava_id, p.player_id, p. player_name, a.services, a. pay_type, a.is_canceled, a.session_id
+select a.ava_id, p.player_id, p. player_name, a.services, a. pay_amount, a.is_canceled, a.session_id
  from available_player a inner join player p on a.player_id = p.player_id
-where p.player_name ='nguoi choi 2';
+where p.player_name ='nguoi choi 05';
 
 select * from player
-where player_name ='nguoi choi 008';
+where player_name ='nguoi choi 03';
 
 select * from available_player
 where session_id in (114,108);
@@ -66,8 +66,10 @@ order by ID desc limit 10;
 select * from debit where player_id = 124;
 
  select * from payment
- where player_id = ( select player_id from player where player_name = 'nguoi choi 2');
+ where player_id = ( select player_id from player where player_name = 'nguoi choi 05');
  
  select * from payment_debit where payment_id in (1,2,3);
  select * from payment
  where player_id = ( select player_id from player where player_name = 'nguoi choi 2');
+ 
+ select * from inventory_item i inner join stock_movement m on i.item_id = m.item_id;

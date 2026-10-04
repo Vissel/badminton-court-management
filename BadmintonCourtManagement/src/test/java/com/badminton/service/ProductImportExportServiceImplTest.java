@@ -3,8 +3,8 @@ package com.badminton.service;
 import com.badminton.entity.ShuttleBall;
 import com.badminton.enums.ProductImportMode;
 import com.badminton.model.product.ProductImportPlan;
-import com.badminton.repository.ServiceRepositoty;
-import com.badminton.repository.ShuttleBallRepositoty;
+import com.badminton.repository.ServiceRepository;
+import com.badminton.repository.ShuttleBallRepository;
 import com.badminton.response.product.ProductImportPreviewResponse;
 import com.badminton.response.product.ProductImportRowResponse;
 import com.badminton.response.result.Result;
@@ -38,10 +38,10 @@ import static org.mockito.Mockito.*;
 class ProductImportExportServiceImplTest {
 
     @Mock
-    private ShuttleBallRepositoty shuttleRepo;
+    private ShuttleBallRepository shuttleRepo;
 
     @Mock
-    private ServiceRepositoty serviceRepo;
+    private ServiceRepository serviceRepo;
 
     @Mock
     private ProductImportApplier applier;
@@ -76,17 +76,17 @@ class ProductImportExportServiceImplTest {
 
         byte[] xlsx = workbook(
                 Map.of("ShuttleBall", List.of(
-                        new String[]{"SameCost", "25000"},
-                        new String[]{"OldPrice", "27000"},
-                        new String[]{"Inactive", "22000"},
-                        new String[]{"BrandNew", "30000"},
-                        new String[]{"", "1000"},
-                        new String[]{"Neg", "-5"},
-                        new String[]{"Dup", "1000"},
-                        new String[]{"Dup", "2000"}),
+                                new String[]{"SameCost", "25000"},
+                                new String[]{"OldPrice", "27000"},
+                                new String[]{"Inactive", "22000"},
+                                new String[]{"BrandNew", "30000"},
+                                new String[]{"", "1000"},
+                                new String[]{"Neg", "-5"},
+                                new String[]{"Dup", "1000"},
+                                new String[]{"Dup", "2000"}),
                         "Service", List.of(
-                        new String[]{"costInPerson", "30000"},
-                        new String[]{"Nước suối", "10000"})));
+                                new String[]{"costInPerson", "30000"},
+                                new String[]{"Nước suối", "10000"})));
         MockMultipartFile file = new MockMultipartFile("file", "products.xlsx", null, xlsx);
 
         Result<ProductImportPreviewResponse> result = service.previewImport(file, null);

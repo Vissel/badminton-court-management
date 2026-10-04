@@ -44,13 +44,15 @@ public class RentByTimeService {
     @Autowired
     private AvailablePlayerRepository avaPlayerRepo;
     @Autowired
-    private ServiceRepositoty serviceRepo;
+    private ServiceRepository serviceRepo;
 
     @Autowired
     private SessionServiceImpl sessionService;
 
     @Autowired
     private CourtServicesService courtService;
+    @Autowired
+    private GameService gameService;
     @Autowired
     private GameRepository gameRepo;
 
@@ -95,7 +97,7 @@ public class RentByTimeService {
                 RentState.STARTED.name());
         rentByTimeRepo.save(rental);
         GameDTO gameDTO = buildGameDTO(request);
-        courtService.changeGameState(gameDTO);
+        gameService.handleChangeGameState(gameDTO);
 
         // Add service to player
         BigDecimal hourlyRate = getHourlyRate();

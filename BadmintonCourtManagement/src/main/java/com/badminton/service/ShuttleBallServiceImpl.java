@@ -9,7 +9,7 @@ import com.badminton.exception.enums.ErrorCodeEnum;
 import com.badminton.model.dto.ShuttleBallDTO;
 import com.badminton.repository.GameRepository;
 import com.badminton.repository.GameShuttleMapRepository;
-import com.badminton.repository.ShuttleBallRepositoty;
+import com.badminton.repository.ShuttleBallRepository;
 import com.badminton.requestmodel.ShuttleBallRequest;
 import com.badminton.response.result.Result;
 import com.badminton.response.result.ShuttleBallResponse;
@@ -27,7 +27,7 @@ import java.util.stream.Collectors;
 public class ShuttleBallServiceImpl {
 
     @Autowired
-    private ShuttleBallRepositoty ballRepo;
+    private ShuttleBallRepository ballRepo;
     @Autowired
     private InventoryService inventoryService;
     @Autowired
@@ -35,7 +35,7 @@ public class ShuttleBallServiceImpl {
     @Autowired
     private GameShuttleMapRepository gameShuttleMapRepo;
     @Autowired
-    private ShuttleBallRepositoty shuttleBallRepo;
+    private ShuttleBallRepository shuttleBallRepo;
     @Autowired
     ServiceTemplate serviceTemple;
 

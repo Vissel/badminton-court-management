@@ -1,26 +1,34 @@
 package com.badminton.service.impl;
 
+import com.badminton.core.inventory.CoreInventoryService;
 import com.badminton.entity.*;
 import com.badminton.enums.ImportAction;
 import com.badminton.enums.InventoryItemType;
+import com.badminton.enums.MovementReferenceType;
 import com.badminton.enums.StockMovementType;
+import com.badminton.exception.BusinessException;
 import com.badminton.model.dto.ServiceDTO;
+import com.badminton.model.dto.ShuttleBallDTO;
 import com.badminton.model.inventory.StockIntakePlan;
 import com.badminton.model.inventory.StockIntakeRow;
 import com.badminton.repository.*;
 import com.badminton.requestmodel.inventory.AdjustmentRequest;
+import com.badminton.requestmodel.inventory.BallConsumeInGameRequest;
 import com.badminton.requestmodel.inventory.InventoryItemRequest;
 import com.badminton.requestmodel.inventory.PurchaseRequest;
 import com.badminton.response.inventory.*;
 import com.badminton.response.product.ProductImportCounts;
 import com.badminton.response.result.Result;
 import com.badminton.service.InventoryService;
+import com.badminton.service.ProcessCallback;
+import com.badminton.service.ServiceTemplate;
 import com.badminton.service.product.StockIntakeParser;
 import com.badminton.service.report.InventoryExcelWriter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.Assert;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -47,9 +55,6 @@ public class InventoryServiceImpl implements InventoryService {
     private static final String XLSX_EXTENSION = ".xlsx";
     private static final long IMPORT_TOKEN_TTL_MS = 30L * 60 * 1000;
     private static final int LOW_STOCK_THRESHOLD = 10;
-    private static final String REF_TYPE_GAME = "GAME";
-    private static final String REF_TYPE_PURCHASE_LOT = "PURCHASE_LOT";
-    private static final String REF_TYPE_PAYMENT = "PAYMENT";
     private static final String EXPORT_FILE_PREFIX = "inventory_";
     private static final ZoneId APP_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final DateTimeFormatter FILE_TIMESTAMP_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
@@ -82,16 +87,23 @@ public class InventoryServiceImpl implements InventoryService {
     private StockMovementRepository movementRepo;
 
     @Autowired
-    private ShuttleBallRepositoty shuttleRepo;
+    private ShuttleBallRepository shuttleRepo;
 
     @Autowired
-    private ServiceRepositoty serviceRepo;
+    private ServiceRepository serviceRepo;
+
 
     @Autowired
     private StockIntakeParser stockIntakeParser;
 
     @Autowired
     private InventoryExcelWriter inventoryExcelWriter;
+
+    @Autowired
+    private ServiceTemplate serviceTemplate;
+
+    @Autowired
+    private CoreInventoryService coreInventoryService;
 
     // ------------------------------------------------------------------
     // items
@@ -236,7 +248,7 @@ public class InventoryServiceImpl implements InventoryService {
             StockMovement movement = baseMovement(item, StockMovementType.PURCHASE_IN,
                     baseQty, request.getNote());
             movement.setUnitCost(baseUnitCost(request.getUnitCost(), selection.multiplier()));
-            movement.setRefType(REF_TYPE_PURCHASE_LOT);
+            movement.setRefType(MovementReferenceType.PURCHASE_LOT);
             movement.setRefId(savedLot.getLotId());
             movementRepo.save(movement);
 
@@ -495,7 +507,7 @@ public class InventoryServiceImpl implements InventoryService {
                     baseQty, "Import file");
             movement.setUnitCost(baseUnitCost(row.getUnitCost(),
                     row.getQuantity() > 0 ? baseQty / row.getQuantity() : 1));
-            movement.setRefType(REF_TYPE_PURCHASE_LOT);
+            movement.setRefType(MovementReferenceType.PURCHASE_LOT);
             movement.setRefId(savedLot.getLotId());
             movementRepo.save(movement);
         }
@@ -527,26 +539,96 @@ public class InventoryServiceImpl implements InventoryService {
 
     @Override
     @Transactional
-    public void recordGameConsumption(Game game) {
-        if (game == null || game.getShuttleMap() == null || game.getShuttleMap().isEmpty()) {
-            return;
-        }
-        for (GameShuttleMap map : game.getShuttleMap()) {
-            ShuttleBall ball = map.getShuttleBall();
-            if (ball == null) {
-                continue;
+    public Result<Boolean> recordBallConsumption(BallConsumeInGameRequest ballConsumeInGameRequest) {
+        return serviceTemplate.execute(new ProcessCallback<BallConsumeInGameRequest, Boolean>() {
+            @Override
+            public BallConsumeInGameRequest getRequest() {
+                return ballConsumeInGameRequest;
             }
-            int qty = map.getShuttleNumber();
-            if (qty <= 0) {
-                continue;
+
+            @Override
+            public void preProcess(BallConsumeInGameRequest request) {
+                Assert.notNull(request.getShuttleBallDTOList(), "Shuttle balls must not null");
+                Assert.isTrue(request.getInGame() > 0, "Game is not exist.");
             }
-            InventoryItem item = resolveItemForBall(ball);
-            StockMovement movement = baseMovement(item, StockMovementType.GAME_CONSUMPTION,
-                    -qty, "Game " + game.getGameId());
-            movement.setRefType(REF_TYPE_GAME);
-            movement.setRefId((long) game.getGameId());
-            movementRepo.save(movement);
+
+            @Override
+            public Boolean process() throws BusinessException {
+                if (getRequest().getShuttleBallDTOList().isEmpty()) {
+                    return false;
+                }
+                coreInventoryService.recordItemConsumption(toConsumptionMap(getRequest()), null);
+                return true;
+            }
+        });
+    }
+
+    @Override
+    @Transactional
+    public Result<Boolean> revokeBallConsumption(List<ShuttleBallDTO> balls) {
+        return serviceTemplate.execute(new ProcessCallback<List<ShuttleBallDTO>, Boolean>() {
+            @Override
+            public List<ShuttleBallDTO> getRequest() {
+                return balls;
+            }
+
+            @Override
+            public void preProcess(List<ShuttleBallDTO> request) {
+                Assert.notEmpty(balls, "Shuttle balls must not empty");
+            }
+
+            @Override
+            public Boolean process() throws BusinessException {
+                coreInventoryService.revokeItemConsumption(toConsumptionMap(balls), null);
+                return true;
+            }
+        });
+    }
+
+    private Map<InventoryItem, Integer> toConsumptionMap(BallConsumeInGameRequest request) {
+        return toConsumptionMap(request.getShuttleBallDTOList());
+    }
+
+    private Map<InventoryItem, Integer> toConsumptionMap(List<ShuttleBallDTO> balls) {
+        Map<InventoryItem, Integer> items = new LinkedHashMap<>();
+        for (ShuttleBallDTO ball : balls) {
+            InventoryItem item = resolveItemForBallDTO(ball);
+            if (item != null) {
+                items.merge(item, ball.getBallQuantity(), Integer::sum);
+            }
         }
+        return items;
+    }
+
+    private InventoryItem resolveItemForBallDTO(ShuttleBallDTO ballDTO) {
+        ShuttleBall ball = shuttleRepo.findAllByShuttleName(ballDTO.getShuttleName()).stream()
+                .filter(ShuttleBall::isActive).findFirst().orElse(null);
+        if (ball != null) {
+            return resolveItemForBall(ball);
+        }
+        return itemRepo.findByItemNameIgnoreCaseAndItemType(
+                ballDTO.getShuttleName(), InventoryItemType.SHUTTLE_BALL).orElse(null);
+    }
+
+    /**
+     * Resolves the stock item for a catalog ball. Catalog rows created after
+     * the initial backfill (AdminServiceImpl, product import) can carry
+     * {@code item_id = NULL} - heal the link lazily so stock always deducts.
+     */
+    private InventoryItem resolveItemForBall(ShuttleBall ball) {
+        if (ball.getItem() != null) {
+            return ball.getItem();
+        }
+        InventoryItem item = itemRepo
+                .findByItemNameIgnoreCaseAndItemType(ball.getShuttleName(), InventoryItemType.SHUTTLE_BALL)
+                .orElseGet(() -> {
+                    InventoryItem created = new InventoryItem(ball.getShuttleName(), InventoryItemType.SHUTTLE_BALL);
+                    applyUnitDefaults(created);
+                    return itemRepo.save(created);
+                });
+        ball.setItem(item);
+        shuttleRepo.save(ball);
+        return item;
     }
 
     /**
@@ -582,7 +664,7 @@ public class InventoryServiceImpl implements InventoryService {
     @Override
     @Transactional
     public void recordRetailSales(List<ServiceDTO> services, Long refId) {
-        recordServiceMovements(services, refId, StockMovementType.RETAIL_SALE, -1);
+        coreInventoryService.retailItem(services, refId);
     }
 
     @Override
@@ -603,7 +685,7 @@ public class InventoryServiceImpl implements InventoryService {
                 continue;
             }
             StockMovement movement = baseMovement(item, type, sign * qty, line.getServiceName());
-            movement.setRefType(REF_TYPE_PAYMENT);
+            movement.setRefType(MovementReferenceType.PAYMENT);
             movement.setRefId(refId);
             movementRepo.save(movement);
         }
@@ -628,6 +710,7 @@ public class InventoryServiceImpl implements InventoryService {
     }
 
     @Override
+    @Transactional
     public long getStockOnHand(InventoryItem item) {
         return movementRepo.sumQuantityDeltaByItem(item);
     }
@@ -714,7 +797,8 @@ public class InventoryServiceImpl implements InventoryService {
         return new StockMovementResponse(m.getMovementId(),
                 m.getItem().getItemId(), m.getItem().getItemName(),
                 m.getMovementType().name(), m.getQuantityDelta(), m.getUnitCost(),
-                m.getRefType(), m.getRefId(), m.getNote(), m.getCreatedDate());
+                m.getRefType() != null ? m.getRefType().name() : null,
+                m.getRefId(), m.getNote(), m.getCreatedDate());
     }
 
     private StockMovement baseMovement(InventoryItem item, StockMovementType type,
@@ -770,26 +854,6 @@ public class InventoryServiceImpl implements InventoryService {
         }
     }
 
-    /**
-     * Resolves the stock item for a catalog ball. Catalog rows created after
-     * the initial backfill (AdminServiceImpl, product import) can carry
-     * {@code item_id = NULL} - heal the link lazily so stock always deducts.
-     */
-    private InventoryItem resolveItemForBall(ShuttleBall ball) {
-        if (ball.getItem() != null) {
-            return ball.getItem();
-        }
-        InventoryItem item = itemRepo
-                .findByItemNameIgnoreCaseAndItemType(ball.getShuttleName(), InventoryItemType.SHUTTLE_BALL)
-                .orElseGet(() -> {
-                    InventoryItem created = new InventoryItem(ball.getShuttleName(), InventoryItemType.SHUTTLE_BALL);
-                    applyUnitDefaults(created);
-                    return itemRepo.save(created);
-                });
-        ball.setItem(item);
-        shuttleRepo.save(ball);
-        return item;
-    }
 
     /**
      * Default units: SHUTTLE_BALL → quả base / ống package of 12; GOODS keep

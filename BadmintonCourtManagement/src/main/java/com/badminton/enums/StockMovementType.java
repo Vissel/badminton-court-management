@@ -9,11 +9,12 @@ public enum StockMovementType {
      */
     PURCHASE_IN,
     /**
-     * Shuttle balls consumed by a finished game (negative delta).
+     * Shuttle balls consumed while start game, or add into game, or rental
      */
     GAME_CONSUMPTION,
     /**
      * Goods sold to a player at checkout (negative delta).
+     * Shuttle ball when a game finish.
      */
     RETAIL_SALE,
     /**
@@ -22,6 +23,7 @@ public enum StockMovementType {
     ADJUSTMENT,
     /**
      * Returned goods (positive delta).
+     * shuttle ball return when terminated game.
      */
     RETURN
 }

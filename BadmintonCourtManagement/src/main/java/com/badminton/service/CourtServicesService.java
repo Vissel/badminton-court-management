@@ -3,7 +3,6 @@ package com.badminton.service;
 import com.badminton.BadmintonCourtManagementApplication;
 import com.badminton.constant.CommonConstant;
 import com.badminton.constant.GameState;
-import com.badminton.constant.GameType;
 import com.badminton.core.player.CoreAvailablePlayerService;
 import com.badminton.entity.*;
 import com.badminton.exception.BusinessException;
@@ -38,7 +37,7 @@ public class CourtServicesService {
     private final BadmintonCourtManagementApplication badmintonCourtManagementApplication;
 
     @Autowired
-    private ServiceRepositoty serviceRepo;
+    private ServiceRepository serviceRepo;
     @Autowired
     private SessionServiceImpl session;
     @Autowired
@@ -65,7 +64,7 @@ public class CourtServicesService {
     @Autowired
     private GameRepository gameRepo;
     @Autowired
-    private ShuttleBallRepositoty ballRepo;
+    private ShuttleBallRepository ballRepo;
     @Autowired
     private CourtRepositoty courtRepo;
     @Autowired
@@ -549,21 +548,6 @@ public class CourtServicesService {
             log.info(ErrorMess.ADD_PLAYER_INTO_COURT, CommonConstant.END);
         }
         return false;
-    }
-
-    /**
-     * Req5 - Change game state: Started, Finish, Cancel <br>
-     * Flows: Not start -> Started <br>
-     * Started -> Finish <br>
-     * Started -> Cancel <br>
-     * Logic is centralized in {@link GameService#handleChangeGameState(GameDTO)};
-     * this delegate keeps backward compatibility for internal callers.
-     *
-     * @return
-     */
-    public Boolean changeGameState(GameDTO gameDTO) {
-        Result<Boolean> result = gameService.handleChangeGameState(gameDTO);
-        return result.isSuccess() && Boolean.TRUE.equals(result.getData());
     }
 
     private Team getTeam(Game game, String area) {

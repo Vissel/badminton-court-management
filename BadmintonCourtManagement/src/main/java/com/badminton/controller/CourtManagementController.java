@@ -8,11 +8,7 @@ import com.badminton.response.RentByTimeResponse;
 import com.badminton.response.ServiceResponse;
 import com.badminton.response.result.Result;
 import com.badminton.response.result.ShuttleBallResponse;
-import com.badminton.service.CourtManagementInterface;
-import com.badminton.service.CourtServicesService;
-import com.badminton.service.GameService;
-import com.badminton.service.RentByTimeService;
-import com.badminton.service.ShuttleBallServiceImpl;
+import com.badminton.service.*;
 import com.badminton.util.CommonUtil;
 import com.badminton.util.ResponseConvertor;
 import lombok.extern.slf4j.Slf4j;
@@ -175,8 +171,7 @@ public class CourtManagementController {
      * Req5 - Change game state: Started, Finish, Cancel
      */
     @PostMapping(value = "/changeGameState")
-    public ResponseEntity<Result<Boolean>>
-    changeGameState(@RequestBody GameDTO gameDTO) {
+    public ResponseEntity<Result<Boolean>> changeGameState(@RequestBody GameDTO gameDTO) {
         if (gameDTO != null && StringUtils.isNoneBlank(gameDTO.getGameState(), gameDTO.getCourt().getCourtId())) {
             return ResponseConvertor.convert(gameService.handleChangeGameState(gameDTO));
         }

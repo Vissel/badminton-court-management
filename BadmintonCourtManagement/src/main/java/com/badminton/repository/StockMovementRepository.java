@@ -2,7 +2,9 @@ package com.badminton.repository;
 
 import com.badminton.entity.InventoryItem;
 import com.badminton.entity.StockMovement;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -13,6 +15,7 @@ import java.util.List;
 @Repository
 public interface StockMovementRepository extends JpaRepository<StockMovement, Long> {
 
+    @Lock(LockModeType.PESSIMISTIC_READ)
     @Query("SELECT COALESCE(SUM(m.quantityDelta), 0) FROM StockMovement m WHERE m.item = :item")
     long sumQuantityDeltaByItem(@Param("item") InventoryItem item);
 

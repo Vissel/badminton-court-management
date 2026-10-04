@@ -1,5 +1,6 @@
 package com.badminton.entity;
 
+import com.badminton.enums.MovementReferenceType;
 import com.badminton.enums.StockMovementType;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -43,8 +44,9 @@ public class StockMovement {
     /**
      * Reference to the business event, e.g. GAME for {@code game_id}.
      */
+    @Enumerated(EnumType.STRING)
     @Column(name = "ref_type")
-    private String refType;
+    private MovementReferenceType refType;
 
     @Column(name = "ref_id")
     private Long refId;

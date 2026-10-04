@@ -4,7 +4,9 @@ import com.badminton.entity.Game;
 import com.badminton.entity.InventoryItem;
 import com.badminton.enums.InventoryItemType;
 import com.badminton.model.dto.ServiceDTO;
+import com.badminton.model.dto.ShuttleBallDTO;
 import com.badminton.requestmodel.inventory.AdjustmentRequest;
+import com.badminton.requestmodel.inventory.BallConsumeInGameRequest;
 import com.badminton.requestmodel.inventory.InventoryItemRequest;
 import com.badminton.requestmodel.inventory.PurchaseRequest;
 import com.badminton.response.inventory.InventoryItemResponse;
@@ -36,7 +38,7 @@ public interface InventoryService {
      * otherwise by (itemName, itemType).
      */
     Result<StockCheckResponse> checkStock(Integer itemId, String itemName,
-            InventoryItemType itemType);
+                                          InventoryItemType itemType);
 
     /**
      * Creates an item (itemId null) or updates name/unit/retailPrice/isActive.
@@ -82,11 +84,9 @@ public interface InventoryService {
     // Internal stock-deduction hooks (called by game/payment flows)
     // ------------------------------------------------------------------
 
-    /**
-     * Writes GAME_CONSUMPTION movements for every shuttle ball mapped on the game.
-     * Call once the game is finished.
-     */
-    void recordGameConsumption(Game game);
+    Result<Boolean> recordBallConsumption(BallConsumeInGameRequest ballConsumeInGameRequest);
+
+    Result<Boolean> revokeBallConsumption(List<ShuttleBallDTO> balls);
 
     /**
      * Logs low-stock warnings for the shuttle balls selected on a starting game.

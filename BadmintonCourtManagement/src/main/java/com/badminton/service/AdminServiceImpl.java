@@ -9,8 +9,8 @@ import com.badminton.exception.GlobalExceptionHandler;
 import com.badminton.model.dto.ServiceDTO;
 import com.badminton.model.dto.ShuttleBallDTO;
 import com.badminton.repository.CourtRepositoty;
-import com.badminton.repository.ServiceRepositoty;
-import com.badminton.repository.ShuttleBallRepositoty;
+import com.badminton.repository.ServiceRepository;
+import com.badminton.repository.ShuttleBallRepository;
 import com.badminton.requestmodel.SetUpServiceDTO;
 import com.badminton.requestmodel.SetUpServiceRequest;
 import com.badminton.response.SetUpServiceResponse;
@@ -35,9 +35,9 @@ public class AdminServiceImpl implements AdminService {
     @Autowired
     private CourtRepositoty courtRepo;
     @Autowired
-    private ShuttleBallRepositoty shuttleRepo;
+    private ShuttleBallRepository shuttleRepo;
     @Autowired
-    private ServiceRepositoty serviceRepo;
+    private ServiceRepository serviceRepo;
 
     private static final String COURT_STR = "Sân ";
 

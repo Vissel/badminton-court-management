@@ -2,13 +2,12 @@ package com.badminton.service.product;
 
 import com.badminton.constant.ApiConstant;
 import com.badminton.entity.ShuttleBall;
-import com.badminton.enums.ImportAction;
 import com.badminton.enums.ProductImportMode;
 import com.badminton.enums.ProductSheet;
 import com.badminton.model.product.ProductImportPlan;
 import com.badminton.model.product.ProductImportRow;
-import com.badminton.repository.ServiceRepositoty;
-import com.badminton.repository.ShuttleBallRepositoty;
+import com.badminton.repository.ServiceRepository;
+import com.badminton.repository.ShuttleBallRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -27,10 +26,10 @@ import java.util.Set;
 public class ProductImportApplier {
 
     @Autowired
-    private ShuttleBallRepositoty shuttleRepo;
+    private ShuttleBallRepository shuttleRepo;
 
     @Autowired
-    private ServiceRepositoty serviceRepo;
+    private ServiceRepository serviceRepo;
 
     /**
      * Pricing settings rows that must never be imported, exported or deleted.
