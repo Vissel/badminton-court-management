@@ -24,15 +24,12 @@ public class Player {
 
 	private String playerName;
 
-	private String password;
-
 	@Column(updatable = false, insertable = false)
 	private Timestamp createdDate;
 
-	public Player(String playerName, String playerPassword) {
+	public Player(String playerName, String ignoredPassword) {
 		super();
 		this.playerName = playerName;
-		this.password = playerPassword;
 	}
 
 }

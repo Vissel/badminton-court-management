@@ -46,4 +46,14 @@
     <changeSet id="024" author="thach">
         <sqlFile path="db/changelog/inventory-units.sql"/>
     </changeSet>
+    <include file="db/changelog/rbac-jwt.sql"/>
+    <changeSet id="026" author="devin">
+        <sqlFile path="db/changelog/billing-tables.sql"/>
+    </changeSet>
+    <changeSet id="027" author="devin">
+        <sqlFile path="db/changelog/backup-change-tracking.sql"/>
+    </changeSet>
+    <changeSet id="028" author="devin">
+        <sqlFile path="db/changelog/billing-einvoice-error.sql"/>
+    </changeSet>
 </databaseChangeLog>

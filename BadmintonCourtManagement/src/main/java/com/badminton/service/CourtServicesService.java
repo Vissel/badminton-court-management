@@ -52,7 +52,6 @@ public class CourtServicesService {
     @Autowired
     CoreAvailablePlayerService coreAvailablePlayerService;
 
-
     @Autowired
     private ServiceTemplate serviceTemple;
     @Autowired
@@ -204,7 +203,8 @@ public class CourtServicesService {
                 return transactionTemplate.execute(new TransactionCallback<Boolean>() {
                     @Override
                     public Boolean doInTransaction(TransactionStatus status) {
-                        return coreAvailablePlayerService.updateAvailablePlayerName(request.getCurrName(), request.getNewName());
+                        return coreAvailablePlayerService.updateAvailablePlayerName(request.getCurrName(),
+                                request.getNewName());
                     }
                 });
             }
@@ -284,7 +284,6 @@ public class CourtServicesService {
 
         Player player = availablePlayer.getPlayer();
         player.setPlayerName(newPlayerName);
-        player.setPassword(newPlayerName);
         userRepo.save(player);
         return Boolean.TRUE;
     }
@@ -417,10 +416,12 @@ public class CourtServicesService {
     private void recordServiceDeltas(List<ServiceDTO> previous, List<ServiceDTO> current, Long refId) {
         Map<String, Integer> net = new HashMap<>();
         for (ServiceDTO dto : previous) {
-            net.merge(serviceDeltaKey(dto), dto.getQuantity() != null && dto.getQuantity() > 0 ? dto.getQuantity() : 1, Integer::sum);
+            net.merge(serviceDeltaKey(dto), dto.getQuantity() != null && dto.getQuantity() > 0 ? dto.getQuantity() : 1,
+                    Integer::sum);
         }
         for (ServiceDTO dto : current) {
-            net.merge(serviceDeltaKey(dto), -(dto.getQuantity() != null && dto.getQuantity() > 0 ? dto.getQuantity() : 1), Integer::sum);
+            net.merge(serviceDeltaKey(dto),
+                    -(dto.getQuantity() != null && dto.getQuantity() > 0 ? dto.getQuantity() : 1), Integer::sum);
         }
         for (Map.Entry<String, Integer> entry : net.entrySet()) {
             int delta = entry.getValue();
@@ -506,7 +507,8 @@ public class CourtServicesService {
             Team team = getTeam(game, area);
 
             Optional<AvailablePlayer> optPlayer = avaPlayerRepo
-                    .findAvailablePlayerInSessionByNameAndLeaveTimeNull(session.findListCurrentSession().getFirst(), playerName);
+                    .findAvailablePlayerInSessionByNameAndLeaveTimeNull(session.findListCurrentSession().getFirst(),
+                            playerName);
             if (!optPlayer.isPresent()) {
                 throw new BusinessException(ErrorCodeEnum.PLAYER_NOT_FOUND, "Available player is not found.");
             }

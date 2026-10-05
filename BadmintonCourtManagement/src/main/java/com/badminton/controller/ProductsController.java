@@ -33,9 +33,7 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 @RequestMapping("/api/products")
 public class ProductsController {
 
-    private static final String XLSX_CONTENT_TYPE =
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-    private static final String ROOT_USER = "rootuser";
+    private static final String XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     private static final String TEMPLATE_FILE_NAME = "products_template.xlsx";
 
     @Autowired
@@ -82,7 +80,8 @@ public class ProductsController {
 
     /**
      * Apply a cached preview transactionally.
-     * Optional {@code mode=REPLACE} deactivates active products absent from the file.
+     * Optional {@code mode=REPLACE} deactivates active products absent from the
+     * file.
      */
     @PostMapping("/import/commit")
     public ResponseEntity<Result<Boolean>> commitImport(
@@ -105,7 +104,9 @@ public class ProductsController {
 
     private boolean isRootUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        return authentication != null && ROOT_USER.equals(authentication.getName());
+        return authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(authority -> authority.getAuthority().equals("ROLE_ROOT")
+                        || authority.getAuthority().equals("ROLE_ADMINISTRATOR"));
     }
 
     private <T> ResponseEntity<Result<T>> forbidden() {

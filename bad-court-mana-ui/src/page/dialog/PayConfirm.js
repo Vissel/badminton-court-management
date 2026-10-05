@@ -22,6 +22,9 @@ import PaymentOutlinedIcon from "@mui/icons-material/PaymentOutlined";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import CloseIcon from "@mui/icons-material/Close";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
+import Collapse from "@mui/material/Collapse";
+import TextField from "@mui/material/TextField";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { TYPE, ADVANCE_SERVICE_NAME } from "../HomePage";
 import { VN_CURRENCY, formatVND } from "../MoneyUtils";
 import PlayerDebtSection from "./PlayerDebtSection";
@@ -35,6 +38,14 @@ const EMPTY_DEBT_STATE = {
   totalDebitAmount: 0,
 };
 
+const EMPTY_BUYER = {
+  buyerName: "",
+  company: "",
+  taxCode: "",
+  address: "",
+  email: "",
+};
+
 const PayConfirm = ({ show, data, onConfirm, onExit }) => {
   // Debt flow (summary / list / record / pay) lives in PlayerDebtSection;
   // it reports recorded debts up so the payable amounts stay in sync.
@@ -43,12 +54,18 @@ const PayConfirm = ({ show, data, onConfirm, onExit }) => {
   // Existing debts picked in DebitListDialog — settled together with this
   // payment via PayRequest.payDebits (PayDebitRequest shape).
   const [payDebits, setPayDebits] = useState(null);
+  // Business-buyer fields for the bill (company/MST...). Walk-in customers
+  // leave it empty — the bill then carries the player name only.
+  const [buyerOpen, setBuyerOpen] = useState(false);
+  const [buyer, setBuyer] = useState(EMPTY_BUYER);
 
   useEffect(() => {
     if (show) {
       setDebtInfo(EMPTY_DEBT_STATE);
       setPaymentMethod("CASH");
       setPayDebits(null);
+      setBuyerOpen(false);
+      setBuyer(EMPTY_BUYER);
     }
   }, [show]);
 
@@ -246,6 +263,68 @@ const PayConfirm = ({ show, data, onConfirm, onExit }) => {
             </Box>
           )}
 
+          {/* Buyer/tax info for the bill — optional, business customers only */}
+          {isPayment && (
+            <>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1,
+                  mt: 1.5,
+                  cursor: "pointer",
+                }}
+                onClick={() => setBuyerOpen((prev) => !prev)}
+              >
+                <ReceiptLongIcon fontSize="small" color="action" />
+                <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
+                  Thông tin xuất hoá đơn
+                </Typography>
+                <ExpandMoreIcon
+                  fontSize="small"
+                  sx={{
+                    transform: buyerOpen ? "rotate(180deg)" : "none",
+                    transition: "transform 0.2s",
+                  }}
+                />
+              </Box>
+              <Collapse in={buyerOpen}>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1, mt: 1, pl: 4 }}>
+                  <TextField
+                    size="small"
+                    label="Tên người mua"
+                    value={buyer.buyerName}
+                    onChange={(e) => setBuyer({ ...buyer, buyerName: e.target.value })}
+                  />
+                  <TextField
+                    size="small"
+                    label="Tên công ty"
+                    value={buyer.company}
+                    onChange={(e) => setBuyer({ ...buyer, company: e.target.value })}
+                  />
+                  <TextField
+                    size="small"
+                    label="Mã số thuế"
+                    value={buyer.taxCode}
+                    onChange={(e) => setBuyer({ ...buyer, taxCode: e.target.value })}
+                  />
+                  <TextField
+                    size="small"
+                    label="Địa chỉ"
+                    value={buyer.address}
+                    onChange={(e) => setBuyer({ ...buyer, address: e.target.value })}
+                  />
+                  <TextField
+                    size="small"
+                    label="Email nhận HĐĐT"
+                    value={buyer.email}
+                    onChange={(e) => setBuyer({ ...buyer, email: e.target.value })}
+                  />
+                </Box>
+              </Collapse>
+            </>
+          )}
+
           {/* Service breakdown */}
           {regularServices.length > 0 && (
             <>
@@ -413,7 +492,8 @@ const PayConfirm = ({ show, data, onConfirm, onExit }) => {
               debitAmount: debtInfo.totalDebitAmount,
               debitNote: debtInfo.debtNote,
               paymentMethod: paymentMethod,
-              payDebits: payDebits
+              payDebits: payDebits,
+              buyer: Object.values(buyer).some((v) => v && v.trim()) ? buyer : null,
             })}
             fullWidth
             size="large"

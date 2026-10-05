@@ -22,7 +22,7 @@ Help **court administrators** and **cashiers** run the facility efficiently: one
 | **Payment & leave session** with method and timestamp | Stripe/subscription models | Suited to **cash / local payment** workflows and **clear session exit**. |
 | **Owner settings**: courts, shuttle types, services, default per-head court fee | Multi-tenant SaaS pricing tiers | **Venue configuration** in-app; documented as best changed **before** opening the day’s session. |
 | **Reports**: sessions by month, revenue, Excel per session or bulk | BI dashboards, cloud analytics | **Practical Excel** exports for accountants and owners. |
-| **Security**: login required; session / CSRF token lifetime (~30 min per product docs) | OAuth, magic links | **Classic session-based** staff login; re-login does not lose persisted data. |
+| **Security**: login required; role-based access with JWT access and refresh tokens | OAuth, magic links | Stateless staff authentication suited to online deployment; re-login does not lose persisted data. |
 
 **Positioning:** A **specialized venue operations and settlement** tool rather than a public booking marketplace or league management platform.
 
@@ -32,9 +32,10 @@ Help **court administrators** and **cashiers** run the facility efficiently: one
 
 | Role | Responsibilities |
 |------|------------------|
-| **Court owner** | Configure courts, shuttle types, add-on services, and prices; default per-player court fee. |
-| **Administrator / cashier** | Login, sessions, players, courts, matches, shuttles/services, results, costs, payments, reports. |
-| **Internal super admin** | Create admin accounts, reset passwords (exceptional / internal use). |
+| **Root** | All application permissions, including staff account and role administration. The migrated `rootuser` account receives this role. |
+| **Administrator** | All operational, setup, reporting, debt, product, and inventory permissions except staff account administration. |
+| **Coordinator** | HomePage operations only: player check-in and court assignment, matches, services, payments, and live stock checks. |
+| **Player** | Business-domain person added from HomePage; has no application access or login account. |
 
 ---
 
@@ -59,7 +60,7 @@ Help **court administrators** and **cashiers** run the facility efficiently: one
 |------|------------|
 | Runtime | **Java 21** |
 | Framework | **Spring Boot 3.5.x** (WAR packaging for external Tomcat) |
-| Security | **Spring Security**, BCrypt passwords, session + CSRF (configurable) |
+| Security | **Spring Security**, BCrypt passwords, RBAC, RS256 JWT access tokens, rotating refresh tokens |
 | Data | **Spring Data JPA**, **MySQL** (`mysql-connector-j`) |
 | Migrations | **Liquibase** (`db/changelog`) |
 | API | REST controllers (`/login`, `/session`, `/court-mana`, `/gameResult`, `/api/v1/pay`, `/api/v1/manager`, `/admin/internal`, `/api` settings, etc.) |

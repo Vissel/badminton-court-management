@@ -5,10 +5,8 @@ import CircularProgress from "@mui/material/CircularProgress";
 import Typography from "@mui/material/Typography";
 import { AuthContext } from "./AuthContext";
 
-const isRootUser = () => sessionStorage.getItem("username") === "rootuser";
-
-const ProtectedRoute = ({ children, requireRoot = false }) => {
-  const { authenticated, loading } = useContext(AuthContext);
+const ProtectedRoute = ({ children, roles: allowedRoles = [] }) => {
+  const { authenticated, loading, roles } = useContext(AuthContext);
 
   if (loading) {
     return (
@@ -27,13 +25,10 @@ const ProtectedRoute = ({ children, requireRoot = false }) => {
       </Box>
     );
   }
-  if (!authenticated) {
-    return <Navigate to="/login" replace />;
-  }
-  if (requireRoot && !isRootUser()) {
+  if (!authenticated) return <Navigate to="/login" replace />;
+  if (allowedRoles.length > 0 && !roles.some((role) => allowedRoles.includes(role))) {
     return <Navigate to="/home" replace />;
   }
-
   return children ? children : <Outlet />;
 };
 

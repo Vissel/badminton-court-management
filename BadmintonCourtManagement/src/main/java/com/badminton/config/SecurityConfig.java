@@ -1,9 +1,6 @@
 package com.badminton.config;
 
 import com.badminton.CustomUserDetailsService;
-import jakarta.servlet.http.HttpServletResponse;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.http.HttpHeaders;
@@ -18,9 +15,9 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
-import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
 import org.springframework.stereotype.Component;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -28,66 +25,55 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.Arrays;
 import java.util.List;
 
-@Slf4j
 @Component
 @EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
+    private static final String ROOT = "ROOT";
+    private static final String ADMIN = "ADMINISTRATOR";
+    private static final String COORDINATOR = "COORDINATOR";
 
-    @Autowired
-    private CustomUserDetailsService userService;
+    private final CustomUserDetailsService userService;
 
-    @Value(value = "${server.servlet.context-path}")
-    private String context;
+    public SecurityConfig(CustomUserDetailsService userService) {
+        this.userService = userService;
+    }
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http, UrlBasedCorsConfigurationSource corsConfigurationSource)
+    SecurityFilterChain securityFilterChain(HttpSecurity http, UrlBasedCorsConfigurationSource cors,
+            JwtAuthenticationConverter jwtAuthenticationConverter)
             throws Exception {
-        http
-                // CSRF protection enabled for production
-                .csrf(csrf ->
-                        csrf.ignoringRequestMatchers("/login", "/logout", "/index", "/error",
-                                        "/public/**", "/csrf", "/api/v1/health")
-                                .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
-                )
-                // Configure CORS
-                .cors(cors -> cors.configurationSource(corsConfigurationSource))
-                // Authorize all requests (adjust as per your security requirements)
-                .authorizeHttpRequests(authorize -> authorize.requestMatchers("/login", "/logout", "/index", "/error",
-                                "/public/**", "/csrf", "/public-key", "/api/v1/health").permitAll()
-                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()// a part to handle OPTIONs from FE
-                        .anyRequest().authenticated())
-                .sessionManagement(session ->
-                        session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
-                )
-
-//				.formLogin(form -> form.loginProcessingUrl("/login").usernameParameter("username")
-//						.passwordParameter("password").permitAll().successHandler(authenticationSuccessHandler())
-//						.failureHandler(authenticationFailureHandler()))
-                .logout(logout -> logout.logoutUrl("/logout")
-//						.logoutSuccessHandler((req, res, auth) -> res.setStatus(HttpServletResponse.SC_OK)))
-
-                                .logoutSuccessHandler((req, res, auth) -> {
-                                    // Invalidate CSRF cookie
-//							ResponseCookie csrfCookie = ResponseCookie.from("XSRF-TOKEN", "").path("/").maxAge(0)
-//									.build();
-//							res.setHeader(HttpHeaders.SET_COOKIE, csrfCookie.toString());
-                                    res.setStatus(HttpServletResponse.SC_OK);
-                                    res.getWriter().write("Logged out");
-
-                                })
-
-//				.sessionManagement(session -> session.maximumSessions(1).maxSessionsPreventsLogin(false)
-//						.expiredUrl("/login?expired"));
-
-                )
-//				.exceptionHandling(ex -> ex.authenticationEntryPoint((req, res, excep) -> {
-//					res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-//					res.getWriter().write("Unauthorized");
-//				}))
-        ;
-
+        http.csrf(csrf -> csrf.disable())
+                .cors(configurer -> configurer.configurationSource(cors))
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(authorize -> authorize
+                        .requestMatchers("/login", "/auth/refresh", "/logout", "/index", "/error",
+                                "/public/**", "/public-key", "/api/v1/health")
+                        .permitAll()
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers("/admin/internal/**").hasRole(ROOT)
+                        .requestMatchers("/api/inventory/checkStock", "/api/v1/debit/summary",
+                                "/api/v1/debit/listRemainingDebts", "/api/v1/debit/prePay")
+                        .hasAnyRole(ROOT, ADMIN, COORDINATOR)
+                        .requestMatchers("/court-mana/**", "/session/**", "/gameResult/**", "/api/v1/pay/**")
+                        .hasAnyRole(ROOT, ADMIN, COORDINATOR)
+                        .requestMatchers("/api/products/**", "/api/inventory/**", "/api/v1/manager/**",
+                                "/api/v1/debit/**", "/api/v1/player/**", "/api/**")
+                        .hasAnyRole(ROOT, ADMIN)
+                        .anyRequest().hasAnyRole(ROOT, ADMIN))
+                .oauth2ResourceServer(
+                        oauth -> oauth.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)));
         return http.build();
+    }
+
+    @Bean
+    JwtAuthenticationConverter jwtAuthenticationConverter() {
+        JwtGrantedAuthoritiesConverter authorities = new JwtGrantedAuthoritiesConverter();
+        authorities.setAuthoritiesClaimName("roles");
+        authorities.setAuthorityPrefix("ROLE_");
+        JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
+        converter.setJwtGrantedAuthoritiesConverter(authorities);
+        return converter;
     }
 
     @Bean
@@ -97,9 +83,9 @@ public class SecurityConfig {
 
     @Bean
     AuthenticationProvider authenticationProvider() {
-        DaoAuthenticationProvider authenticationProvider = new DaoAuthenticationProvider(userService);
-        authenticationProvider.setPasswordEncoder(passwordEncoder());
-        return authenticationProvider;
+        DaoAuthenticationProvider provider = new DaoAuthenticationProvider(userService);
+        provider.setPasswordEncoder(passwordEncoder());
+        return provider;
     }
 
     @Bean
@@ -108,84 +94,16 @@ public class SecurityConfig {
     }
 
     @Bean
-    UrlBasedCorsConfigurationSource corsConfigurationSource() {
+    UrlBasedCorsConfigurationSource corsConfigurationSource(
+            @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:8080}") String origins) {
         CorsConfiguration configuration = new CorsConfiguration();
-        // Allow all origins (use specific origins in production)
-        final String protocol = "http://";
-        final String tomcatPort = "8080";
-        final String devFEPort = "3000";
-        String host = "localhost";
-
-        configuration.setAllowedOriginPatterns(Arrays.asList(
-                concatOrigin(protocol, host, devFEPort),
-                concatOrigin(protocol, host, tomcatPort)
-        ));
-        // Allow all HTTP methods
+        configuration.setAllowedOrigins(Arrays.stream(origins.split(",")).map(String::trim).toList());
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        // Allow all headers
-        configuration.setAllowedHeaders(Arrays.asList("*"));
-        // Allow credentials (e.g., cookies, authorization headers)
+        configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
         configuration.setExposedHeaders(List.of(HttpHeaders.CONTENT_DISPOSITION));
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        // Apply this CORS configuration to all paths
         source.registerCorsConfiguration("/**", configuration);
-
         return source;
-    }
-
-    private String concatOrigin(String protocol, String host, String port) {
-        return protocol + host + ":" + port;
-    }
-
-    // Custom success handler to return JSON instead of redirecting
-//	@Bean
-//	AuthenticationSuccessHandler authenticationSuccessHandler() {
-//		return new AuthenticationSuccessHandler() {
-//			@Override
-//			public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response,
-//					Authentication authentication) throws IOException {
-//				response.setStatus(HttpServletResponse.SC_OK); // HTTP 200 OK
-//				// Return CSRF token after login
-
-    /// /				CsrfToken csrf = (CsrfToken) request.getAttribute(CsrfToken.class.getName());
-    /// /				request.getHeader(ApiConstant.HEADER_X_XCSRF_TOKEN)
-//				AuthenDTO authResponse = new AuthenDTO("Login successful", authentication.getName(),
-//						request.getHeader(ApiConstant.HEADER_X_XCSRF_TOKEN));
-//				response.setContentType("application/json");
-//				response.getWriter().write(authResponse.toString());
-//
-//				response.getWriter().flush();
-//				// If you use session, Spring Security will automatically set the JSESSIONID
-//				// cookie
-//			}
-//		};
-//	}
-
-    // Custom failure handler to return JSON instead of redirecting
-//	@Bean
-//	AuthenticationFailureHandler authenticationFailureHandler() {
-//		return new AuthenticationFailureHandler() {
-//			@Override
-//			public void onAuthenticationFailure(HttpServletRequest request, HttpServletResponse response,
-//					AuthenticationException exception) throws IOException {
-//				response.setStatus(HttpServletResponse.SC_UNAUTHORIZED); // HTTP 401 Unauthorized
-//				response.setContentType("application/json");
-//				AuthenDTO authResponse = new AuthenDTO("Authentication failed:" + exception.getMessage(),
-//						CommonConstant.EMPTY, CommonConstant.EMPTY);
-//				response.getWriter().write(authResponse.toString());
-//				response.getWriter().flush();
-//			}
-//		};
-//	}
-
-//	@Bean
-    HttpSessionCsrfTokenRepository csrfRepository() {
-//		CookieCsrfTokenRepository repo = CookieCsrfTokenRepository.withHttpOnlyFalse();
-//		repo.setCookiePath(context);
-        HttpSessionCsrfTokenRepository repo = new HttpSessionCsrfTokenRepository();
-        repo.setSessionAttributeName("_csrf");
-
-        return repo;
     }
 }

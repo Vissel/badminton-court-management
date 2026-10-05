@@ -19,4 +19,7 @@ public class PaymentDebitModel {
     private Integer numPaidDebts;
     private Integer numRemainingDebts;
     private String payDebitsMessage;
+    /** Bill issued for this payment. */
+    private Long billId;
+    private String billNo;
 }

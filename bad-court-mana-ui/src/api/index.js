@@ -2,6 +2,7 @@ import axios from "axios";
 import config from './config'
 import { authRef } from '../context/authRef';
 import { emitApiError } from './errorBus';
+import { clearAuth, getAccessToken, getRefreshToken, storeAuth } from './tokenStore';
 
 // import { useNavigate } from 'react-router';
 
@@ -15,9 +16,10 @@ const api = axios.create({
   timeout: config.timeout,
 });
 api.interceptors.request.use((config) => {
-  const csrfToken = sessionStorage.getItem("csrfToken");
-  if (csrfToken) {
-    config.headers["X-XSRF-TOKEN"] = csrfToken;
+  const accessToken = getAccessToken();
+  const anonymousPath = ["/login", "/auth/refresh", "/logout", "/public-key"].includes(config.url);
+  if (accessToken && !anonymousPath) {
+    config.headers.Authorization = `Bearer ${accessToken}`;
   }
   // FormData uploads must let the browser set the multipart boundary.
   if (config.data instanceof FormData) {
@@ -46,6 +48,22 @@ export const responseMessage = (data, fallback) => {
   return fallback;
 };
 
+let refreshPromise = null;
+
+const refreshAccessToken = () => {
+  if (!refreshPromise) {
+    refreshPromise = axios.post(`${config.baseURL}/auth/refresh`, {
+      refreshToken: getRefreshToken(),
+    }).then((response) => {
+      storeAuth(response.data);
+      return response.data.accessToken;
+    }).finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
+};
+
 api.interceptors.response.use(
   (response) => response,
 
@@ -67,15 +85,25 @@ api.interceptors.response.use(
     /* ===============================
        401 / 403 – Unauthorized
     ================================ */
-    if (status === 401 || status === 403) {
-      const excludePaths = ["/login", "*", "/"];
-      const isExcluded = excludePaths.some((p) => currentPath.includes(p));
-
-      if (!isExcluded) {
-        console.warn("Unauthorized / Forbidden – forcing logout");
+    if (status === 401 && !config?._retry && config?.url !== "/auth/refresh" && getRefreshToken()) {
+      try {
+        config._retry = true;
+        config.headers.Authorization = `Bearer ${await refreshAccessToken()}`;
+        return api(config);
+      } catch {
+        clearAuth();
         authRef.logout?.();
-        return new Promise(() => { });
+        return Promise.reject(error);
       }
+    }
+    if (status === 401 && !currentPath.includes("/login")) {
+      clearAuth();
+      authRef.logout?.();
+      return Promise.reject(error);
+    }
+    if (status === 403 && !silent) {
+      emitApiError("Bạn không có quyền thực hiện thao tác này.");
+      return Promise.reject(error);
     }
     /* ===============================
        Handle BLOB error (export)

@@ -1,9 +1,11 @@
 package com.badminton.core.debit;
 
+import com.badminton.core.billing.CoreBillingService;
 import com.badminton.core.player.CoreAvailablePlayerService;
 import com.badminton.core.session.CoreSession;
 import com.badminton.entity.Debit;
 import com.badminton.entity.DebitSummary;
+import com.badminton.entity.Invoice;
 import com.badminton.entity.Player;
 import com.badminton.entity.Session;
 import com.badminton.enums.DebitStatus;
@@ -45,12 +47,15 @@ public class CoreDebitService {
     @Autowired
     private DebitRepository debitRepository;
     @Autowired
-    private SessionRepository sessionRepository;
-
+    private SessionServiceImpl sessionService;
+    @Autowired
+    private CoreAvailablePlayerService coreAvailablePlayerService;
     @Autowired
     private CorePayDebitService corePayDebitService;
     @Autowired
     private PaymentDebitRepository paymentDebitRepository;
+    @Autowired
+    private CoreBillingService coreBillingService;
     @Autowired
     CoreSession coreSession;
     @Autowired
@@ -246,7 +251,8 @@ public class CoreDebitService {
                 .build();
     }
 
-    private RemainingDebitModel convertToDebitModel(Optional<DebitSummary> debitSummaryOpt, Page<Debit> debitPage, String playerName) {
+    private RemainingDebitModel convertToDebitModel(Optional<DebitSummary> debitSummaryOpt, Page<Debit> debitPage,
+            String playerName) {
         BigDecimal totalDebts = debitSummaryOpt.map(DebitSummary::getTotalDebts).orElse(BigDecimal.ZERO);
         int numberDebit = debitSummaryOpt.map(DebitSummary::getNumDebts).orElse(0);
 
@@ -260,7 +266,7 @@ public class CoreDebitService {
                 .collect(Collectors.toList());
 
         // Update pagination total page
-//        debitDTO.getPagination().setTotalPage(debitPage.getTotalPages());
+        // debitDTO.getPagination().setTotalPage(debitPage.getTotalPages());
 
         return RemainingDebitModel.builder()
                 .playerName(playerName)
@@ -292,7 +298,8 @@ public class CoreDebitService {
     @Transactional
     public PrepayDebitResponse prepayDebitsForPlayer(AllocateDebitPaymentRequest request) throws BusinessException {
         Player player = resolvePlayerByName(request.getPlayerName());
-        List<Debit> unpaidDebits = debitRepository.findUnpaidDebitsByPlayerIdOrderByCreatedDateAsc(player.getPlayerId());
+        List<Debit> unpaidDebits = debitRepository
+                .findUnpaidDebitsByPlayerIdOrderByCreatedDateAsc(player.getPlayerId());
         if (unpaidDebits.isEmpty()) {
             throw new BusinessException(ErrorCodeEnum.DEBTS_NOT_FOUND);
         }
@@ -348,7 +355,8 @@ public class CoreDebitService {
             log.info("Allocating DebitPayment for player:{}", allocateDebitPaymentRequest.getPlayerName());
             Player player = resolvePlayerByName(allocateDebitPaymentRequest.getPlayerName());
 
-            List<Debit> unpaidDebits = debitRepository.findUnpaidDebitsByPlayerIdOrderByCreatedDateAsc(player.getPlayerId());
+            List<Debit> unpaidDebits = debitRepository
+                    .findUnpaidDebitsByPlayerIdOrderByCreatedDateAsc(player.getPlayerId());
             if (unpaidDebits.isEmpty()) {
                 throw new BusinessException(ErrorCodeEnum.DEBTS_NOT_FOUND);
             }
@@ -393,15 +401,24 @@ public class CoreDebitService {
                     ? "Payment allocation completed successfully"
                     : "Payment allocation completed. Some debts are still remaining");
             response.setErrorCode(0);
+
+            // Standalone settlement issues its own bill; checkout folds the
+            // settled debts into its bill via "Trả nợ" lines instead.
+            if (Boolean.TRUE.equals(allocateDebitPaymentRequest.getIssueBill())) {
+                Invoice bill = coreBillingService.issueDebitSettlementBill(allocateDebitPaymentRequest, response);
+                response.setBillId(bill.getInvoiceId());
+                response.setBillNo(bill.getBillNo());
+            }
         } catch (BusinessException e) {
-            log.error("Allocating DebitPayment for player:{} got business error: {}", allocateDebitPaymentRequest.getPlayerName(), e.getMessage());
+            log.error("Allocating DebitPayment for player:{} got business error: {}",
+                    allocateDebitPaymentRequest.getPlayerName(), e.getMessage());
             response.setStatus(PaymentStatus.FAIL);
             response.setMessage(e.getErrorMessage());
             response.setErrorCode(Integer.valueOf(e.getErrorCodeEnum().getCode()));
             TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
         } catch (Exception e) {
-            log.error("Allocating DebitPayment for player:{} got error:{}", allocateDebitPaymentRequest.getPlayerName()
-                    , e.getMessage());
+            log.error("Allocating DebitPayment for player:{} got error:{}", allocateDebitPaymentRequest.getPlayerName(),
+                    e.getMessage());
             response.setStatus(PaymentStatus.FAIL);
             response.setMessage("Server error while allocating debit payment");
             response.setErrorCode(Integer.valueOf(ErrorCodeEnum.INTERNAL_SERVER_ERROR.getCode()));
@@ -421,28 +438,23 @@ public class CoreDebitService {
                     playerName,
                     new MoneyResponse(
                             0.0f,
-                            MoneyUtils.CURRENCY_VN
-                    ),
-                    0
-            );
+                            MoneyUtils.CURRENCY_VN),
+                    0);
         }
 
         DebitSummary summary = summaryOpt.get();
         MoneyResponse moneyResponse = new MoneyResponse(
                 summary.getTotalDebts().floatValue(),
-                summary.getCurrency()
-        );
+                summary.getCurrency());
 
         return new DebitSummaryResponse(
                 playerName,
                 moneyResponse,
-                summary.getNumDebts()
-        );
+                summary.getNumDebts());
     }
 
     private DebitResponse convertToResponse(Debit debit) {
-        return new DebitResponse(
-        );
+        return new DebitResponse();
     }
 
     private DebitSummary calculateDebitSummary() {
@@ -491,7 +503,7 @@ public class CoreDebitService {
     }
 
     private DebitSummary updatePlayerDebitSummary(Player player) {
-//        DebitSummary summary = calculatePlayerDebitSummary(player);
+        // DebitSummary summary = calculatePlayerDebitSummary(player);
         List<Debit> playerDebits = debitRepository.findByPlayerIdOrderByCreatedDateDesc(player.getPlayerId());
         BigDecimal totalRemainingDebts = playerDebits.stream()
                 .map(Debit::getRemainingAmount)
@@ -537,5 +549,21 @@ public class CoreDebitService {
         }
         summary.setIsActive(true);
         debitSummaryRepository.save(summary);
+    }
+
+    private Pair<Player, Session> getPlayerAndSession(String name, Instant createdTime) throws BusinessException {
+        String createdTimeStr = DateTimeFormatter.ISO_LOCAL_DATE_TIME.withZone(java.time.ZoneOffset.UTC)
+                .format(createdTime);
+        List<Session> sessions = sessionService.getSessionsByDateTime(createdTimeStr);
+        if (sessions.isEmpty()) {
+            throw new BusinessException(ErrorCodeEnum.CURRENT_SESSION_NOT_FOUND);
+        }
+        for (Session session : sessions) {
+            Player player = coreAvailablePlayerService.checkAvailableAndGetPlayer(session, name);
+            if (player != null) {
+                return Pair.of(player, session);
+            }
+        }
+        throw new BusinessException(ErrorCodeEnum.PLAYER_NOT_FOUND);
     }
 }
