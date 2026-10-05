@@ -703,6 +703,18 @@ Implemented unit tests verify:
 
 Build verification uses JDK 25 and Maven `clean verify`.
 
+### 20.1 Feature qualification
+
+The current catalog is explicitly qualified for:
+
+- Online court management and RBAC state in `role`, `app_user`, `app_user_role`, and `refresh_token`.
+- Tax billing and export state in `invoice`, `invoice_item`, `invoice_series`, and `bill_config`.
+- Financial dependencies in `payment`, `payment_debit`, `debit`, and `debit_summary`.
+
+Generated Excel, PDF, browser-print, and ESC/POS output is reproducible and is not stored separately. MISA credentials are deployment secrets and are intentionally excluded. Provider-side e-invoice artifacts require post-restore reconciliation using the identifiers stored in `invoice`.
+
+The detailed assessment is maintained in [Feature Backup Qualification](FEATURE_BACKUP_QUALIFICATION.md).
+
 Recommended environment integration tests:
 
 1. Apply BCM and metadata Liquibase migrations to MySQL 8.
