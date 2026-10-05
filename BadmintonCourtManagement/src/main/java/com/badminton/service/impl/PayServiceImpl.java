@@ -93,17 +93,21 @@ public class PayServiceImpl implements PayService {
         dto.setPlayerName(request.getPlayerName());
         dto.setServices(request.getServiceRequests() != null
                 ? request.getServiceRequests().stream()
-                .map(ServiceConverter::convertRequestToDTO)
-                .collect(Collectors.toList())
+                        .map(ServiceConverter::convertRequestToDTO)
+                        .collect(Collectors.toList())
                 : null);
         dto.setTotalPay(request.getTotalExpense());
         dto.setPayType(request.getPayType());
         dto.setDebit(request.getDebitRequest() != null ? convertToCreateDebitDTO(request.getDebitRequest()) : null);
-        dto.setPayDebits(request.getPayDebits() != null ? convertToAllocateDebitPaymentRequest(request.getPayDebits()) : null);
+        dto.setPayDebits(
+                request.getPayDebits() != null ? convertToAllocateDebitPaymentRequest(request.getPayDebits()) : null);
+        dto.setBuyer(request.getBuyer());
+        dto.setVatRate(request.getVatRate());
         return dto;
     }
 
-    private AllocateDebitPaymentRequest convertToAllocateDebitPaymentRequest(com.badminton.requestmodel.debit.PayDebitRequest request) {
+    private AllocateDebitPaymentRequest convertToAllocateDebitPaymentRequest(
+            com.badminton.requestmodel.debit.PayDebitRequest request) {
         return AllocateDebitPaymentRequest.builder()
                 .playerName(request.getPlayerName())
                 .payAmount(BigDecimal.valueOf(request.getTotalPayAmount()))
@@ -111,11 +115,11 @@ public class PayServiceImpl implements PayService {
                 .note(request.getNote())
                 .listDebitPay(request.getListDebitPay() != null
                         ? request.getListDebitPay().stream()
-                        .map(debitPay -> DebitPayDTO.builder()
-                                .dateTime(debitPay.getDateTime())
-                                .payAmount(BigDecimal.valueOf(debitPay.getPayAmount()))
-                                .build())
-                        .collect(Collectors.toList())
+                                .map(debitPay -> DebitPayDTO.builder()
+                                        .dateTime(debitPay.getDateTime())
+                                        .payAmount(BigDecimal.valueOf(debitPay.getPayAmount()))
+                                        .build())
+                                .collect(Collectors.toList())
                         : null)
                 .build();
     }
@@ -139,9 +143,12 @@ public class PayServiceImpl implements PayService {
                 paymentDebitModel.getPayTime() != null ? paymentDebitModel.getPayTime().toString() : null,
                 paymentDebitModel.getDebitAmount() != null ? paymentDebitModel.getDebitAmount().floatValue() : 0f,
                 paymentDebitModel.getPaidDebts() != null ? paymentDebitModel.getPaidDebts().floatValue() : null,
-                paymentDebitModel.getRemainingDebts() != null ? paymentDebitModel.getRemainingDebts().floatValue() : null,
+                paymentDebitModel.getRemainingDebts() != null ? paymentDebitModel.getRemainingDebts().floatValue()
+                        : null,
                 paymentDebitModel.getNumPaidDebts(),
                 paymentDebitModel.getNumRemainingDebts(),
-                paymentDebitModel.getPayDebitsMessage());
+                paymentDebitModel.getPayDebitsMessage(),
+                paymentDebitModel.getBillId(),
+                paymentDebitModel.getBillNo());
     }
 }

@@ -13,11 +13,33 @@ import TableRow from "@mui/material/TableRow";
 import Paper from "@mui/material/Paper";
 import IconButton from "@mui/material/IconButton";
 import InputAdornment from "@mui/material/InputAdornment";
+import MenuItem from "@mui/material/MenuItem";
+import Checkbox from "@mui/material/Checkbox";
+import FormControlLabel from "@mui/material/FormControlLabel";
 import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
 import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
 import api from "../api/index";
+import { getBillConfig, updateBillConfig, testPrinter } from "../api/billApi";
 import { emitApiError } from "../api/errorBus";
 import { VN_CURRENCY, formatVND } from "./MoneyUtils";
+
+const EMPTY_BILL_CONFIG = {
+  businessName: "",
+  taxCode: "",
+  address: "",
+  phone: "",
+  billPrefix: "BL",
+  vatRate: 0,
+  billFooter: "",
+  printerMode: "BROWSER",
+  printerIp: "",
+  printerPort: 9100,
+  paperWidth: 80,
+  autoPrint: true,
+  einvoiceEnabled: false,
+  einvoiceSeries: "",
+  einvoiceTemplate: "",
+};
 
 function SetupPage() {
   const [errorMess, setErrorMess] = useState(null);
@@ -98,6 +120,82 @@ function SetupPage() {
   const handleServiceCostChange = (e, id) => {
     const raw = e.target.value.replace(/\D/g, "");
     handleServiceChange(id, "cost", raw);
+  };
+
+  // Billing / VAT / printer config — saved via its own endpoint, not the
+  // court-setup payload.
+  const [billConfig, setBillConfig] = useState(EMPTY_BILL_CONFIG);
+  const [savingBillConfig, setSavingBillConfig] = useState(false);
+  const [testingPrinter, setTestingPrinter] = useState(false);
+
+  const fetchBillConfig = async () => {
+    try {
+      const res = await getBillConfig();
+      if (res?.data?.success && res.data.data) {
+        setBillConfig({ ...EMPTY_BILL_CONFIG, ...res.data.data });
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const setBillField = (field, value) =>
+    setBillConfig((prev) => ({ ...prev, [field]: value }));
+
+  const handleSaveBillConfig = async () => {
+    const vat = Number(billConfig.vatRate);
+    if (isNaN(vat) || vat < 0 || vat >= 100) {
+      emitApiError("Thuế suất VAT phải trong khoảng 0–99.");
+      return;
+    }
+    try {
+      setSavingBillConfig(true);
+      const res = await updateBillConfig({
+        businessName: billConfig.businessName,
+        taxCode: billConfig.taxCode,
+        address: billConfig.address,
+        phone: billConfig.phone,
+        billPrefix: billConfig.billPrefix,
+        vatRate: vat,
+        billFooter: billConfig.billFooter,
+        printerMode: billConfig.printerMode,
+        printerIp: billConfig.printerIp || null,
+        printerPort: billConfig.printerPort ? Number(billConfig.printerPort) : null,
+        paperWidth: billConfig.paperWidth ? Number(billConfig.paperWidth) : null,
+        autoPrint: billConfig.autoPrint,
+        einvoiceEnabled: billConfig.einvoiceEnabled,
+        einvoiceSeries: billConfig.einvoiceSeries || null,
+        einvoiceTemplate: billConfig.einvoiceTemplate || null,
+      });
+      if (res?.data?.success) {
+        alert("Lưu cấu hình hoá đơn thành công!");
+        setBillConfig({ ...EMPTY_BILL_CONFIG, ...res.data.data });
+      } else if (res?.data) {
+        emitApiError(res.data.errorMessage || "Lưu cấu hình hoá đơn thất bại.");
+      }
+    } catch (error) {
+      // interceptor already surfaced the error
+    } finally {
+      setSavingBillConfig(false);
+    }
+  };
+
+  // Probes the configured printer over its saved IP:port — uses the SAVED
+  // server-side config, so save first after changing IP/port.
+  const handleTestPrinter = async () => {
+    try {
+      setTestingPrinter(true);
+      const res = await testPrinter();
+      if (res?.data?.success) {
+        alert("Kết nối máy in thành công!");
+      } else if (res?.data) {
+        emitApiError(res.data.errorMessage || "Không kết nối được máy in.");
+      }
+    } catch (error) {
+      // interceptor already surfaced the error
+    } finally {
+      setTestingPrinter(false);
+    }
   };
 
   const [selectedRow, setSelectedRow] = useState(null);
@@ -281,6 +379,7 @@ function SetupPage() {
 
   useEffect(() => {
     fetchEntries();
+    fetchBillConfig();
 
     const handleClickOutside = (event) => {
       if (tableRef.current && !tableRef.current.contains(event.target)) {
@@ -605,6 +704,201 @@ function SetupPage() {
           </Button>
         </Grid>
       </Grid>
+
+      {/* ── Billing / tax / printer configuration ── */}
+      <Paper variant="outlined" sx={{ mt: 4, p: 2 }}>
+        <Typography variant="h6" gutterBottom>
+          Hoá đơn &amp; Thuế
+        </Typography>
+        <Grid container spacing={2}>
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <TextField
+              fullWidth
+              size="small"
+              label="Tên đơn vị kinh doanh"
+              value={billConfig.businessName}
+              onChange={(e) => setBillField("businessName", e.target.value)}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 3 }}>
+            <TextField
+              fullWidth
+              size="small"
+              label="Mã số thuế"
+              value={billConfig.taxCode}
+              onChange={(e) => setBillField("taxCode", e.target.value)}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 3 }}>
+            <TextField
+              fullWidth
+              size="small"
+              label="Điện thoại"
+              value={billConfig.phone}
+              onChange={(e) => setBillField("phone", e.target.value)}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <TextField
+              fullWidth
+              size="small"
+              label="Địa chỉ"
+              value={billConfig.address}
+              onChange={(e) => setBillField("address", e.target.value)}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 3 }}>
+            <TextField
+              fullWidth
+              size="small"
+              label="Tiền tố số HĐ"
+              value={billConfig.billPrefix}
+              onChange={(e) => setBillField("billPrefix", e.target.value)}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 3 }}>
+            <TextField
+              fullWidth
+              size="small"
+              type="number"
+              label="Thuế suất VAT (%)"
+              value={billConfig.vatRate}
+              onChange={(e) => setBillField("vatRate", e.target.value)}
+              helperText="Giá bán đã bao gồm VAT"
+            />
+          </Grid>
+          <Grid size={{ xs: 12 }}>
+            <TextField
+              fullWidth
+              size="small"
+              multiline
+              minRows={2}
+              label="Nội dung cuối hoá đơn"
+              value={billConfig.billFooter}
+              onChange={(e) => setBillField("billFooter", e.target.value)}
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12 }}>
+            <Typography variant="subtitle2" color="text.secondary">
+              Máy in hoá đơn
+            </Typography>
+          </Grid>
+          <Grid size={{ xs: 12, sm: 3 }}>
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label="Kiểu in"
+              value={billConfig.printerMode}
+              onChange={(e) => setBillField("printerMode", e.target.value)}
+            >
+              <MenuItem value="BROWSER">In qua trình duyệt (USB)</MenuItem>
+              <MenuItem value="NETWORK">In mạng (ESC/POS)</MenuItem>
+            </TextField>
+          </Grid>
+          <Grid size={{ xs: 12, sm: 3 }}>
+            <TextField
+              fullWidth
+              size="small"
+              label="IP máy in"
+              value={billConfig.printerIp}
+              onChange={(e) => setBillField("printerIp", e.target.value)}
+              disabled={billConfig.printerMode !== "NETWORK"}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 3 }}>
+            <TextField
+              fullWidth
+              size="small"
+              type="number"
+              label="Cổng máy in"
+              value={billConfig.printerPort}
+              onChange={(e) => setBillField("printerPort", e.target.value)}
+              disabled={billConfig.printerMode !== "NETWORK"}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 3 }}>
+            <TextField
+              fullWidth
+              size="small"
+              type="number"
+              label="Khổ giấy (mm)"
+              value={billConfig.paperWidth}
+              onChange={(e) => setBillField("paperWidth", e.target.value)}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 3 }}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={!!billConfig.autoPrint}
+                  onChange={(e) => setBillField("autoPrint", e.target.checked)}
+                />
+              }
+              label="Mở in sau thanh toán"
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12 }}>
+            <Typography variant="subtitle2" color="text.secondary">
+              Hoá đơn điện tử (MISA meInvoice)
+            </Typography>
+          </Grid>
+          <Grid size={{ xs: 12, sm: 3 }}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={!!billConfig.einvoiceEnabled}
+                  onChange={(e) => setBillField("einvoiceEnabled", e.target.checked)}
+                />
+              }
+              label="Bật HĐĐT"
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 3 }}>
+            <TextField
+              fullWidth
+              size="small"
+              label="Ký hiệu HĐĐT"
+              value={billConfig.einvoiceSeries}
+              onChange={(e) => setBillField("einvoiceSeries", e.target.value)}
+              disabled={!billConfig.einvoiceEnabled}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <TextField
+              fullWidth
+              size="small"
+              label="Mẫu số HĐĐT"
+              value={billConfig.einvoiceTemplate}
+              onChange={(e) => setBillField("einvoiceTemplate", e.target.value)}
+              disabled={!billConfig.einvoiceEnabled}
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12 }}>
+            <Button
+              variant="contained"
+              color="success"
+              onClick={handleSaveBillConfig}
+              disabled={savingBillConfig}
+            >
+              Lưu cấu hình hoá đơn
+            </Button>
+            {billConfig.printerMode === "NETWORK" && (
+              <Button
+                variant="outlined"
+                sx={{ ml: 1 }}
+                onClick={handleTestPrinter}
+                disabled={testingPrinter}
+              >
+                Kiểm tra máy in
+              </Button>
+            )}
+          </Grid>
+        </Grid>
+      </Paper>
     </Box>
   );
 }

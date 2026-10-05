@@ -1,7 +1,9 @@
 package com.badminton.core.payment;
 
 import com.badminton.constant.ServiceConstants;
+import com.badminton.core.billing.CoreBillingService;
 import com.badminton.core.debit.CoreDebitService;
+import com.badminton.entity.Invoice;
 import com.badminton.entity.AvailablePlayer;
 import com.badminton.entity.Payment;
 import com.badminton.enums.PaymentStatus;
@@ -45,6 +47,9 @@ public class CorePaymentService {
     @Autowired
     PaymentRepository paymentRepository;
 
+    @Autowired
+    CoreBillingService coreBillingService;
+
     @Transactional
     public PaymentDebitModel payForPlayerAndCreateDebt(PaymentDTO paymentDTO) throws BusinessException {
         PaymentDebitModel paymentDebitModel = null;
@@ -60,15 +65,18 @@ public class CorePaymentService {
                 payDebitsResponse = coreDebitService.allocateDebitPayment(paymentDTO.getPayDebits());
                 if (payDebitsResponse == null || PaymentStatus.FAIL.equals(payDebitsResponse.getStatus())) {
                     throw new BusinessException(
-                            payDebitsResponse != null ? resolveErrorCode(payDebitsResponse.getErrorCode()) : ErrorCodeEnum.INTERNAL_SERVER_ERROR,
-                            payDebitsResponse != null ? payDebitsResponse.getMessage() : "Debit allocation returned empty response");
+                            payDebitsResponse != null ? resolveErrorCode(payDebitsResponse.getErrorCode())
+                                    : ErrorCodeEnum.INTERNAL_SERVER_ERROR,
+                            payDebitsResponse != null ? payDebitsResponse.getMessage()
+                                    : "Debit allocation returned empty response");
                 }
             }
 
             // save the player with leaveTime, service
             // TODO
-            Optional<AvailablePlayer> optPlayer = availablePlayerRepository.findAvailablePlayerInSessionByNameAndLeaveTimeNull(
-                    sessionService.findListCurrentSession().getFirst(), paymentDTO.getPlayerName());
+            Optional<AvailablePlayer> optPlayer = availablePlayerRepository
+                    .findAvailablePlayerInSessionByNameAndLeaveTimeNull(
+                            sessionService.findListCurrentSession().getFirst(), paymentDTO.getPlayerName());
             AvailablePlayerCheck.isAvailablePlayerPresent(optPlayer);
 
             AvailablePlayer availablePlayer = optPlayer.get();
@@ -76,10 +84,12 @@ public class CorePaymentService {
                     ? new ArrayList<>(paymentDTO.getServices())
                     : new ArrayList<>();
             if (paymentDTO.getDebit() != null) {
-                services.add(new ServiceDTO(ServiceConstants.CREATE_DEBIT_VN, paymentDTO.getDebit().getDebitAmount().floatValue()));
+                services.add(new ServiceDTO(ServiceConstants.CREATE_DEBIT_VN,
+                        paymentDTO.getDebit().getDebitAmount().floatValue()));
             }
             if (payDebitsResponse != null) {
-                services.add(new ServiceDTO(ServiceConstants.PAY_DEBIT_VN, payDebitsResponse.getPaidDebts().floatValue()));
+                services.add(
+                        new ServiceDTO(ServiceConstants.PAY_DEBIT_VN, payDebitsResponse.getPaidDebts().floatValue()));
             }
             availablePlayer.setServices(ServiceUtil.buildJsonArrayStr(services));
             availablePlayer.setLeaveTime(sessionService.getUTCPlus7Instant());
@@ -88,13 +98,20 @@ public class CorePaymentService {
 
             AvailablePlayer savedPlayer = availablePlayerRepository.save(availablePlayer);
 
+            // Issue the bill inside the payment tx — a failure rolls the payment back.
+            // The final services list (incl. appended Ghi nợ / Trả nợ lines) is
+            // what the bill itemizes.
+            paymentDTO.setServices(services);
+            Invoice bill = coreBillingService.issueCheckoutBill(paymentDTO, savedPlayer);
+
             paymentDebitModel = new PaymentDebitModel();
             paymentDebitModel.setPayFor(savedPlayer.getPlayer().getPlayerName());
             paymentDebitModel.setPayType(savedPlayer.getPayType());
             paymentDebitModel.setPayAmount(BigDecimal.valueOf(savedPlayer.getPayAmount()));
             paymentDebitModel.setPayTime(savedPlayer.getLeaveTime());
             paymentDebitModel.setServices(savedPlayer.getCurrentServices());
-            paymentDebitModel.setDebitAmount(paymentDTO.getDebit() != null ? paymentDTO.getDebit().getDebitAmount() : null);
+            paymentDebitModel
+                    .setDebitAmount(paymentDTO.getDebit() != null ? paymentDTO.getDebit().getDebitAmount() : null);
             if (payDebitsResponse != null) {
                 paymentDebitModel.setPaidDebts(payDebitsResponse.getPaidDebts());
                 paymentDebitModel.setRemainingDebts(payDebitsResponse.getRemainingDebts());
@@ -102,6 +119,8 @@ public class CorePaymentService {
                 paymentDebitModel.setNumRemainingDebts(payDebitsResponse.getNumRemainingDebts());
                 paymentDebitModel.setPayDebitsMessage(payDebitsResponse.getMessage());
             }
+            paymentDebitModel.setBillId(bill.getInvoiceId());
+            paymentDebitModel.setBillNo(bill.getBillNo());
             return paymentDebitModel;
         } catch (BusinessException e) {
             TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();

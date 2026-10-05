@@ -17,4 +17,5 @@ public class RegisterUserDTO {
 	private String password;
 	private String name;
 	private String link;
+	private String role;
 }

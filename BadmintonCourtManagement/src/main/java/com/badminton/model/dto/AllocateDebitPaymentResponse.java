@@ -22,4 +22,7 @@ public class AllocateDebitPaymentResponse {
     private PaymentStatus status;
     private String message;
     private int errorCode;
+    /** Bill issued for standalone debt settlements (issueBill=true). */
+    private Long billId;
+    private String billNo;
 }

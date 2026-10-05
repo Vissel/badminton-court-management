@@ -47,7 +47,6 @@ import java.util.List;
 public class InventoryController {
 
     private static final String XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-    private static final String ROOT_USER = "rootuser";
 
     @Autowired
     private InventoryService inventoryService;
@@ -212,7 +211,9 @@ public class InventoryController {
 
     private boolean isRootUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        return authentication != null && ROOT_USER.equals(authentication.getName());
+        return authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(authority -> authority.getAuthority().equals("ROLE_ROOT")
+                        || authority.getAuthority().equals("ROLE_ADMINISTRATOR"));
     }
 
     private <T> ResponseEntity<Result<T>> forbidden() {

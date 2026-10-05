@@ -8,6 +8,7 @@ import HomePage from "./page/HomePage";
 import SetupPage from "./page/SetupPage";
 import ReportPage from "./page/ReportPage";
 import DebtManagementPage from "./page/DebtManagementPage";
+import BillingPage from "./page/BillingPage";
 import ProductPage from "./page/ProductPage";
 import InventoryPage from "./page/InventoryPage";
 import Footer from "./Footer";
@@ -48,7 +49,7 @@ function App() {
               <Route
                 path="/home"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute roles={["ROOT", "ADMINISTRATOR", "COORDINATOR"]}>
                     <HomePage />
                   </ProtectedRoute>
                 }
@@ -56,7 +57,7 @@ function App() {
               <Route
                 path="/setup"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute roles={["ROOT", "ADMINISTRATOR"]}>
                     <SetupPage />
                   </ProtectedRoute>
                 }
@@ -64,7 +65,7 @@ function App() {
               <Route
                 path="/report"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute roles={["ROOT", "ADMINISTRATOR"]}>
                     <ReportPage />
                   </ProtectedRoute>
                 }
@@ -72,15 +73,23 @@ function App() {
               <Route
                 path="/debtManagement"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute roles={["ROOT", "ADMINISTRATOR"]}>
                     <DebtManagementPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/bills"
+                element={
+                  <ProtectedRoute roles={["ROOT", "ADMINISTRATOR", "COORDINATOR"]}>
+                    <BillingPage />
                   </ProtectedRoute>
                 }
               />
               <Route
                 path="/super-admin"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute roles={["ROOT"]}>
                     <SuperAdminPage />
                   </ProtectedRoute>
                 }
@@ -88,7 +97,7 @@ function App() {
               <Route
                 path="/products"
                 element={
-                  <ProtectedRoute requireRoot>
+                  <ProtectedRoute roles={["ROOT", "ADMINISTRATOR"]}>
                     <ProductPage />
                   </ProtectedRoute>
                 }
@@ -96,7 +105,7 @@ function App() {
               <Route
                 path="/inventory"
                 element={
-                  <ProtectedRoute requireRoot>
+                  <ProtectedRoute roles={["ROOT", "ADMINISTRATOR"]}>
                     <InventoryPage />
                   </ProtectedRoute>
                 }

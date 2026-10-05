@@ -372,6 +372,10 @@ public class DebitServiceImpl implements DebitService {
                                         .build())
                                 .collect(Collectors.toList())
                         : null)
+                // standalone settlement issues its own DEBT_SETTLEMENT bill
+                .issueBill(Boolean.TRUE)
+                .buyer(request.getBuyer())
+                .vatRate(request.getVatRate())
                 .build();
     }
 
@@ -387,6 +391,8 @@ public class DebitServiceImpl implements DebitService {
         response.setPaymentDate(TimeUtils.toDateTimeDisplay(model.getPaymentDate()));
         response.setStatus(model.getStatus() != null ? model.getStatus().name() : null);
         response.setMessage(model.getMessage());
+        response.setBillId(model.getBillId());
+        response.setBillNo(model.getBillNo());
         return response;
     }
 

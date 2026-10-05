@@ -1,119 +1,109 @@
 package com.badminton.service;
 
 import com.badminton.config.cache.AppCache;
-import com.badminton.core.player.CorePlayerService;
+import com.badminton.entity.AppUser;
 import com.badminton.entity.Player;
+import com.badminton.entity.Role;
+import com.badminton.enums.RoleName;
 import com.badminton.model.CacheObject;
+import com.badminton.repository.AppUserRepository;
+import com.badminton.repository.RoleRepository;
 import com.badminton.repository.UserRepository;
 import com.badminton.requestmodel.RegisterUserDTO;
 import com.badminton.requestmodel.ResetUserRequest;
 import com.badminton.util.RsaKeyService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.Assert;
 
-import java.util.Optional;
 import java.util.UUID;
 
 @Service
 public class UserServiceImpl implements UserService {
-    @Autowired
-    private PasswordEncoder encoder;
+    private final PasswordEncoder encoder;
+    private final UserRepository playerRepository;
+    private final AppUserRepository appUserRepository;
+    private final RoleRepository roleRepository;
+    private final AppCache appCache;
+    private final RsaKeyService rsaKeyService;
 
-    @Autowired
-    private UserRepository userRepo;
-
-    @Autowired
-    private AppCache appCache;
-
-    @Autowired
-    private RsaKeyService rsaKeyService;
-
-    @Autowired
-    private CorePlayerService corePlayerService;
+    public UserServiceImpl(PasswordEncoder encoder, UserRepository playerRepository,
+            AppUserRepository appUserRepository, RoleRepository roleRepository,
+            AppCache appCache, RsaKeyService rsaKeyService) {
+        this.encoder = encoder;
+        this.playerRepository = playerRepository;
+        this.appUserRepository = appUserRepository;
+        this.roleRepository = roleRepository;
+        this.appCache = appCache;
+        this.rsaKeyService = rsaKeyService;
+    }
 
     @Override
     public boolean saveAdminUser(RegisterUserDTO userDTO) {
-        boolean isSaved = false;
-        if (userDTO.getUserId() == null) {
-            Optional<Player> existedPlayer = userRepo.findByPlayerName(userDTO.getUserName());
-
-            Player user;
-            if (!existedPlayer.isPresent()) {
-                // Password arrives as RSA ciphertext (same contract as /login).
-                String rawPassword;
-                try {
-                    rawPassword = rsaKeyService.decrypt(userDTO.getPassword());
-                } catch (IllegalArgumentException e) {
-                    return false;
-                }
-                user = new Player(userDTO.getUserName(), encoder.encode(rawPassword));
-                isSaved = userRepo.save(user).getPlayerId() != 0;
-            }
+        if (userDTO.getUserId() != null || appUserRepository.existsByUsername(userDTO.getUserName()))
+            return false;
+        try {
+            RoleName roleName = userDTO.getRole() == null || userDTO.getRole().isBlank()
+                    ? RoleName.ADMINISTRATOR
+                    : RoleName.valueOf(userDTO.getRole().trim().toUpperCase());
+            if (roleName == RoleName.PLAYER)
+                return false;
+            Role role = roleRepository.findByRoleName(roleName)
+                    .orElseThrow(() -> new IllegalArgumentException("Role is not configured"));
+            String rawPassword = rsaKeyService.decrypt(userDTO.getPassword());
+            return appUserRepository.save(new AppUser(userDTO.getUserName(), encoder.encode(rawPassword), role))
+                    .getUserId() != null;
+        } catch (IllegalArgumentException e) {
+            return false;
         }
-        return isSaved;
     }
 
     @Override
     public boolean savePlayer(RegisterUserDTO userDTO) {
-
-        return userRepo.save(new Player(userDTO.getUserName(), null)).getPlayerId() != 0;
+        return playerRepository.save(new Player(userDTO.getUserName(), null)).getPlayerId() != 0;
     }
 
     @Override
     public ResponseEntity<String> generateResetPassToken(String userName) {
-        if (!checkUserExistByName(userName)) {
+        if (!checkUserExistByName(userName))
             return ResponseEntity.badRequest().body("User is not present.");
-        }
-        final String randomString = userName + UUID.randomUUID() + System.currentTimeMillis();
-        final String token = encoder.encode(randomString);
-        CacheObject cacheObject
-                = new CacheObject(userName, System.currentTimeMillis());
-        appCache.put(token, cacheObject);
-        return ResponseEntity.ok().body(token);
+        String token = encoder.encode(userName + UUID.randomUUID() + System.currentTimeMillis());
+        appCache.put(token, new CacheObject(userName, System.currentTimeMillis()));
+        return ResponseEntity.ok(token);
     }
 
     @Override
-    public ResponseEntity<String> resetPassword(ResetUserRequest resetUserRequest) {
-        String result = "Reset password for user " + resetUserRequest.getUserName() + " successfully.";
-        ResponseEntity<String> responseEntity = ResponseEntity.ok(result);
+    public ResponseEntity<String> resetPassword(ResetUserRequest request) {
         try {
-            // Both password fields arrive as RSA ciphertext. Decrypt before
-            // validation since RSA-OAEP is probabilistic and two ciphertexts
-            // of the same plaintext never match.
-            resetUserRequest.setNewPass(rsaKeyService.decrypt(resetUserRequest.getNewPass()));
-            resetUserRequest.setRepeatNewPass(rsaKeyService.decrypt(resetUserRequest.getRepeatNewPass()));
-            validateRequest(resetUserRequest);
-            Player user = userRepo.findByPlayerName(resetUserRequest.getUserName())
+            request.setNewPass(rsaKeyService.decrypt(request.getNewPass()));
+            request.setRepeatNewPass(rsaKeyService.decrypt(request.getRepeatNewPass()));
+            validateRequest(request);
+            AppUser user = appUserRepository.findByUsername(request.getUserName())
                     .orElseThrow(() -> new IllegalArgumentException("User is not present."));
-            user.setPassword(encoder.encode(resetUserRequest.getNewPass()));
-            userRepo.save(user);
-            appCache.remove(resetUserRequest.getResetToken());
+            user.setPassword(encoder.encode(request.getNewPass()));
+            appUserRepository.save(user);
+            appCache.remove(request.getResetToken());
+            return ResponseEntity.ok("Reset password for user " + request.getUserName() + " successfully.");
         } catch (IllegalArgumentException e) {
-            responseEntity = ResponseEntity.badRequest().body(e.getMessage());
+            return ResponseEntity.badRequest().body(e.getMessage());
         } catch (RuntimeException e) {
-            responseEntity = ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(e.getMessage());
         }
-        return responseEntity;
     }
 
-    private void validateRequest(ResetUserRequest resetUserRequest) {
-        Assert.isTrue(appCache.contains(resetUserRequest.getResetToken()), "Token is invalid");
-        CacheObject cacheObject = (CacheObject) appCache.get(resetUserRequest.getResetToken());
+    private void validateRequest(ResetUserRequest request) {
+        Assert.isTrue(appCache.contains(request.getResetToken()), "Token is invalid");
+        CacheObject cacheObject = (CacheObject) appCache.get(request.getResetToken());
         Assert.notNull(cacheObject, "Token is invalid");
-        Assert.isTrue((System.currentTimeMillis() - cacheObject.getExpiryTime()) < 1000 * 60 * 3, "Token is expired.");
-        Assert.isTrue(resetUserRequest.getUserName().equals(cacheObject.getValue()),
-                "User is not present.");
-        Assert.isTrue(resetUserRequest.getNewPass().equals(resetUserRequest.getRepeatNewPass()),
-                "Two passwords must match.");
-
+        Assert.isTrue(System.currentTimeMillis() - cacheObject.getExpiryTime() < 1000 * 60 * 3, "Token is expired.");
+        Assert.isTrue(request.getUserName().equals(cacheObject.getValue()), "User is not present.");
+        Assert.isTrue(request.getNewPass().equals(request.getRepeatNewPass()), "Two passwords must match.");
     }
 
     @Override
     public boolean checkUserExistByName(String username) {
-        return corePlayerService.checkPlayerExistByUsername(username) != null;
+        return appUserRepository.existsByUsername(username);
     }
 }

@@ -11,7 +11,7 @@ import { emitApiError } from "../api/errorBus";
 import { encryptPassword, withKeyRetry } from "../api/rsaCrypto";
 
 function LoginPage() {
-  const { setAuthenticated, setLoading } = useContext(AuthContext);
+  const { applyAuth, setLoading } = useContext(AuthContext);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -29,9 +29,7 @@ function LoginPage() {
       });
 
       if (res?.status === 200) {
-        sessionStorage.setItem("csrfToken", res.data.csrfToken);
-        sessionStorage.setItem("username", res.data.username);
-        setAuthenticated(true);
+        applyAuth(res.data);
         navigate("/home");
       }
     } catch (err) {

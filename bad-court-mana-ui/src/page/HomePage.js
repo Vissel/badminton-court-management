@@ -29,6 +29,7 @@ import PayConfirm from "./dialog/PayConfirm";
 import AdvancePaymentDialog from "./dialog/AdvancePaymentDialog";
 import RentByTimeDialog from "./dialog/RentByTimeDialog";
 import RentFinishConfirm from "./dialog/RentFinishConfirm";
+import ReceiptPrintDialog from "./dialog/ReceiptPrintDialog";
 import { VN_CURRENCY, formatVND } from "./MoneyUtils";
 
 const RENT_BY_TIME_PREFIX = "Thuê theo giờ "
@@ -93,6 +94,8 @@ function HomePage() {
   const [payConfirmData, setPayConfirmData] = useState(null);
   const [paySuccess, setPaySuccess] = useState(false);
   const [paySuccessMsg, setPaySuccessMsg] = useState("");
+  // Bill just issued at checkout — opened in the receipt print dialog.
+  const [receiptBillId, setReceiptBillId] = useState(null);
   const [dialogHideActions, setDialogHideActions] = useState(false);
   const [showAdvanceDialog, setShowAdvanceDialog] = useState(false);
   const [pendingPlayerName, setPendingPlayerName] = useState(null);
@@ -1096,15 +1099,21 @@ function HomePage() {
         } : null,
         // existing debts selected in DebitListDialog, settled with this payment
         payDebits: data.payDebits || null,
+        // optional business-buyer/tax info from the bill section of PayConfirm
+        buyer: data.buyer || null,
       })
       .then((res) => {
         const result = res?.data;
         if (result && result.success) {
-          setPaySuccessMsg("Thanh toán thành công");
+          const billNo = result.data?.billNo;
+          setPaySuccessMsg(billNo ? `Thanh toán thành công — Hoá đơn ${billNo}` : "Thanh toán thành công");
           setPaySuccess(true);
           setShowPayConfirmDialog(false);
           setShowDialog(false);
           setAvailablePlayers((prev) => prev.filter((p) => p !== data.playerName));
+          if (result.data?.billId) {
+            setReceiptBillId(result.data.billId);
+          }
         } else if (result) {
           // HTTP 200 but business error, e.g. invalid debit request, player not found
           emitApiError(result.errorMessage || "Thanh toán không thành công. Vui lòng thử lại.");
@@ -1369,6 +1378,11 @@ function HomePage() {
             rental={rentalInfoMap[finishRentCourtId]}
             onConfirm={handleConfirmFinishRent}
             onExit={handleExitFinishConfirm}
+          />
+          <ReceiptPrintDialog
+            show={receiptBillId != null}
+            billId={receiptBillId}
+            onClose={() => setReceiptBillId(null)}
           />
           <Snackbar
             open={paySuccess}

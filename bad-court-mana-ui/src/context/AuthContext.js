@@ -1,70 +1,65 @@
-// src/context/AuthContext.js
-import React, { createContext, useState, useEffect } from "react";
-import Cookies from "js-cookie";
+import React, { createContext, useEffect, useState } from "react";
 import api from "../api";
 import { emitApiError } from "../api/errorBus";
 import { authRef } from "./authRef";
+import {
+  clearAuth,
+  getRefreshToken,
+  getRoles,
+  isAccessTokenValid,
+  storeAuth,
+} from "../api/tokenStore";
 
 export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [authenticated, setAuthenticated] = useState(false);
-  const [csrfToken, setCsrfToken] = useState(null);
+  const [roles, setRoles] = useState(getRoles());
   const [loading, setLoading] = useState(true);
 
-  // Check session on mount
-  const checkSession = async () => {
-    try {
-      // Step 1: fetch CSRF token and set it
-      const res = await api.get(`/csrf`);
-      if (res.status === 200) {
-        const tokenFromCookie = res.data.csrfToken;
-        setCsrfToken(tokenFromCookie);
-        sessionStorage.setItem("csrfToken", tokenFromCookie);
+  const applyAuth = (data) => {
+    storeAuth(data);
+    setRoles(data.roles || []);
+    setAuthenticated(true);
+  };
 
-        setAuthenticated(res.data.valid);
-      }
-    } catch (err) {
-      setAuthenticated(false);
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-  const checkValidSession = () => {
-    const token = Cookies.get("XSRF-TOKEN");
-    if (token) {
-      console.log("Valid token");
-    } else {
-      setAuthenticated(false);
-      setCsrfToken(null);
-    }
-    setLoading(false);
-  };
   useEffect(() => {
-    setLoading(true);
-    checkSession();
-    // checkValidSession();
-    // Refresh CSRF token every 10 minutes (optional)
-    // const interval = setInterval(checkValidSession, 10 * 60 * 1000);
-    // return () => clearInterval(interval);
+    const restore = async () => {
+      if (isAccessTokenValid()) {
+        setAuthenticated(true);
+        setLoading(false);
+        return;
+      }
+      const refreshToken = getRefreshToken();
+      if (!refreshToken) {
+        clearAuth();
+        setLoading(false);
+        return;
+      }
+      try {
+        const response = await api.post("/auth/refresh", { refreshToken });
+        applyAuth(response.data);
+      } catch {
+        clearAuth();
+      } finally {
+        setLoading(false);
+      }
+    };
+    restore();
   }, []);
-  const logout = async () => {
-    console.log("Calling logout.");
-    const res = await api.post(`/logout`, {}).catch(() => null);
 
-    if (res && res.status === 200) {
-      setAuthenticated(false);
-      setCsrfToken(null);
-      sessionStorage.clear();
-      alert("Đăng xuất thành công.");
-    }
+  const logout = async () => {
+    const refreshToken = getRefreshToken();
+    await api.post("/logout", { refreshToken }).catch(() => null);
+    clearAuth();
+    setAuthenticated(false);
+    setRoles([]);
   };
 
   const forceLogout = () => {
+    clearAuth();
     setAuthenticated(false);
-    setCsrfToken(null);
-    sessionStorage.clear();
+    setRoles([]);
     emitApiError("Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại!");
     window.location.replace("/#/login");
   };
@@ -73,13 +68,17 @@ export const AuthProvider = ({ children }) => {
     authRef.logout = forceLogout;
   });
 
+  const hasRole = (...allowedRoles) => roles.some((role) => allowedRoles.includes(role));
+
   return (
     <AuthContext.Provider
       value={{
         authenticated,
         setAuthenticated,
-        csrfToken,
-        setCsrfToken,
+        roles,
+        setRoles,
+        hasRole,
+        applyAuth,
         logout,
         loading,
         setLoading,

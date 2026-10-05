@@ -8,6 +8,7 @@ import Divider from "@mui/material/Divider";
 import Grid from "@mui/material/Grid";
 import Snackbar from "@mui/material/Snackbar";
 import Alert from "@mui/material/Alert";
+import MenuItem from "@mui/material/MenuItem";
 import api from "../api/index";
 import { emitApiError } from "../api/errorBus";
 import { encryptPassword, withKeyRetry } from "../api/rsaCrypto";
@@ -19,6 +20,7 @@ function SuperAdminPage() {
     userName: "",
     password: "",
     repeatPassword: "",
+    role: "ADMINISTRATOR",
   });
   const [forgot, setForgot] = useState({ userName: "" });
   const [resetToken, setResetToken] = useState(null);
@@ -60,11 +62,12 @@ function SuperAdminPage() {
         api.post("/admin/internal/registerUser", {
           userName: reg.userName,
           password: await encryptPassword(reg.password),
+          role: reg.role,
         }, cfg)
       );
       if (res?.status === 200) {
         setSnackbar({ open: true, message: res.data || "Đăng ký admin thành công!" });
-        setReg({ userName: "", password: "", repeatPassword: "" });
+        setReg({ userName: "", password: "", repeatPassword: "", role: "ADMINISTRATOR" });
       }
     } catch (err) {
       console.error(err);
@@ -169,6 +172,17 @@ function SuperAdminPage() {
               }
               fullWidth
             />
+            <TextField
+              select
+              label="Vai trò"
+              value={reg.role}
+              onChange={(e) => setReg({ ...reg, role: e.target.value })}
+              fullWidth
+            >
+              <MenuItem value="ADMINISTRATOR">Administrator</MenuItem>
+              <MenuItem value="COORDINATOR">Coordinator</MenuItem>
+              <MenuItem value="ROOT">Root</MenuItem>
+            </TextField>
             <Stack direction="row" spacing={1}>
               <Button variant="contained" onClick={handleRegister}>
                 Đăng ký
@@ -176,7 +190,7 @@ function SuperAdminPage() {
               <Button
                 variant="outlined"
                 onClick={() =>
-                  setReg({ userName: "", password: "", repeatPassword: "" })
+                  setReg({ userName: "", password: "", repeatPassword: "", role: "ADMINISTRATOR" })
                 }
               >
                 Xoá

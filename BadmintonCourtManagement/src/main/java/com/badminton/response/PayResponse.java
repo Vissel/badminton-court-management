@@ -18,4 +18,6 @@ public class PayResponse {
     private Integer numPaidDebts;
     private Integer numRemainingDebts;
     private String payDebitsMessage;
+    private Long billId;
+    private String billNo;
 }

@@ -15,4 +15,7 @@ public class PayDebitResponse {
     private String paymentDate;
     private String status;
     private String message;
+    /** Bill issued for this debt settlement. */
+    private Long billId;
+    private String billNo;
 }

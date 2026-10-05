@@ -14,29 +14,33 @@ import { AuthContext } from "./context/AuthContext";
 import { useNavigate } from "react-router";
 
 function Header() {
-  const { logout } = useContext(AuthContext);
+  const { authenticated, hasRole, logout } = useContext(AuthContext);
   const navigate = useNavigate();
   const theme = useTheme();
   const isNarrow = useMediaQuery(theme.breakpoints.down("md"));
-  const isRoot = sessionStorage.getItem("username") === "rootuser";
+  const isRoot = hasRole("ROOT");
+  const isAdministrator = hasRole("ROOT", "ADMINISTRATOR");
 
   const [anchorEl, setAnchorEl] = useState(null);
   const open = Boolean(anchorEl);
 
-  const navItems = [
-    { label: "Trang chủ", path: "/home" },
-    { label: "Cài đặt", path: "/setup" },
-    { label: "Thống kê", path: "/report" },
-    { label: "Quản lý nợ", path: "/debtManagement" },
-    ...(isRoot
-      ? [
-        { label: "Quản lý hàng", path: "/products" },
-        { label: "Quản lý kho", path: "/inventory" },
-      ]
-      : []),
-    ...(isRoot ? [{ label: "Super Admin", path: "/super-admin" }] : []),
-    { label: "Đăng xuất", path: null, action: "logout" },
-  ];
+  const navItems = authenticated
+    ? [
+      { label: "Trang chủ", path: "/home" },
+      { label: "Hoá đơn", path: "/bills" },
+      ...(isAdministrator
+        ? [
+          { label: "Cài đặt", path: "/setup" },
+          { label: "Thống kê", path: "/report" },
+          { label: "Quản lý nợ", path: "/debtManagement" },
+          { label: "Quản lý hàng", path: "/products" },
+          { label: "Quản lý kho", path: "/inventory" },
+        ]
+        : []),
+      ...(isRoot ? [{ label: "Super Admin", path: "/super-admin" }] : []),
+      { label: "Đăng xuất", path: null, action: "logout" },
+    ]
+    : [];
 
   const go = (item) => {
     setAnchorEl(null);
@@ -107,11 +111,7 @@ function Header() {
         ) : (
           <Box sx={{ ml: "auto", display: "flex", gap: 1, flexWrap: "wrap" }}>
             {navItems.map((item) => (
-              <Button
-                key={item.label}
-                color="inherit"
-                onClick={() => go(item)}
-              >
+              <Button key={item.label} color="inherit" onClick={() => go(item)}>
                 {item.label}
               </Button>
             ))}

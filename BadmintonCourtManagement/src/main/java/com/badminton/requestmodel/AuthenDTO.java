@@ -2,6 +2,8 @@ package com.badminton.requestmodel;
 
 import com.google.gson.Gson;
 
+import java.util.List;
+
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -15,6 +17,9 @@ public class AuthenDTO {
 	public String message;
 	public String username;
 	public String csrfToken;
+	public String accessToken;
+	public String refreshToken;
+	public List<String> roles;
 	public boolean valid;
 	public long expiresInSeconds;
 
