@@ -57,6 +57,7 @@ public class SecurityConfig {
                         .hasAnyRole(ROOT, ADMIN, COORDINATOR)
                         .requestMatchers("/court-mana/**", "/session/**", "/gameResult/**", "/api/v1/pay/**")
                         .hasAnyRole(ROOT, ADMIN, COORDINATOR)
+                        .requestMatchers("/api/v1/users/**").hasAnyRole(ROOT, ADMIN)
                         .requestMatchers("/api/products/**", "/api/inventory/**", "/api/v1/manager/**",
                                 "/api/v1/debit/**", "/api/v1/player/**", "/api/**")
                         .hasAnyRole(ROOT, ADMIN)

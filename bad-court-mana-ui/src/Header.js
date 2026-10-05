@@ -18,7 +18,6 @@ function Header() {
   const navigate = useNavigate();
   const theme = useTheme();
   const isNarrow = useMediaQuery(theme.breakpoints.down("md"));
-  const isRoot = hasRole("ROOT");
   const isAdministrator = hasRole("ROOT", "ADMINISTRATOR");
 
   const [anchorEl, setAnchorEl] = useState(null);
@@ -37,7 +36,7 @@ function Header() {
           { label: "Quản lý kho", path: "/inventory" },
         ]
         : []),
-      ...(isRoot ? [{ label: "Super Admin", path: "/super-admin" }] : []),
+      ...(isAdministrator ? [{ label: "User management", path: "/user-management" }] : []),
       { label: "Đăng xuất", path: null, action: "logout" },
     ]
     : [];

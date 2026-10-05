@@ -11,17 +11,28 @@ import com.badminton.repository.RoleRepository;
 import com.badminton.repository.UserRepository;
 import com.badminton.requestmodel.RegisterUserDTO;
 import com.badminton.requestmodel.ResetUserRequest;
+import com.badminton.response.AppUserResponse;
+import com.badminton.response.result.Result;
 import com.badminton.util.RsaKeyService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.Assert;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
 public class UserServiceImpl implements UserService {
+    // Rank order enforces the management hierarchy: an actor may only manage
+    // accounts whose highest role is strictly below the actor's own rank.
+    private static final int ROOT_RANK = 3;
+    private static final int ADMIN_RANK = 2;
+    private static final int COORDINATOR_RANK = 1;
+
     private final PasswordEncoder encoder;
     private final UserRepository playerRepository;
     private final AppUserRepository appUserRepository;
@@ -48,7 +59,7 @@ public class UserServiceImpl implements UserService {
             RoleName roleName = userDTO.getRole() == null || userDTO.getRole().isBlank()
                     ? RoleName.ADMINISTRATOR
                     : RoleName.valueOf(userDTO.getRole().trim().toUpperCase());
-            if (roleName == RoleName.PLAYER)
+            if (roleName == RoleName.PLAYER || !canManageRank(rankOf(roleName)))
                 return false;
             Role role = roleRepository.findByRoleName(roleName)
                     .orElseThrow(() -> new IllegalArgumentException("Role is not configured"));
@@ -67,8 +78,11 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public ResponseEntity<String> generateResetPassToken(String userName) {
-        if (!checkUserExistByName(userName))
+        AppUser user = appUserRepository.findByUsername(userName).orElse(null);
+        if (user == null)
             return ResponseEntity.badRequest().body("User is not present.");
+        if (!canManageRank(rankOf(user)))
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Insufficient permission to manage this user.");
         String token = encoder.encode(userName + UUID.randomUUID() + System.currentTimeMillis());
         appCache.put(token, new CacheObject(userName, System.currentTimeMillis()));
         return ResponseEntity.ok(token);
@@ -82,6 +96,7 @@ public class UserServiceImpl implements UserService {
             validateRequest(request);
             AppUser user = appUserRepository.findByUsername(request.getUserName())
                     .orElseThrow(() -> new IllegalArgumentException("User is not present."));
+            Assert.isTrue(canManageRank(rankOf(user)), "Insufficient permission to manage this user.");
             user.setPassword(encoder.encode(request.getNewPass()));
             appUserRepository.save(user);
             appCache.remove(request.getResetToken());
@@ -103,7 +118,122 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    public Result<List<AppUserResponse>> listUsers() {
+        Result<List<AppUserResponse>> result = new Result<>();
+        result.setSuccess(true);
+        result.setData(appUserRepository.findAll().stream().map(AppUserResponse::from).toList());
+        return result;
+    }
+
+    @Override
+    public Result<AppUserResponse> updateUserRole(Long userId, String roleName) {
+        AppUser user = findManageableUser(userId);
+        if (user == null)
+            return forbidden();
+        if (user.getUsername().equals(actorName()))
+            return badRequest("Cannot change your own role.");
+        RoleName targetRole;
+        try {
+            targetRole = RoleName.valueOf(roleName.trim().toUpperCase());
+        } catch (IllegalArgumentException | NullPointerException e) {
+            return badRequest("Invalid role: " + roleName);
+        }
+        if (targetRole == RoleName.PLAYER || !canManageRank(rankOf(targetRole)))
+            return forbidden();
+        user.getRoles().clear();
+        user.getRoles().add(roleRepository.findByRoleName(targetRole)
+                .orElseThrow(() -> new IllegalStateException("Role is not configured")));
+        Result<AppUserResponse> result = new Result<>();
+        result.setSuccess(true);
+        result.setData(AppUserResponse.from(appUserRepository.save(user)));
+        return result;
+    }
+
+    @Override
+    public Result<AppUserResponse> updateUserStatus(Long userId, boolean active) {
+        AppUser user = findManageableUser(userId);
+        if (user == null)
+            return forbidden();
+        if (user.getUsername().equals(actorName()))
+            return badRequest("Cannot deactivate your own account.");
+        user.setActive(active);
+        Result<AppUserResponse> result = new Result<>();
+        result.setSuccess(true);
+        result.setData(AppUserResponse.from(appUserRepository.save(user)));
+        return result;
+    }
+
+    @Override
     public boolean checkUserExistByName(String username) {
         return appUserRepository.existsByUsername(username);
+    }
+
+    /**
+     * Returns the target user only when the current actor is allowed to manage
+     * it: ROOT manages everyone, ADMINISTRATOR manages only COORDINATOR-level
+     * accounts. PLAYER accounts are never manageable targets.
+     */
+    private AppUser findManageableUser(Long userId) {
+        AppUser user = appUserRepository.findById(userId).orElse(null);
+        if (user == null || !canManageRank(rankOf(user)))
+            return null;
+        return user;
+    }
+
+    private boolean canManageRank(int targetRank) {
+        int actorRank = actorRank();
+        return actorRank == ROOT_RANK || targetRank < actorRank;
+    }
+
+    private int rankOf(AppUser user) {
+        return user.getRoles().stream().mapToInt(role -> rankOf(role.getRoleName())).max().orElse(0);
+    }
+
+    private int rankOf(RoleName role) {
+        return switch (role) {
+            case ROOT -> ROOT_RANK;
+            case ADMINISTRATOR -> ADMIN_RANK;
+            case COORDINATOR -> COORDINATOR_RANK;
+            case PLAYER -> 0;
+        };
+    }
+
+    private int actorRank() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null)
+            return 0;
+        if (hasAuthority(authentication, "ROLE_ROOT"))
+            return ROOT_RANK;
+        if (hasAuthority(authentication, "ROLE_ADMINISTRATOR"))
+            return ADMIN_RANK;
+        if (hasAuthority(authentication, "ROLE_COORDINATOR"))
+            return COORDINATOR_RANK;
+        return 0;
+    }
+
+    private String actorName() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication == null ? "" : authentication.getName();
+    }
+
+    private boolean hasAuthority(Authentication authentication, String authority) {
+        return authentication.getAuthorities().stream()
+                .anyMatch(granted -> granted.getAuthority().equals(authority));
+    }
+
+    private <T> Result<T> forbidden() {
+        Result<T> result = new Result<>();
+        result.setSuccess(false);
+        result.setErrorCode(HttpStatus.FORBIDDEN.value());
+        result.setErrorMessage("Insufficient permission to manage this user.");
+        return result;
+    }
+
+    private <T> Result<T> badRequest(String message) {
+        Result<T> result = new Result<>();
+        result.setSuccess(false);
+        result.setErrorCode(HttpStatus.BAD_REQUEST.value());
+        result.setErrorMessage(message);
+        return result;
     }
 }

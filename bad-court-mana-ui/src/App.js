@@ -87,9 +87,9 @@ function App() {
                 }
               />
               <Route
-                path="/super-admin"
+                path="/user-management"
                 element={
-                  <ProtectedRoute roles={["ROOT"]}>
+                  <ProtectedRoute roles={["ROOT", "ADMINISTRATOR"]}>
                     <SuperAdminPage />
                   </ProtectedRoute>
                 }

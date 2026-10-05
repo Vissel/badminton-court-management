@@ -2,7 +2,8 @@
 
 Standalone JDK 25 service for full and incremental logical backups of the BCM MySQL database.
 
-Detailed architecture and software design: [Software Design Description](SOFTWARE_DESIGN_DESCRIPTION.md).
+- Detailed architecture: [Software Design Description](SOFTWARE_DESIGN_DESCRIPTION.md)
+- RBAC and tax-billing coverage: [Feature Backup Qualification](FEATURE_BACKUP_QUALIFICATION.md)
 
 ## Responsibilities
 
