@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS `payment`
     `note`         varchar(250) DEFAULT NULL,
     `player_id`    int NOT NULL,
     PRIMARY KEY (`payment_id`),
-    KEY `payment_player_fk` (`player_id`),
-    CONSTRAINT `payment_player_fk` FOREIGN KEY (`player_id`) REFERENCES `player` (`player_id`)
+    KEY `payment_player_fk` (`player_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+ALTER TABLE `payment`
+    ADD CONSTRAINT `payment_player_fk` FOREIGN KEY (`player_id`) REFERENCES `player` (`player_id`);

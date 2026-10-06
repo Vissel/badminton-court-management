@@ -67,6 +67,11 @@ public class JwtService {
         refreshTokenRepository.findByTokenHash(hash(rawRefreshToken)).ifPresent(token -> token.setRevoked(true));
     }
 
+    @Transactional
+    public void revokeAllForUser(AppUser user) {
+        refreshTokenRepository.deleteByUser(user);
+    }
+
     private AuthenDTO response(AppUser user, String refreshToken) {
         List<String> roles = user.getRoles().stream().map(role -> role.getRoleName().name()).sorted().toList();
         Instant now = Instant.now();

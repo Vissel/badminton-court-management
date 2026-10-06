@@ -47,11 +47,7 @@ CREATE TABLE IF NOT EXISTS `invoice`
     KEY `invoice_session_fk` (`session_id`),
     KEY `invoice_ava_fk` (`ava_id`),
     KEY `invoice_payment_fk` (`payment_id`),
-    KEY `idx_invoice_issued_at` (`issued_at`),
-    CONSTRAINT `invoice_player_fk` FOREIGN KEY (`player_id`) REFERENCES `player` (`player_id`),
-    CONSTRAINT `invoice_session_fk` FOREIGN KEY (`session_id`) REFERENCES `session` (`session_id`),
-    CONSTRAINT `invoice_ava_fk` FOREIGN KEY (`ava_id`) REFERENCES `available_player` (`ava_id`),
-    CONSTRAINT `invoice_payment_fk` FOREIGN KEY (`payment_id`) REFERENCES `payment` (`payment_id`)
+    KEY `idx_invoice_issued_at` (`issued_at`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS `invoice_item`
@@ -66,8 +62,7 @@ CREATE TABLE IF NOT EXISTS `invoice_item`
     `amount`     decimal(12,2) NOT NULL COMMENT 'line total; negative for deduction lines',
     `note`       varchar(250)  DEFAULT NULL,
     PRIMARY KEY (`item_id`),
-    KEY `invoice_item_invoice_fk` (`invoice_id`),
-    CONSTRAINT `invoice_item_invoice_fk` FOREIGN KEY (`invoice_id`) REFERENCES `invoice` (`invoice_id`)
+    KEY `invoice_item_invoice_fk` (`invoice_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
 
 -- Gapless bill numbering: row locked SELECT ... FOR UPDATE inside the payment tx.
@@ -105,3 +100,13 @@ CREATE TABLE IF NOT EXISTS `bill_config`
 INSERT INTO `bill_config` (`business_name`, `bill_prefix`, `vat_rate`, `printer_mode`, `auto_print`)
 SELECT 'Sân cầu lông TC', 'BL', 0, 'BROWSER', 1
 WHERE NOT EXISTS (SELECT 1 FROM `bill_config`);
+
+-- Add foreign key constraints after all tables are created
+ALTER TABLE `invoice`
+    ADD CONSTRAINT `invoice_player_fk` FOREIGN KEY (`player_id`) REFERENCES `player` (`player_id`),
+    ADD CONSTRAINT `invoice_session_fk` FOREIGN KEY (`session_id`) REFERENCES `session` (`session_id`),
+    ADD CONSTRAINT `invoice_ava_fk` FOREIGN KEY (`ava_id`) REFERENCES `available_player` (`ava_id`),
+    ADD CONSTRAINT `invoice_payment_fk` FOREIGN KEY (`payment_id`) REFERENCES `payment` (`payment_id`);
+
+ALTER TABLE `invoice_item`
+    ADD CONSTRAINT `invoice_item_invoice_fk` FOREIGN KEY (`invoice_id`) REFERENCES `invoice` (`invoice_id`);

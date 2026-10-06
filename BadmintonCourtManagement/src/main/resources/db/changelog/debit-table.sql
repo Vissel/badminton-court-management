@@ -16,7 +16,9 @@ CREATE TABLE IF NOT EXISTS `debit`
     PRIMARY KEY (`debit_id`),
     KEY `debit_player_fk` (`player_id`),
     KEY `debit_session_fk` (`session_id`),
-    CONSTRAINT `debit_player_fk` FOREIGN KEY (`player_id`) REFERENCES `player` (`player_id`),
-    CONSTRAINT `debit_session_fk` FOREIGN KEY (`session_id`) REFERENCES `session` (`session_id`),
     CONSTRAINT `chk_debit_status` CHECK (`status` IN ('PENDING', 'PARTIALLY_PAID', 'PAID'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+ALTER TABLE `debit`
+    ADD CONSTRAINT `debit_player_fk` FOREIGN KEY (`player_id`) REFERENCES `player` (`player_id`),
+    ADD CONSTRAINT `debit_session_fk` FOREIGN KEY (`session_id`) REFERENCES `session` (`session_id`);

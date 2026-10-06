@@ -14,7 +14,9 @@ CREATE TABLE IF NOT EXISTS `rent_by_time`
     `state`      varchar(50) DEFAULT 'Started',
     PRIMARY KEY (`id`),
     KEY `rent_ava_fk` (`ava_id`),
-    KEY `rent_court_fk` (`court_id`),
-    CONSTRAINT `rent_ava_fk` FOREIGN KEY (`ava_id`) REFERENCES `available_player` (`ava_id`),
-    CONSTRAINT `rent_court_fk` FOREIGN KEY (`court_id`) REFERENCES `court` (`court_id`)
+    KEY `rent_court_fk` (`court_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+ALTER TABLE `rent_by_time`
+    ADD CONSTRAINT `rent_ava_fk` FOREIGN KEY (`ava_id`) REFERENCES `available_player` (`ava_id`),
+    ADD CONSTRAINT `rent_court_fk` FOREIGN KEY (`court_id`) REFERENCES `court` (`court_id`);

@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS `debit_summary`
     `is_active`    tinyint(1) DEFAULT 1,
     `last_update`  timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`debt_sum_id`),
-    KEY `debit_summary_player_fk` (`player_id`),
-    CONSTRAINT `debit_summary_player_fk` FOREIGN KEY (`player_id`) REFERENCES `player` (`player_id`)
+    KEY `debit_summary_player_fk` (`player_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+ALTER TABLE `debit_summary`
+    ADD CONSTRAINT `debit_summary_player_fk` FOREIGN KEY (`player_id`) REFERENCES `player` (`player_id`);

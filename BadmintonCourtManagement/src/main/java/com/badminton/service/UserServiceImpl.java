@@ -14,12 +14,14 @@ import com.badminton.requestmodel.ResetUserRequest;
 import com.badminton.response.AppUserResponse;
 import com.badminton.response.result.Result;
 import com.badminton.util.RsaKeyService;
+import com.badminton.service.JwtService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
 
 import java.util.List;
@@ -39,16 +41,18 @@ public class UserServiceImpl implements UserService {
     private final RoleRepository roleRepository;
     private final AppCache appCache;
     private final RsaKeyService rsaKeyService;
+    private final JwtService jwtService;
 
     public UserServiceImpl(PasswordEncoder encoder, UserRepository playerRepository,
             AppUserRepository appUserRepository, RoleRepository roleRepository,
-            AppCache appCache, RsaKeyService rsaKeyService) {
+            AppCache appCache, RsaKeyService rsaKeyService, JwtService jwtService) {
         this.encoder = encoder;
         this.playerRepository = playerRepository;
         this.appUserRepository = appUserRepository;
         this.roleRepository = roleRepository;
         this.appCache = appCache;
         this.rsaKeyService = rsaKeyService;
+        this.jwtService = jwtService;
     }
 
     @Override
@@ -150,6 +154,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional
     public Result<AppUserResponse> updateUserStatus(Long userId, boolean active) {
         AppUser user = findManageableUser(userId);
         if (user == null)
@@ -157,6 +162,9 @@ public class UserServiceImpl implements UserService {
         if (user.getUsername().equals(actorName()))
             return badRequest("Cannot deactivate your own account.");
         user.setActive(active);
+        if (!active) {
+            jwtService.revokeAllForUser(user);
+        }
         Result<AppUserResponse> result = new Result<>();
         result.setSuccess(true);
         result.setData(AppUserResponse.from(appUserRepository.save(user)));

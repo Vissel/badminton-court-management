@@ -29,8 +29,7 @@ CREATE TABLE IF NOT EXISTS `purchase_lot`
     `note`          varchar(250)  DEFAULT NULL,
     `created_date`  timestamp     NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`lot_id`),
-    KEY `purchase_lot_item_fk` (`item_id`),
-    CONSTRAINT `purchase_lot_item_fk` FOREIGN KEY (`item_id`) REFERENCES `inventory_item` (`item_id`)
+    KEY `purchase_lot_item_fk` (`item_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS `stock_movement`
@@ -46,8 +45,7 @@ CREATE TABLE IF NOT EXISTS `stock_movement`
     `created_date`   timestamp     NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`movement_id`),
     KEY `stock_movement_item_fk` (`item_id`),
-    KEY `idx_stock_movement_item` (`item_id`, `movement_id`),
-    CONSTRAINT `stock_movement_item_fk` FOREIGN KEY (`item_id`) REFERENCES `inventory_item` (`item_id`)
+    KEY `idx_stock_movement_item` (`item_id`, `movement_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
 
 ALTER TABLE `shuttle_ball`
@@ -88,3 +86,10 @@ UPDATE `service` s
 JOIN `inventory_item` ii ON ii.`item_name` = s.`ser_name` AND ii.`item_type` = 'GOODS'
 SET s.`item_id` = ii.`item_id`
 WHERE s.`item_id` IS NULL;
+
+-- Add foreign key constraints after all tables are created
+ALTER TABLE `purchase_lot`
+    ADD CONSTRAINT `purchase_lot_item_fk` FOREIGN KEY (`item_id`) REFERENCES `inventory_item` (`item_id`);
+
+ALTER TABLE `stock_movement`
+    ADD CONSTRAINT `stock_movement_item_fk` FOREIGN KEY (`item_id`) REFERENCES `inventory_item` (`item_id`);
