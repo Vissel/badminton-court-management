@@ -24,9 +24,7 @@ CREATE TABLE IF NOT EXISTS `app_user` (
 CREATE TABLE IF NOT EXISTS `app_user_role` (
     `user_id` bigint NOT NULL,
     `role_id` int NOT NULL,
-    PRIMARY KEY (`user_id`, `role_id`),
-    CONSTRAINT `app_user_role_user_fk` FOREIGN KEY (`user_id`) REFERENCES `app_user` (`user_id`) ON DELETE CASCADE,
-    CONSTRAINT `app_user_role_role_fk` FOREIGN KEY (`role_id`) REFERENCES `role` (`role_id`)
+    PRIMARY KEY (`user_id`, `role_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 INSERT INTO `app_user` (`username`, `password`, `display_name`, `is_active`, `created_date`)
@@ -92,6 +90,13 @@ CREATE TABLE IF NOT EXISTS `refresh_token` (
     `created_date` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`refresh_token_id`),
     UNIQUE KEY `uk_refresh_token_hash` (`token_hash`),
-    KEY `idx_refresh_token_user` (`user_id`),
-    CONSTRAINT `refresh_token_user_fk` FOREIGN KEY (`user_id`) REFERENCES `app_user` (`user_id`) ON DELETE CASCADE
+    KEY `idx_refresh_token_user` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Add foreign key constraints after all tables are created
+ALTER TABLE `app_user_role`
+    ADD CONSTRAINT `app_user_role_user_fk` FOREIGN KEY (`user_id`) REFERENCES `app_user` (`user_id`) ON DELETE CASCADE,
+    ADD CONSTRAINT `app_user_role_role_fk` FOREIGN KEY (`role_id`) REFERENCES `role` (`role_id`);
+
+ALTER TABLE `refresh_token`
+    ADD CONSTRAINT `refresh_token_user_fk` FOREIGN KEY (`user_id`) REFERENCES `app_user` (`user_id`) ON DELETE CASCADE;

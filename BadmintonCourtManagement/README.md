@@ -14,4 +14,4 @@ tomcat:
 3) include Front-end and Back-end files in webapps folder of tomcat
 
 MySQL server
-
+    SET GLOBAL log_bin_trust_function_creators = 1;

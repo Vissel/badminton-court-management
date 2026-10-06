@@ -4,7 +4,7 @@
         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
 
-    <!-- <changeSet id="001" author="thach">
+    <changeSet id="001" author="thach">
         <sqlFile path="db/changelog/badminton-qa.sql"/>
     </changeSet>
     <changeSet id="002" author="thach">
@@ -12,7 +12,7 @@
     </changeSet>
     <changeSet id="003" author="thach">
         <sqlFile path="db/changelog/court-creation.sql"/>
-    </changeSet> -->
+    </changeSet>
     <changeSet id="004" author="thach">
         <sqlFile path="db/changelog/rent-by-time.sql"/>
     </changeSet>
@@ -46,7 +46,9 @@
     <changeSet id="024" author="thach">
         <sqlFile path="db/changelog/inventory-units.sql"/>
     </changeSet>
-    <include file="db/changelog/rbac-jwt.sql"/>
+    <changeSet id="025" author="thach">
+        <sqlFile path="db/changelog/rbac-jwt.sql"/>
+    </changeSet>
     <changeSet id="026" author="devin">
         <sqlFile path="db/changelog/billing-tables.sql"/>
     </changeSet>
