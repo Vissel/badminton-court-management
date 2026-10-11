@@ -3,7 +3,6 @@ package com.badminton.service.impl;
 import com.badminton.constant.GameState;
 import com.badminton.constant.GameType;
 import com.badminton.core.game.CoreGameService;
-import com.badminton.core.inventory.CoreInventoryService;
 import com.badminton.entity.Game;
 import com.badminton.entity.Team;
 import com.badminton.exception.BusinessException;
@@ -47,8 +46,6 @@ public class GameServiceImpl implements GameService {
     ShuttleBallServiceImpl shuttleBallService;
     @Autowired
     CoreGameService coreGameService;
-    @Autowired
-    CoreInventoryService coreInventoryService;
     @Autowired
     InventoryService inventoryService;
 
@@ -451,7 +448,22 @@ public class GameServiceImpl implements GameService {
         setSelectedBallIntoGame(game, gameRequest.getShuttleBalls());
         gameRepository.save(game);
         // reduce the shuttle ball quantity in stock
-        coreInventoryService.consumeShuttleBallsForGame(game);
+        BallConsumeInGameRequest request = new BallConsumeInGameRequest();
+        request.setInGame(game.getGameId());
+        List<ShuttleBallDTO> shuttleBallDTOList = new ArrayList<>();
+        if (game.getShuttleMap() != null) {
+            for (com.badminton.entity.GameShuttleMap mapping : game.getShuttleMap()) {
+                if (mapping != null && mapping.getShuttleBall() != null) {
+                    ShuttleBallDTO dto = new ShuttleBallDTO();
+                    dto.setShuttleName(mapping.getShuttleBall().getShuttleName());
+                    dto.setShuttleCost(mapping.getShuttleBall().getCost());
+                    dto.setBallQuantity(mapping.getShuttleNumber());
+                    shuttleBallDTOList.add(dto);
+                }
+            }
+        }
+        request.setShuttleBallDTOList(shuttleBallDTOList);
+        inventoryService.recordBallConsumption(request);
         return true;
     }
 

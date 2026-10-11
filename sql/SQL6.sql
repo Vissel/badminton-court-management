@@ -10,6 +10,8 @@ select g.game_id, c.court_id, c.court_name, g. created_date, g.ended_date, g.sta
  order by game_id desc 
  limit 10;
  
+ select * from game;
+ 
  select * from rent_by_time 
  order by id desc;
  
@@ -73,3 +75,4 @@ select * from debit where player_id = 124;
  where player_id = ( select player_id from player where player_name = 'nguoi choi 2');
  
  select * from inventory_item i inner join stock_movement m on i.item_id = m.item_id;
+ 

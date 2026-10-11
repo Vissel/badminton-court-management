@@ -9,6 +9,7 @@ import com.badminton.enums.StockMovementType;
 import com.badminton.exception.BusinessException;
 import com.badminton.model.dto.ServiceDTO;
 import com.badminton.model.dto.ShuttleBallDTO;
+import com.badminton.model.inventory.ConsumedItemsModel;
 import com.badminton.model.inventory.StockIntakePlan;
 import com.badminton.model.inventory.StockIntakeRow;
 import com.badminton.repository.*;
@@ -557,7 +558,27 @@ public class InventoryServiceImpl implements InventoryService {
                 if (getRequest().getShuttleBallDTOList().isEmpty()) {
                     return false;
                 }
-                coreInventoryService.recordItemConsumption(toConsumptionMap(getRequest()), null);
+                Map<InventoryItem, Integer> items = toConsumptionMap(getRequest());
+                List<ConsumedItemsModel> consumedItems = new ArrayList<>();
+                Long gameId = (long) getRequest().getInGame();
+                for (Map.Entry<InventoryItem, Integer> entry : items.entrySet()) {
+                    InventoryItem item = entry.getKey();
+                    Integer qty = entry.getValue();
+                    if (item == null || qty == null || qty <= 0) {
+                        continue;
+                    }
+                    ConsumedItemsModel model = new ConsumedItemsModel();
+                    model.setItemName(item.getItemName());
+                    model.setItemType(item.getItemType());
+                    model.setConsumeType(StockMovementType.GAME_CONSUMPTION);
+                    model.setQuantity(qty);
+                    model.setSign(-1);
+                    model.setReferenceType(MovementReferenceType.GAME);
+                    model.setReferenceId(gameId);
+                    model.setNote("Game " + gameId);
+                    consumedItems.add(model);
+                }
+                coreInventoryService.writeItemMovements(consumedItems);
                 return true;
             }
         });
@@ -579,7 +600,26 @@ public class InventoryServiceImpl implements InventoryService {
 
             @Override
             public Boolean process() throws BusinessException {
-                coreInventoryService.revokeItemConsumption(toConsumptionMap(balls), null);
+                Map<InventoryItem, Integer> items = toConsumptionMap(balls);
+                List<ConsumedItemsModel> consumedItems = new ArrayList<>();
+                for (Map.Entry<InventoryItem, Integer> entry : items.entrySet()) {
+                    InventoryItem item = entry.getKey();
+                    Integer qty = entry.getValue();
+                    if (item == null || qty == null || qty <= 0) {
+                        continue;
+                    }
+                    ConsumedItemsModel model = new ConsumedItemsModel();
+                    model.setItemName(item.getItemName());
+                    model.setItemType(item.getItemType());
+                    model.setConsumeType(StockMovementType.RETURN);
+                    model.setQuantity(qty);
+                    model.setSign(1);
+                    model.setReferenceType(MovementReferenceType.GAME);
+                    model.setReferenceId(null);
+                    model.setNote("Item return");
+                    consumedItems.add(model);
+                }
+                coreInventoryService.writeItemMovements(consumedItems);
                 return true;
             }
         });

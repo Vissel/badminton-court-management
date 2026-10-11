@@ -1,6 +1,8 @@
 package com.badminton.core.inventory;
 
-import com.badminton.entity.*;
+import com.badminton.entity.InventoryItem;
+import com.badminton.entity.ShuttleBall;
+import com.badminton.entity.StockMovement;
 import com.badminton.enums.InventoryItemType;
 import com.badminton.enums.MovementReferenceType;
 import com.badminton.enums.StockMovementType;
@@ -17,7 +19,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -56,28 +57,6 @@ public class CoreInventoryService {
 
     }
 
-    public Boolean consumeShuttleBallsForGame(Game game) {
-        if (game == null || game.getShuttleMap() == null) {
-            return Boolean.FALSE;
-        }
-        ConsumedBallsInGame consumedBallsInGame = new ConsumedBallsInGame();
-        consumedBallsInGame.setInGameId(game.getGameId());
-        List<ShuttleBallModel> ballModels = new ArrayList<>();
-        for (GameShuttleMap mapping : game.getShuttleMap()) {
-            if (mapping == null || mapping.getShuttleBall() == null) {
-                continue;
-            }
-            ShuttleBall ball = mapping.getShuttleBall();
-            ShuttleBallModel model = new ShuttleBallModel();
-            model.setName(ball.getShuttleName());
-            model.setCost(BigDecimal.valueOf(ball.getCost()));
-            model.setQuantity(mapping.getShuttleNumber());
-            ballModels.add(model);
-        }
-        consumedBallsInGame.setShuttleBallModelList(ballModels);
-        return consumeShuttleBallsInGame(consumedBallsInGame);
-    }
-
     private List<ConsumedItemsModel> convertBallsToItems(ConsumedBallsInGame consumedBallsInGame) {
         List<ConsumedItemsModel> result = new ArrayList<>();
 
@@ -103,12 +82,13 @@ public class CoreInventoryService {
      * right after each deduction and a warning is logged for the admin when
      * it drops to the low-stock threshold.
      */
-    @Transactional
+
     public Boolean recordItemConsumption(List<ConsumedItemsModel> consumedItems) {
         writeItemMovements(consumedItems);
         return Boolean.TRUE;
     }
 
+    @Transactional
     public Boolean recordItemConsumption(Map<InventoryItem, Integer> items, Long gameId) {
         if (items == null) {
             return Boolean.TRUE;
@@ -129,37 +109,6 @@ public class CoreInventoryService {
             model.setReferenceType(MovementReferenceType.GAME);
             model.setReferenceId(gameId);
             model.setNote(gameId != null ? "Game " + gameId : "Item consumption");
-            consumedItems.add(model);
-        }
-        writeItemMovements(consumedItems);
-        return Boolean.TRUE;
-    }
-
-    /**
-     * Revokes a previous consumption: the items go back to stock via positive
-     * RETURN movements (e.g. a terminated game returns its shuttle balls).
-     */
-    @Transactional
-    public Boolean revokeItemConsumption(Map<InventoryItem, Integer> items, Long gameId) {
-        if (items == null) {
-            return Boolean.TRUE;
-        }
-        List<ConsumedItemsModel> consumedItems = new ArrayList<>();
-        for (Map.Entry<InventoryItem, Integer> entry : items.entrySet()) {
-            InventoryItem item = entry.getKey();
-            Integer qty = entry.getValue();
-            if (item == null || qty == null || qty <= 0) {
-                continue;
-            }
-            ConsumedItemsModel model = new ConsumedItemsModel();
-            model.setItemName(item.getItemName());
-            model.setItemType(item.getItemType());
-            model.setConsumeType(StockMovementType.RETURN);
-            model.setQuantity(qty);
-            model.setSign(1);
-            model.setReferenceType(MovementReferenceType.GAME);
-            model.setReferenceId(gameId);
-            model.setNote(gameId != null ? "Return game " + gameId : "Item return");
             consumedItems.add(model);
         }
         writeItemMovements(consumedItems);
