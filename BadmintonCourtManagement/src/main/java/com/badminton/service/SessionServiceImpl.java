@@ -1,6 +1,7 @@
 package com.badminton.service;
 
 import com.badminton.constant.GameState;
+import com.badminton.core.session.CoreSession;
 import com.badminton.entity.AvailablePlayer;
 import com.badminton.entity.Game;
 import com.badminton.entity.Player;
@@ -49,6 +50,9 @@ import java.util.stream.Collectors;
 @Service
 @Slf4j
 public class SessionServiceImpl {
+    @Autowired
+    CoreSession coreSession;
+
     @Autowired
     private SessionRepository sessionRepo;
 
@@ -154,11 +158,10 @@ public class SessionServiceImpl {
         }
         return deactiveList;
     }
+
     @Transactional(readOnly = true)
     public List<Session> findListCurrentSession() {
-        Instant current = getUTCPlus7Instant();
-        return sessionRepo.findByFromTimeLessThanAndToTimeIsNullAndIsActive(current, true,
-                Sort.by(Order.desc("sessionId")));
+        return coreSession.findListCurrentSession();
     }
 
     @Transactional

@@ -14,6 +14,7 @@ import com.badminton.model.dto.CreateDebitDTO;
 import com.badminton.model.dto.DebitHistoryDTO;
 import com.badminton.model.dto.DebitPayDTO;
 import com.badminton.model.dto.RemainingDebitDTO;
+import com.badminton.model.dto.SessionDTO;
 import com.badminton.requestmodel.Pagination;
 import com.badminton.requestmodel.debit.DebitHistoryRequest;
 import com.badminton.requestmodel.debit.DebitRequest;
@@ -25,6 +26,7 @@ import com.badminton.response.result.Result;
 import com.badminton.service.DebitService;
 import com.badminton.service.ProcessCallback;
 import com.badminton.service.ServiceTemplate;
+import com.badminton.service.SessionServiceImpl;
 import com.badminton.util.MoneyUtils;
 import com.badminton.util.TimeUtils;
 import lombok.extern.slf4j.Slf4j;
@@ -49,6 +51,9 @@ public class DebitServiceImpl implements DebitService {
 
     @Autowired
     private CoreDebitService coreDebitService;
+
+    @Autowired
+    private SessionServiceImpl sessionService;
 
     @Transactional
     @Override
@@ -355,6 +360,23 @@ public class DebitServiceImpl implements DebitService {
         dto.setNote(request.getNote());
         dto.setPlayerName(request.getPlayerName());
         dto.setCreatedTime(TimeUtils.convertToInstant(request.getCreatedTime()));
+
+        // Fetch session in service layer and pass SessionDTO to core layer
+        Instant createdTime = dto.getCreatedTime();
+        String createdTimeStr = java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME
+                .withZone(java.time.ZoneOffset.UTC)
+                .format(createdTime);
+        List<com.badminton.entity.Session> sessions = sessionService.getSessionsByDateTime(createdTimeStr);
+        if (!sessions.isEmpty()) {
+            com.badminton.entity.Session session = sessions.getFirst();
+            SessionDTO sessionDTO = new SessionDTO();
+            sessionDTO.setSessionId(session.getSessionId());
+            sessionDTO.setFromTime(session.getFromTime());
+            sessionDTO.setToTime(session.getToTime());
+            sessionDTO.setActive(session.isActive());
+            dto.setSession(sessionDTO);
+        }
+
         return dto;
     }
 

@@ -4,6 +4,9 @@ import com.badminton.constant.PayType;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 
+/**
+ * Pay for debit
+ */
 @Data
 @AllArgsConstructor
 public class PayResponse {

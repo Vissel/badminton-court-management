@@ -1,25 +1,23 @@
 package com.badminton.core.inventory;
 
+import com.badminton.entity.Game;
+import com.badminton.entity.GameShuttleMap;
 import com.badminton.entity.InventoryItem;
-import com.badminton.entity.ShuttleBall;
 import com.badminton.entity.StockMovement;
 import com.badminton.enums.InventoryItemType;
 import com.badminton.enums.MovementReferenceType;
 import com.badminton.enums.StockMovementType;
 import com.badminton.model.dto.ServiceDTO;
-import com.badminton.model.game.ShuttleBallModel;
-import com.badminton.model.inventory.ConsumedBallsInGame;
 import com.badminton.model.inventory.ConsumedItemsModel;
-import com.badminton.repository.InventoryItemRepository;
-import com.badminton.repository.ServiceRepository;
-import com.badminton.repository.ShuttleBallRepository;
-import com.badminton.repository.StockMovementRepository;
+import com.badminton.model.inventory.GameEndConfirmDTO;
+import com.badminton.repository.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -46,74 +44,8 @@ public class CoreInventoryService {
     private ShuttleBallRepository shuttleRepo;
     @Autowired
     private ServiceRepository serviceRepo;
-
-    /**
-     * Deducts the shuttle balls selected on the game from stock by writing
-     * GAME_CONSUMPTION movements for every ball in the game's shuttle map.
-     */
-    public Boolean consumeShuttleBallsInGame(ConsumedBallsInGame consumedBallsInGame) {
-        List<ConsumedItemsModel> consumedItems = convertBallsToItems(consumedBallsInGame);
-        return recordItemConsumption(consumedItems);
-
-    }
-
-    private List<ConsumedItemsModel> convertBallsToItems(ConsumedBallsInGame consumedBallsInGame) {
-        List<ConsumedItemsModel> result = new ArrayList<>();
-
-        Long gameId = (long) consumedBallsInGame.getInGameId();
-        for (ShuttleBallModel ball : consumedBallsInGame.getShuttleBallModelList()) {
-            ConsumedItemsModel item = new ConsumedItemsModel();
-            item.setItemName(ball.getName());
-            item.setItemType(InventoryItemType.SHUTTLE_BALL);
-            item.setConsumeType(StockMovementType.GAME_CONSUMPTION);
-            item.setQuantity(ball.getQuantity());
-            item.setSign(-1);
-            item.setReferenceType(MovementReferenceType.GAME);
-            item.setReferenceId(gameId);
-            item.setNote("Game " + gameId);
-            result.add(item);
-        }
-        return result;
-    }
-
-    /**
-     * Records consumed items (e.g. shuttle balls taken out for a game) by
-     * writing negative GAME_CONSUMPTION movements. Stock on hand is re-read
-     * right after each deduction and a warning is logged for the admin when
-     * it drops to the low-stock threshold.
-     */
-
-    public Boolean recordItemConsumption(List<ConsumedItemsModel> consumedItems) {
-        writeItemMovements(consumedItems);
-        return Boolean.TRUE;
-    }
-
-    @Transactional
-    public Boolean recordItemConsumption(Map<InventoryItem, Integer> items, Long gameId) {
-        if (items == null) {
-            return Boolean.TRUE;
-        }
-        List<ConsumedItemsModel> consumedItems = new ArrayList<>();
-        for (Map.Entry<InventoryItem, Integer> entry : items.entrySet()) {
-            InventoryItem item = entry.getKey();
-            Integer qty = entry.getValue();
-            if (item == null || qty == null || qty <= 0) {
-                continue;
-            }
-            ConsumedItemsModel model = new ConsumedItemsModel();
-            model.setItemName(item.getItemName());
-            model.setItemType(item.getItemType());
-            model.setConsumeType(StockMovementType.GAME_CONSUMPTION);
-            model.setQuantity(qty);
-            model.setSign(-1);
-            model.setReferenceType(MovementReferenceType.GAME);
-            model.setReferenceId(gameId);
-            model.setNote(gameId != null ? "Game " + gameId : "Item consumption");
-            consumedItems.add(model);
-        }
-        writeItemMovements(consumedItems);
-        return Boolean.TRUE;
-    }
+    @Autowired
+    private GameRepository gameRepository;
 
     /**
      * Confirms service lines are actually paid: writes negative RETAIL_SALE
@@ -177,6 +109,124 @@ public class CoreInventoryService {
         stockMovementRepository.saveAll(stockMovementList);
     }
 
+    @Transactional
+    public boolean confirmMovementItemEndGame(GameEndConfirmDTO gameEndConfirmDTO) {
+        Long gameId = (long) gameEndConfirmDTO.getGameId();
+
+        if (gameEndConfirmDTO.isFinish()) {
+            // Finish: validate that game shuttleMap matches stock movements
+            validateGameShuttleConsumption(gameId);
+            return true;
+        } else {
+            // Termination: calculate net consumption and return only what was actually consumed
+            List<StockMovement> movements = stockMovementRepository.findByRefIdAndRefType(gameId, MovementReferenceType.GAME);
+            Map<String, Integer> netConsumption = new HashMap<>();
+
+            for (StockMovement movement : movements) {
+                String itemKey = movement.getItem().getItemName() + "|" + movement.getItem().getItemType().name();
+                int delta = movement.getQuantityDelta();
+
+                if (movement.getMovementType() == StockMovementType.GAME_CONSUMPTION) {
+                    netConsumption.put(itemKey, netConsumption.getOrDefault(itemKey, 0) + delta);
+                } else if (movement.getMovementType() == StockMovementType.RETURN) {
+                    netConsumption.put(itemKey, netConsumption.getOrDefault(itemKey, 0) + delta);
+                }
+            }
+
+            List<ConsumedItemsModel> returnItems = new ArrayList<>();
+            for (Map.Entry<String, Integer> entry : netConsumption.entrySet()) {
+                int netDelta = entry.getValue();
+                if (netDelta < 0) {
+                    // Net consumption exists - return it
+                    String[] parts = entry.getKey().split("\\|");
+                    ConsumedItemsModel model = new ConsumedItemsModel();
+                    model.setItemName(parts[0]);
+                    model.setItemType(InventoryItemType.valueOf(parts[1]));
+                    model.setConsumeType(StockMovementType.RETURN);
+                    model.setQuantity(Math.abs(netDelta));
+                    model.setSign(1);
+                    model.setReferenceType(MovementReferenceType.GAME);
+                    model.setReferenceId(gameId);
+                    model.setNote("Terminated game " + gameId + " - return items");
+                    returnItems.add(model);
+                }
+            }
+
+            if (!returnItems.isEmpty()) {
+                writeItemMovements(returnItems);
+            }
+            return true;
+        }
+    }
+
+    /**
+     * Validates that the shuttle balls tracked in Game.shuttleMap match the
+     * GAME_CONSUMPTION stock movements for the game. Logs warnings for discrepancies.
+     */
+    private void validateGameShuttleConsumption(Long gameId) {
+        Game game = gameRepository.findById(gameId.intValue())
+                .orElse(null);
+        if (game == null) {
+            log.warn("Game {} not found for shuttle consumption validation", gameId);
+            return;
+        }
+
+        List<GameShuttleMap> shuttleMap = game.getShuttleMap();
+        if (shuttleMap == null || shuttleMap.isEmpty()) {
+            // No shuttle balls in game - check if movements exist
+            List<StockMovement> movements = stockMovementRepository.findByRefIdAndRefType(gameId, MovementReferenceType.GAME);
+            if (!movements.isEmpty()) {
+                log.warn("Game {} has no shuttleMap but has {} stock movements - data inconsistency", gameId, movements.size());
+            }
+            return;
+        }
+
+        // Build expected consumption from shuttleMap
+        Map<Integer, Integer> expectedConsumption = new HashMap<>();
+        for (GameShuttleMap map : shuttleMap) {
+            InventoryItem item = map.getShuttleBall().getItem();
+            if (item != null) {
+                expectedConsumption.put(item.getItemId(), expectedConsumption.getOrDefault(item.getItemId(), 0) + map.getShuttleNumber());
+            } else {
+                log.warn("ShuttleBall {} has no linked InventoryItem - cannot validate stock movement", map.getShuttleBall().getShuttleName());
+            }
+        }
+
+        // Sum actual GAME_CONSUMPTION movements (ignoring RETURN - those are for termination)
+        List<StockMovement> movements = stockMovementRepository.findByRefIdAndRefType(gameId, MovementReferenceType.GAME);
+        Map<Integer, Integer> actualConsumption = new HashMap<>();
+        for (StockMovement movement : movements) {
+            if (movement.getMovementType() == StockMovementType.GAME_CONSUMPTION) {
+                int itemId = movement.getItem().getItemId();
+                // GAME_CONSUMPTION has negative delta, sum absolute values
+                actualConsumption.put(itemId, actualConsumption.getOrDefault(itemId, 0) + Math.abs(movement.getQuantityDelta()));
+            }
+        }
+
+        // Compare - both are positive quantities
+        for (Map.Entry<Integer, Integer> entry : expectedConsumption.entrySet()) {
+            int itemId = entry.getKey();
+            int expected = entry.getValue();
+            int actual = actualConsumption.getOrDefault(itemId, 0);
+            if (expected != actual) {
+                InventoryItem item = inventoryItemRepository.findById(itemId).orElse(null);
+                String itemName = item != null ? item.getItemName() : "unknown";
+                log.warn("Game {} shuttle consumption mismatch for item '{}': expected {}, actual {}",
+                        gameId, itemName, expected, actual);
+            }
+        }
+
+        // Check for extra GAME_CONSUMPTION movements not in shuttleMap
+        for (Map.Entry<Integer, Integer> entry : actualConsumption.entrySet()) {
+            if (!expectedConsumption.containsKey(entry.getKey())) {
+                InventoryItem item = inventoryItemRepository.findById(entry.getKey()).orElse(null);
+                String itemName = item != null ? item.getItemName() : "unknown";
+                log.warn("Game {} has GAME_CONSUMPTION for item '{}' (qty {}) but not in shuttleMap",
+                        gameId, itemName, entry.getValue());
+            }
+        }
+    }
+
     /**
      * Stock is ledger-derived, so on-hand is always real time. After a write,
      * re-sum the ledger and warn the admin once the item is low.
@@ -205,27 +255,6 @@ public class CoreInventoryService {
         }
         log.warn("Retail/return service skipped: no stock item for '{}'", line.getServiceName());
         return null;
-    }
-
-    /**
-     * Resolves the stock item for a catalog ball. Catalog rows created after
-     * the initial backfill (AdminServiceImpl, product import) can carry
-     * {@code item_id = NULL} - heal the link lazily so stock always deducts.
-     */
-    private InventoryItem resolveItemForBall(ShuttleBall ball) {
-        if (ball.getItem() != null) {
-            return ball.getItem();
-        }
-        InventoryItem item = inventoryItemRepository
-                .findByItemNameIgnoreCaseAndItemType(ball.getShuttleName(), InventoryItemType.SHUTTLE_BALL)
-                .orElseGet(() -> {
-                    InventoryItem created = new InventoryItem(ball.getShuttleName(), InventoryItemType.SHUTTLE_BALL);
-                    applyUnitDefaults(created);
-                    return inventoryItemRepository.save(created);
-                });
-        ball.setItem(item);
-        shuttleRepo.save(ball);
-        return item;
     }
 
     /**

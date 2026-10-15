@@ -1,6 +1,7 @@
 package com.badminton.core.debit;
 
 import com.badminton.core.player.CoreAvailablePlayerService;
+import com.badminton.core.session.CoreSession;
 import com.badminton.entity.Debit;
 import com.badminton.entity.DebitSummary;
 import com.badminton.entity.Player;
@@ -11,17 +12,12 @@ import com.badminton.exception.BusinessException;
 import com.badminton.exception.enums.ErrorCodeEnum;
 import com.badminton.model.debit.*;
 import com.badminton.model.dto.*;
-import com.badminton.repository.DebitRepository;
-import com.badminton.repository.DebitSummaryRepository;
-import com.badminton.repository.PaymentDebitRepository;
-import com.badminton.repository.UserRepository;
+import com.badminton.repository.*;
 import com.badminton.requestmodel.Pagination;
 import com.badminton.response.debit.*;
-import com.badminton.service.SessionServiceImpl;
 import com.badminton.util.MoneyUtils;
 import com.badminton.util.TimeUtils;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.tuple.Pair;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -33,7 +29,6 @@ import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import java.math.BigDecimal;
 import java.text.Normalizer;
 import java.time.Instant;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -50,17 +45,31 @@ public class CoreDebitService {
     @Autowired
     private DebitRepository debitRepository;
     @Autowired
-    private SessionServiceImpl sessionService;
-    @Autowired
-    private CoreAvailablePlayerService coreAvailablePlayerService;
+    private SessionRepository sessionRepository;
+
     @Autowired
     private CorePayDebitService corePayDebitService;
     @Autowired
     private PaymentDebitRepository paymentDebitRepository;
+    @Autowired
+    CoreSession coreSession;
+    @Autowired
+    CoreAvailablePlayerService coreAvailablePlayerService;
 
     @Transactional
     public Boolean createDebit(CreateDebitDTO dto) throws BusinessException {
-        Pair<Player, Session> playerAndSession = getPlayerAndSession(dto.getPlayerName(), dto.getCreatedTime());
+        if (dto.getSession() == null) {
+            throw new BusinessException(ErrorCodeEnum.CURRENT_SESSION_NOT_FOUND, "Session must be provided");
+        }
+
+        // Convert SessionDTO to Session entity
+        Session session = Optional.ofNullable(coreSession.findSessionById(dto.getSession().getSessionId()))
+                .orElseThrow(() -> new BusinessException(ErrorCodeEnum.CURRENT_SESSION_NOT_FOUND,
+                        "Session not found with ID: " + dto.getSession().getSessionId()));
+
+        Player player = Optional.ofNullable(coreAvailablePlayerService.checkAvailableAndGetPlayer(session, dto.getPlayerName()))
+                .orElseThrow(() -> new BusinessException(ErrorCodeEnum.PLAYER_NOT_FOUND,
+                        "Player not found in session: " + dto.getPlayerName()));
 
         Debit debit = new Debit();
         BigDecimal debtAmount = dto.getDebitAmount();
@@ -69,8 +78,8 @@ public class CoreDebitService {
         debit.setCurrency(dto.getCurrency() != null ? dto.getCurrency() : MoneyUtils.CURRENCY_VN);
         debit.setStatus(DebitStatus.PENDING);
         debit.setNote(dto.getNote());
-        debit.setPlayer(playerAndSession.getLeft());
-        debit.setSession(playerAndSession.getRight());
+        debit.setPlayer(player);
+        debit.setSession(session);
         debit.setCreatedDate(dto.getCreatedTime());
         debitRepository.save(debit);
         // Update player debit summary incrementally to avoid transaction issue
@@ -528,20 +537,5 @@ public class CoreDebitService {
         }
         summary.setIsActive(true);
         debitSummaryRepository.save(summary);
-    }
-
-    private Pair<Player, Session> getPlayerAndSession(String name, Instant createdTime) throws BusinessException {
-        String createdTimeStr = DateTimeFormatter.ISO_LOCAL_DATE_TIME.withZone(java.time.ZoneOffset.UTC).format(createdTime);
-        List<Session> sessions = sessionService.getSessionsByDateTime(createdTimeStr);
-        if (sessions.isEmpty()) {
-            throw new BusinessException(ErrorCodeEnum.CURRENT_SESSION_NOT_FOUND);
-        }
-        for (Session session : sessions) {
-            Player player = coreAvailablePlayerService.checkAvailableAndGetPlayer(session, name);
-            if (player != null) {
-                return Pair.of(player, session);
-            }
-        }
-        throw new BusinessException(ErrorCodeEnum.PLAYER_NOT_FOUND);
     }
 }

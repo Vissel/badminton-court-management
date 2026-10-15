@@ -4,13 +4,11 @@ import com.badminton.constant.GameState;
 import com.badminton.constant.GameType;
 import com.badminton.entity.AvailablePlayer;
 import com.badminton.entity.Game;
+import com.badminton.entity.GameShuttleMap;
 import com.badminton.exception.BusinessException;
 import com.badminton.exception.enums.ErrorCodeEnum;
 import com.badminton.model.dto.ServiceDTO;
-import com.badminton.model.game.CourtAreaModel;
-import com.badminton.model.game.CourtModel;
-import com.badminton.model.game.GameModel;
-import com.badminton.model.game.GameResultEnum;
+import com.badminton.model.game.*;
 import com.badminton.repository.GameRepository;
 import com.badminton.util.MoneyUtils;
 import com.badminton.util.ServiceUtil;
@@ -30,19 +28,35 @@ public class CoreGameService {
 
     /**
      * Finish the active game on the court described by {@link GameModel}:
-     * resolves gType (SHARE/NEGO), writes team expenses + win flags, bills a
-     * "Tiền {courtName}" service per occupied area, stamps endedDate and
-     * persists the game as FINISH.
+     * uses pre-calculated game type, team expenses and win flags from GameModel,
+     * stamps endedDate and persists the game as FINISH.
      */
     public Boolean finishGame(GameModel gameModel) throws BusinessException {
         Game game = findActiveGame(gameModel.getCourtModel().getCourtId());
-        // validate from request the type of game: SHARE or NEGO and set expense
-        findGTypeAndSetExpense(game, gameModel.getCourtModel());
-        // set value: state, Team's expense, endedDate, gType.
+        game.setGtype(gameModel.getGameType().name());
+        // Set team expenses and win flags from GameModel
+        if (gameModel.getTeamOneExpenseOne() != null) {
+            game.getTeamOne().setExpenseOne(gameModel.getTeamOneExpenseOne());
+        }
+        if (gameModel.getTeamOneExpenseTwo() != null) {
+            game.getTeamOne().setExpenseTwo(gameModel.getTeamOneExpenseTwo());
+        }
+        if (gameModel.getTeamOneWin() != null) {
+            game.getTeamOne().setWin(gameModel.getTeamOneWin());
+        }
+        if (gameModel.getTeamTwoExpenseOne() != null) {
+            game.getTeamTwo().setExpenseOne(gameModel.getTeamTwoExpenseOne());
+        }
+        if (gameModel.getTeamTwoExpenseTwo() != null) {
+            game.getTeamTwo().setExpenseTwo(gameModel.getTeamTwoExpenseTwo());
+        }
+        if (gameModel.getTeamTwoWin() != null) {
+            game.getTeamTwo().setWin(gameModel.getTeamTwoWin());
+        }
+        // set value: state, endedDate.
         game.setEndedDate(TimeUtils.getUTCPlus7Instant());
         game.setState(GameState.FINISH.getValue());
         gameRepository.save(game);
-
         return true;
     }
 
@@ -52,6 +66,62 @@ public class CoreGameService {
             throw new BusinessException(ErrorCodeEnum.GAME_NOT_FOUND, "Game is not found to execute.");
         }
         return gOption.get();
+    }
+
+    public GameModel findActiveGameModel(int gameId) throws BusinessException {
+        Optional<Game> gOption = gameRepository.findById(gameId);
+        if (!gOption.isPresent()) {
+            throw new BusinessException(ErrorCodeEnum.GAME_NOT_FOUND, "Game is not found to execute.");
+        }
+        return convertToGameModel(gOption.get());
+    }
+
+    public int findActiveGameId(String courtId) throws BusinessException {
+        Game game = findActiveGame(courtId);
+        return game.getGameId();
+    }
+
+    private GameModel convertToGameModel(Game game) {
+        GameModel model = new GameModel();
+        // Convert court to CourtModel
+        CourtModel courtModel = new CourtModel();
+        courtModel.setCourtId(String.valueOf(game.getCourt().getCourtId()));
+        courtModel.setName(game.getCourt().getCourtName());
+        model.setCourtModel(courtModel);
+
+        // Convert state to GameState
+        model.setGameState(GameState.getGameState(game.getState()));
+
+        // Convert gtype to GameType
+        if (game.getGtype() != null) {
+            model.setGameType(GameType.valueOf(game.getGtype()));
+        }
+
+        // Convert shuttleMap to Map<ShuttleBallModel, Integer>
+        if (game.getShuttleMap() != null) {
+            Map<ShuttleBallModel, Integer> shuttleBallMap = new HashMap<>();
+            for (GameShuttleMap map : game.getShuttleMap()) {
+                ShuttleBallModel shuttleBallModel = new ShuttleBallModel();
+                shuttleBallModel.setName(map.getShuttleBall().getShuttleName());
+                shuttleBallModel.setCost(java.math.BigDecimal.valueOf(map.getShuttleBall().getCost()));
+                shuttleBallMap.put(shuttleBallModel, map.getShuttleNumber());
+            }
+            model.setShuttleBallModelMap(shuttleBallMap);
+        }
+
+        // Set team expenses and win flags from game teams
+        if (game.getTeamOne() != null) {
+            model.setTeamOneExpenseOne(game.getTeamOne().getExpenseOne());
+            model.setTeamOneExpenseTwo(game.getTeamOne().getExpenseTwo());
+            model.setTeamOneWin(game.getTeamOne().isWin());
+        }
+        if (game.getTeamTwo() != null) {
+            model.setTeamTwoExpenseOne(game.getTeamTwo().getExpenseOne());
+            model.setTeamTwoExpenseTwo(game.getTeamTwo().getExpenseTwo());
+            model.setTeamTwoWin(game.getTeamTwo().isWin());
+        }
+
+        return model;
     }
 
     private void findGTypeAndSetExpense(Game game, CourtModel courtModel) {
@@ -134,8 +204,12 @@ public class CoreGameService {
         return null;
     }
 
-    public Boolean cancelGame(GameModel gameModel) {
-        return Boolean.TRUE;
+    public Boolean cancelGame(GameModel gameModel) throws BusinessException {
+        Game game = findActiveGame(gameModel.getCourtModel().getCourtId());
+        game.setEndedDate(TimeUtils.getUTCPlus7Instant());
+        game.setState(GameState.CANCEL.getValue());
+        gameRepository.save(game);
+        return true;
     }
 
     public Boolean checkGameExistById(int gameId) {

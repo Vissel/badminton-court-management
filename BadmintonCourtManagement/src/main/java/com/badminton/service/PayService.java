@@ -6,8 +6,15 @@ import com.badminton.response.result.Result;
 
 public interface PayService {
 
+    /**
+     * Pay debit for player
+     *
+     * @param payRequest
+     * @return
+     */
     Result<PayResponse> payToPlayer(PayRequest payRequest);
 
     Result<Boolean> cancel(PayRequest payRequest);
+
 
 }

@@ -71,7 +71,7 @@ public class PayServiceImpl implements PayService {
             }
 
             @Override
-            public Boolean process() throws BusinessException {
+            public Boolean process() {
                 return corePaymentService.cancelPayment(getRequest().getPlayerName());
             }
         });

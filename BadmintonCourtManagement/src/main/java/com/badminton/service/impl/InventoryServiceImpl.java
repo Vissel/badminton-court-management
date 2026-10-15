@@ -10,11 +10,13 @@ import com.badminton.exception.BusinessException;
 import com.badminton.model.dto.ServiceDTO;
 import com.badminton.model.dto.ShuttleBallDTO;
 import com.badminton.model.inventory.ConsumedItemsModel;
+import com.badminton.model.inventory.GameEndConfirmDTO;
 import com.badminton.model.inventory.StockIntakePlan;
 import com.badminton.model.inventory.StockIntakeRow;
 import com.badminton.repository.*;
 import com.badminton.requestmodel.inventory.AdjustmentRequest;
 import com.badminton.requestmodel.inventory.BallConsumeInGameRequest;
+import com.badminton.requestmodel.inventory.ChangeShuttleBallQuantityRequest;
 import com.badminton.requestmodel.inventory.InventoryItemRequest;
 import com.badminton.requestmodel.inventory.PurchaseRequest;
 import com.badminton.response.inventory.*;
@@ -621,6 +623,80 @@ public class InventoryServiceImpl implements InventoryService {
                 }
                 coreInventoryService.writeItemMovements(consumedItems);
                 return true;
+            }
+        });
+    }
+
+    @Override
+    @Transactional
+    public Result<Boolean> changeShuttleBallQuantity(ChangeShuttleBallQuantityRequest request) {
+        return serviceTemplate.execute(new ProcessCallback<ChangeShuttleBallQuantityRequest, Boolean>() {
+            @Override
+            public ChangeShuttleBallQuantityRequest getRequest() {
+                return request;
+            }
+
+            @Override
+            public void preProcess(ChangeShuttleBallQuantityRequest request) {
+                Assert.notNull(request, "Request must not be null");
+                Assert.notNull(request.getShuttleBallDTO(), "Shuttle ball DTO must not be null");
+                Assert.isTrue(request.getGameId() > 0, "Game ID must be valid");
+            }
+
+            @Override
+            public Boolean process() throws BusinessException {
+                int oldQuantity = request.getOldQuantity();
+                int newQuantity = request.getShuttleBallDTO().getBallQuantity();
+                int delta = newQuantity - oldQuantity;
+
+                if (delta > 0) {
+                    // Increase: consume additional balls from stock
+                    ShuttleBallDTO deltaDTO = new ShuttleBallDTO();
+                    deltaDTO.setShuttleName(request.getShuttleBallDTO().getShuttleName());
+                    deltaDTO.setShuttleCost(request.getShuttleBallDTO().getShuttleCost());
+                    deltaDTO.setBallQuantity(delta);
+                    BallConsumeInGameRequest consumeRequest = new BallConsumeInGameRequest();
+                    consumeRequest.setInGame(request.getGameId());
+                    consumeRequest.setShuttleBallDTOList(List.of(deltaDTO));
+                    Result<Boolean> result = recordBallConsumption(consumeRequest);
+                    if (!result.isSuccess()) {
+                        throw new RuntimeException("Failed to consume additional balls");
+                    }
+                } else if (delta < 0) {
+                    // Decrease: return balls to stock
+                    ShuttleBallDTO deltaDTO = new ShuttleBallDTO();
+                    deltaDTO.setShuttleName(request.getShuttleBallDTO().getShuttleName());
+                    deltaDTO.setShuttleCost(request.getShuttleBallDTO().getShuttleCost());
+                    deltaDTO.setBallQuantity(Math.abs(delta));
+                    Result<Boolean> result = revokeBallConsumption(List.of(deltaDTO));
+                    if (!result.isSuccess()) {
+                        throw new RuntimeException("Failed to return balls to stock");
+                    }
+                }
+
+                return true;
+            }
+        });
+    }
+
+    @Override
+    @Transactional
+    public Result<Boolean> confirmMovementItemEndGame(GameEndConfirmDTO gameEndConfirmDTO) {
+        return serviceTemplate.execute(new ProcessCallback<GameEndConfirmDTO, Boolean>() {
+            @Override
+            public GameEndConfirmDTO getRequest() {
+                return gameEndConfirmDTO;
+            }
+
+            @Override
+            public void preProcess(GameEndConfirmDTO request) {
+                Assert.notNull(request, "Request must not be null");
+                Assert.isTrue(request.getGameId() > 0, "Game ID must be valid");
+            }
+
+            @Override
+            public Boolean process() throws BusinessException {
+                return coreInventoryService.confirmMovementItemEndGame(gameEndConfirmDTO);
             }
         });
     }

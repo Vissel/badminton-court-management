@@ -2,6 +2,7 @@ package com.badminton.repository;
 
 import com.badminton.entity.InventoryItem;
 import com.badminton.entity.StockMovement;
+import com.badminton.enums.MovementReferenceType;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -27,4 +28,6 @@ public interface StockMovementRepository extends JpaRepository<StockMovement, Lo
 
     List<StockMovement> findAllByItemAndCreatedDateBetweenOrderByMovementIdAsc(
             InventoryItem item, Timestamp from, Timestamp to);
+
+    List<StockMovement> findByRefIdAndRefType(Long refId, MovementReferenceType refType);
 }

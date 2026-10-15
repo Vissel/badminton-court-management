@@ -16,4 +16,6 @@ public class CreateDebitDTO {
     private String playerName;
 
     private Instant createdTime;
+
+    private SessionDTO session;
 }

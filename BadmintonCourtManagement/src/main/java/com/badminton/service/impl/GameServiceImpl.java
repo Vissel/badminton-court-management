@@ -6,9 +6,11 @@ import com.badminton.core.game.CoreGameService;
 import com.badminton.entity.Game;
 import com.badminton.entity.Team;
 import com.badminton.exception.BusinessException;
+import com.badminton.exception.ErrorUtils;
 import com.badminton.exception.enums.ErrorCodeEnum;
 import com.badminton.model.dto.ShuttleBallDTO;
 import com.badminton.model.game.*;
+import com.badminton.model.inventory.GameEndConfirmDTO;
 import com.badminton.repository.GameRepository;
 import com.badminton.requestmodel.CourtAreaDTO;
 import com.badminton.requestmodel.CourtDTO;
@@ -25,11 +27,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.Assert;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.*;
 
 @Slf4j
@@ -48,6 +52,10 @@ public class GameServiceImpl implements GameService {
     CoreGameService coreGameService;
     @Autowired
     InventoryService inventoryService;
+    @Autowired
+    PayService payService;
+    @Autowired
+    TransactionTemplate transactionTemplate;
 
     @Override
     public List<Game> findAllInprogress() {
@@ -93,7 +101,6 @@ public class GameServiceImpl implements GameService {
      * Started -> Cancel
      */
     @Override
-    @Transactional
     public Result<Boolean> handleChangeGameState(GameDTO gameRequest) {
         return serviceTemple.execute(new ProcessCallback<GameDTO, Boolean>() {
 
@@ -110,18 +117,29 @@ public class GameServiceImpl implements GameService {
 
             @Override
             public Boolean process() throws BusinessException {
-                // 2. get Game
-                Game game = coreGameService.findActiveGame(gameRequest.getCourt().getCourtId());
-                // 3. branch the game by change state
-                GameState changeGameState = GameState.getGameState(gameRequest.getGameState());
-                return switch (changeGameState) {
-                    case START -> isRentGameType(gameRequest.getGameType())
-                            ? processStartRentGame(game, gameRequest)
-                            : processStartGame(game, gameRequest);
-                    case FINISH, CANCEL -> processEndGame(game, gameRequest, changeGameState);
-                    default -> throw new BusinessException(ErrorCodeEnum.FLOW_ERROR,
-                            "Unsupported game state: " + gameRequest.getGameState());
-                };
+                return transactionTemplate.execute(new TransactionCallback<Boolean>() {
+                    @Override
+                    public Boolean doInTransaction(TransactionStatus status) {
+                        try {
+                            // 2. get Game
+                            Game game = coreGameService.findActiveGame(gameRequest.getCourt().getCourtId());
+                            // 3. branch the game by change state
+                            GameState changeGameState = GameState.getGameState(gameRequest.getGameState());
+                            return switch (changeGameState) {
+                                case START -> isRentGameType(gameRequest.getGameType())
+                                        ? processStartRentGame(game, gameRequest)
+                                        : processStartGame(game, gameRequest);
+                                case FINISH, CANCEL -> processEndGame(game, gameRequest, changeGameState);
+                                default ->
+                                        throw new RuntimeException(ErrorUtils.buildErrorMessage(ErrorCodeEnum.GAME_STATE_ERROR));
+                            };
+                        } catch (BusinessException e) {
+                            throw new RuntimeException(ErrorUtils.buildErrorMessage(ErrorCodeEnum.FLOW_ERROR));
+                        }
+
+                    }
+                });
+
             }
         });
     }
@@ -143,8 +161,26 @@ public class GameServiceImpl implements GameService {
 
             @Override
             public Boolean process() throws BusinessException {
-                // 2. convert the request to GameModel and delegate finish logic to CoreGameService
-                return coreGameService.finishGame(toGameModel(gameRequest));
+                return transactionTemplate.execute(new TransactionCallback<Boolean>() {
+                    @Override
+                    public Boolean doInTransaction(TransactionStatus status) {
+                        try {
+                            GameModel gameModel = calculateGameExpensetoGameModel(gameRequest);
+                            // 2. convert the request to GameModel and delegate finish logic to CoreGameService
+                            coreGameService.finishGame(gameModel);
+                            // 3. confirm in the inventory
+                            int gameId = coreGameService.findActiveGameId(gameModel.getCourtModel().getCourtId());
+                            inventoryService.confirmMovementItemEndGame(toGameEndConfirmDTO(
+                                    gameId
+                                    , true
+                            ));
+                            return true;
+                        } catch (BusinessException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+                });
+
             }
         });
     }
@@ -169,14 +205,24 @@ public class GameServiceImpl implements GameService {
 
             @Override
             public Boolean process() throws BusinessException {
-                List<Game> listGame = gameRepository.findAllByCourtIdAndEndedDateIsNull(Integer.valueOf(gameRequest.getCourt().getCourtId()));
-                final Instant endedDate = TimeUtils.getUTCPlus7Instant();
-                listGame.stream().forEach(game -> {
-                    game.setEndedDate(endedDate);
-                    game.setState(GameState.CANCEL.getValue());
+                return transactionTemplate.execute(new TransactionCallback<Boolean>() {
+                    @Override
+                    public Boolean doInTransaction(TransactionStatus status) {
+                        try {
+                            GameModel gameModel = toGameModelForTerminate(gameRequest);
+                            // 1. delegate terminate logic to CoreGameService
+                            coreGameService.cancelGame(gameModel);
+                            // 2. confirm in the inventory (return items for termination)
+                            inventoryService.confirmMovementItemEndGame(toGameEndConfirmDTO(
+                                    coreGameService.findActiveGameId(gameModel.getCourtModel().getCourtId())
+                                    , false
+                            ));
+                            return true;
+                        } catch (BusinessException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
                 });
-                gameRepository.saveAll(listGame);
-                return true;
             }
         });
     }
@@ -330,13 +376,69 @@ public class GameServiceImpl implements GameService {
      * Converts the finish-game request into the internal {@link GameModel}
      * handled by {@link CoreGameService}.
      */
-    private GameModel toGameModel(GameDTO gameRequest) {
+    private GameModel calculateGameExpensetoGameModel(GameDTO gameRequest) {
         GameModel model = new GameModel();
-        model.setCourtModel(toCourtModel(gameRequest.getCourt()));
+        CourtModel courtModel = toCourtModel(gameRequest.getCourt());
+        model.setCourtModel(courtModel);
         model.setGameState(GameState.getGameState(gameRequest.getGameState()));
         model.setGameType(toGameType(gameRequest.getGameType()));
         model.setShuttleBallModelMap(toShuttleBallMap(gameRequest.getShuttleBalls()));
+
+        // Calculate game type, team expenses and win flags from court model
+        calculateGameTypeAndExpenses(model, courtModel);
         return model;
+    }
+
+    private void calculateGameTypeAndExpenses(GameModel model, CourtModel courtModel) {
+        // Map areas to a map for easier lookup
+        Map<String, com.badminton.model.game.CourtAreaModel> areaMap = new HashMap<>();
+        putAreaIfPresent(areaMap, courtModel.getAreaA());
+        putAreaIfPresent(areaMap, courtModel.getAreaB());
+        putAreaIfPresent(areaMap, courtModel.getAreaC());
+        putAreaIfPresent(areaMap, courtModel.getAreaD());
+
+        // Determine game type (NEGO if any area has WIN result with expense)
+        GameType gameType = GameType.SHARE;
+        for (com.badminton.model.game.CourtAreaModel area : areaMap.values()) {
+            if (GameResultEnum.WIN.equals(area.getGameResult()) && area.getExpense() > MoneyUtils.DEFAULT) {
+                gameType = GameType.NEGO;
+                break;
+            }
+        }
+        model.setGameType(gameType);
+
+        // Set team expenses and win flags based on areas
+        for (Map.Entry<String, com.badminton.model.game.CourtAreaModel> entry : areaMap.entrySet()) {
+            setTeamExpenseInModel(model, entry.getKey(), entry.getValue().getExpense(),
+                    GameResultEnum.WIN.equals(entry.getValue().getGameResult()));
+        }
+    }
+
+    private void putAreaIfPresent(Map<String, com.badminton.model.game.CourtAreaModel> areaMap, com.badminton.model.game.CourtAreaModel area) {
+        if (area != null && area.getArea() != null) {
+            areaMap.put(area.getArea().name(), area);
+        }
+    }
+
+    private void setTeamExpenseInModel(GameModel model, String area, float expense, boolean win) {
+        switch (area) {
+            case GameState.Player.PLAYER_A -> {
+                model.setTeamOneExpenseOne(expense);
+                model.setTeamOneWin(win);
+            }
+            case GameState.Player.PLAYER_B -> {
+                model.setTeamOneExpenseTwo(expense);
+                model.setTeamOneWin(win);
+            }
+            case GameState.Player.PLAYER_C -> {
+                model.setTeamTwoExpenseOne(expense);
+                model.setTeamTwoWin(win);
+            }
+            case GameState.Player.PLAYER_D -> {
+                model.setTeamTwoExpenseTwo(expense);
+                model.setTeamTwoWin(win);
+            }
+        }
     }
 
     private CourtModel toCourtModel(CourtDTO court) {
@@ -435,7 +537,7 @@ public class GameServiceImpl implements GameService {
 //        coreInventoryService.consumeShuttleBallsForGame(game);
         Result<Boolean> result = inventoryService.recordBallConsumption(toBallInGameRequest(gameRequest.getShuttleBalls(), game.getGameId()));
         if (!result.isSuccess()) {
-            throw new RuntimeException("Cannot save record");
+            throw new RuntimeException("Cannot start the game");
         }
         return true;
 
@@ -448,26 +550,12 @@ public class GameServiceImpl implements GameService {
         setSelectedBallIntoGame(game, gameRequest.getShuttleBalls());
         gameRepository.save(game);
         // reduce the shuttle ball quantity in stock
-        BallConsumeInGameRequest request = new BallConsumeInGameRequest();
-        request.setInGame(game.getGameId());
-        List<ShuttleBallDTO> shuttleBallDTOList = new ArrayList<>();
-        if (game.getShuttleMap() != null) {
-            for (com.badminton.entity.GameShuttleMap mapping : game.getShuttleMap()) {
-                if (mapping != null && mapping.getShuttleBall() != null) {
-                    ShuttleBallDTO dto = new ShuttleBallDTO();
-                    dto.setShuttleName(mapping.getShuttleBall().getShuttleName());
-                    dto.setShuttleCost(mapping.getShuttleBall().getCost());
-                    dto.setBallQuantity(mapping.getShuttleNumber());
-                    shuttleBallDTOList.add(dto);
-                }
-            }
-        }
-        request.setShuttleBallDTOList(shuttleBallDTOList);
-        inventoryService.recordBallConsumption(request);
+        inventoryService.recordBallConsumption(toBallInGameRequest(game));
         return true;
     }
 
     private boolean processEndGame(Game game, GameDTO gameRequest, GameState targetState) throws BusinessException {
+
         requireTransition(game, targetState);
         game.setState(targetState.getValue());
         setGameTypeIfPresent(game, gameRequest.getGameType());
@@ -513,6 +601,38 @@ public class GameServiceImpl implements GameService {
         consumeRequest.setInGame(gameId);
         consumeRequest.setShuttleBallDTOList(shuttleBalls == null ? new ArrayList<>() : shuttleBalls);
         return consumeRequest;
+    }
+
+    private BallConsumeInGameRequest toBallInGameRequest(Game game) {
+        BallConsumeInGameRequest request = new BallConsumeInGameRequest();
+        request.setInGame(game.getGameId());
+        List<ShuttleBallDTO> shuttleBallDTOList = new ArrayList<>();
+        if (game.getShuttleMap() != null) {
+            for (com.badminton.entity.GameShuttleMap mapping : game.getShuttleMap()) {
+                if (mapping != null && mapping.getShuttleBall() != null) {
+                    ShuttleBallDTO dto = new ShuttleBallDTO();
+                    dto.setShuttleName(mapping.getShuttleBall().getShuttleName());
+                    dto.setShuttleCost(mapping.getShuttleBall().getCost());
+                    dto.setBallQuantity(mapping.getShuttleNumber());
+                    shuttleBallDTOList.add(dto);
+                }
+            }
+        }
+        request.setShuttleBallDTOList(shuttleBallDTOList);
+        return request;
+    }
+
+    private GameEndConfirmDTO toGameEndConfirmDTO(int gameId, boolean isFinishGame) {
+        GameEndConfirmDTO dto = new GameEndConfirmDTO();
+        dto.setGameId(gameId);
+        dto.setFinish(isFinishGame);
+        return dto;
+    }
+
+    private GameModel toGameModelForTerminate(GameDTO gameRequest) {
+        GameModel model = new GameModel();
+        model.setCourtModel(toCourtModel(gameRequest.getCourt()));
+        return model;
     }
 
 }

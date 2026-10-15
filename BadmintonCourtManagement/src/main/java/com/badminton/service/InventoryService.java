@@ -5,8 +5,10 @@ import com.badminton.entity.InventoryItem;
 import com.badminton.enums.InventoryItemType;
 import com.badminton.model.dto.ServiceDTO;
 import com.badminton.model.dto.ShuttleBallDTO;
+import com.badminton.model.inventory.GameEndConfirmDTO;
 import com.badminton.requestmodel.inventory.AdjustmentRequest;
 import com.badminton.requestmodel.inventory.BallConsumeInGameRequest;
+import com.badminton.requestmodel.inventory.ChangeShuttleBallQuantityRequest;
 import com.badminton.requestmodel.inventory.InventoryItemRequest;
 import com.badminton.requestmodel.inventory.PurchaseRequest;
 import com.badminton.response.inventory.InventoryItemResponse;
@@ -87,6 +89,10 @@ public interface InventoryService {
     Result<Boolean> recordBallConsumption(BallConsumeInGameRequest ballConsumeInGameRequest);
 
     Result<Boolean> revokeBallConsumption(List<ShuttleBallDTO> balls);
+
+    Result<Boolean> changeShuttleBallQuantity(ChangeShuttleBallQuantityRequest request);
+
+    Result<Boolean> confirmMovementItemEndGame(GameEndConfirmDTO gameEndConfirmDTO);
 
     /**
      * Logs low-stock warnings for the shuttle balls selected on a starting game.
