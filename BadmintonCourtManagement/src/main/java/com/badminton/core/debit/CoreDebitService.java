@@ -2,7 +2,6 @@ package com.badminton.core.debit;
 
 import com.badminton.core.billing.CoreBillingService;
 import com.badminton.core.player.CoreAvailablePlayerService;
-import com.badminton.core.session.CoreSession;
 import com.badminton.entity.Debit;
 import com.badminton.entity.DebitSummary;
 import com.badminton.entity.Invoice;
@@ -14,12 +13,17 @@ import com.badminton.exception.BusinessException;
 import com.badminton.exception.enums.ErrorCodeEnum;
 import com.badminton.model.debit.*;
 import com.badminton.model.dto.*;
-import com.badminton.repository.*;
+import com.badminton.repository.DebitRepository;
+import com.badminton.repository.DebitSummaryRepository;
+import com.badminton.repository.PaymentDebitRepository;
+import com.badminton.repository.UserRepository;
 import com.badminton.requestmodel.Pagination;
 import com.badminton.response.debit.*;
+import com.badminton.service.SessionServiceImpl;
 import com.badminton.util.MoneyUtils;
 import com.badminton.util.TimeUtils;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.tuple.Pair;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -31,6 +35,7 @@ import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import java.math.BigDecimal;
 import java.text.Normalizer;
 import java.time.Instant;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -101,7 +106,8 @@ public class CoreDebitService {
     }
 
     @Transactional
-    public RemainingDebitModel getRemainingDebtsBySinglePlayer(RemainingDebitDTO remainingDebitDTO) throws BusinessException {
+    public RemainingDebitModel getRemainingDebtsBySinglePlayer(RemainingDebitDTO remainingDebitDTO)
+            throws BusinessException {
         // step 1: get Player by playerName, throw BusinessException if not found
         Player player = resolvePlayerByName(remainingDebitDTO.getPlayerName());
 
@@ -155,12 +161,17 @@ public class CoreDebitService {
         Player player = resolvePlayerByName(playerName);
 
         Object[] row = debitRepository.summarizeHistoryByPlayerId(player.getPlayerId());
-        // Spring Data JPA returns the aggregate tuple wrapped inside a single-element Object[]
+        // Spring Data JPA returns the aggregate tuple wrapped inside a single-element
+        // Object[]
         Object[] values = (row != null && row.length == 1 && row[0] instanceof Object[] nested) ? nested : row;
         BigDecimal totalDebt = toBigDecimal(values != null && values.length > 0 ? values[0] : null);
         BigDecimal totalRemaining = toBigDecimal(values != null && values.length > 1 ? values[1] : null);
-        int numDebits = values != null && values.length > 2 && values[2] instanceof Number ? ((Number) values[2]).intValue() : 0;
-        int numPaid = values != null && values.length > 3 && values[3] instanceof Number ? ((Number) values[3]).intValue() : 0;
+        int numDebits = values != null && values.length > 2 && values[2] instanceof Number
+                ? ((Number) values[2]).intValue()
+                : 0;
+        int numPaid = values != null && values.length > 3 && values[3] instanceof Number
+                ? ((Number) values[3]).intValue()
+                : 0;
 
         return DebitHistorySummaryModel.builder()
                 .playerName(playerName)
@@ -549,21 +560,5 @@ public class CoreDebitService {
         }
         summary.setIsActive(true);
         debitSummaryRepository.save(summary);
-    }
-
-    private Pair<Player, Session> getPlayerAndSession(String name, Instant createdTime) throws BusinessException {
-        String createdTimeStr = DateTimeFormatter.ISO_LOCAL_DATE_TIME.withZone(java.time.ZoneOffset.UTC)
-                .format(createdTime);
-        List<Session> sessions = sessionService.getSessionsByDateTime(createdTimeStr);
-        if (sessions.isEmpty()) {
-            throw new BusinessException(ErrorCodeEnum.CURRENT_SESSION_NOT_FOUND);
-        }
-        for (Session session : sessions) {
-            Player player = coreAvailablePlayerService.checkAvailableAndGetPlayer(session, name);
-            if (player != null) {
-                return Pair.of(player, session);
-            }
-        }
-        throw new BusinessException(ErrorCodeEnum.PLAYER_NOT_FOUND);
     }
 }

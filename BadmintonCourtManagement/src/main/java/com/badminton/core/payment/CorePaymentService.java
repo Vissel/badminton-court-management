@@ -3,30 +3,35 @@ package com.badminton.core.payment;
 import com.badminton.constant.ServiceConstants;
 import com.badminton.core.billing.CoreBillingService;
 import com.badminton.core.debit.CoreDebitService;
-import com.badminton.core.player.CoreAvailablePlayerService;
-import com.badminton.core.session.CoreSession;
 import com.badminton.entity.Invoice;
 import com.badminton.entity.AvailablePlayer;
 import com.badminton.entity.Payment;
 import com.badminton.enums.PaymentStatus;
 import com.badminton.exception.BusinessException;
-import com.badminton.exception.ErrorUtils;
 import com.badminton.exception.enums.ErrorCodeEnum;
+import com.badminton.exception.validation.AvailablePlayerCheck;
 import com.badminton.exception.validation.DebitCheck;
-import com.badminton.model.dto.*;
+import com.badminton.model.dto.AllocateDebitPaymentResponse;
+import com.badminton.model.dto.PaymentDTO;
+import com.badminton.model.dto.ServiceDTO;
 import com.badminton.model.payment.PaymentDebitModel;
 import com.badminton.model.payment.PaymentModel;
 import com.badminton.model.player.AvailablePlayerPayModel;
+import com.badminton.repository.AvailablePlayerRepository;
 import com.badminton.repository.PaymentRepository;
+import com.badminton.service.SessionServiceImpl;
+import com.badminton.util.ServiceUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.interceptor.TransactionAspectSupport;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -58,37 +63,14 @@ public class CorePaymentService {
                 payDebitsResponse = coreDebitService.allocateDebitPayment(paymentDTO.getPayDebits());
                 if (payDebitsResponse == null || PaymentStatus.FAIL.equals(payDebitsResponse.getStatus())) {
                     throw new BusinessException(
-                            payDebitsResponse != null ? resolveErrorCode(payDebitsResponse.getErrorCode())
-                                    : ErrorCodeEnum.INTERNAL_SERVER_ERROR,
-                            payDebitsResponse != null ? payDebitsResponse.getMessage()
-                                    : "Debit allocation returned empty response");
+                            payDebitsResponse != null ? resolveErrorCode(payDebitsResponse.getErrorCode()) : ErrorCodeEnum.INTERNAL_SERVER_ERROR,
+                            payDebitsResponse != null ? payDebitsResponse.getMessage() : "Debit allocation returned empty response");
                 }
             }
 
             // save the player with leaveTime, service
-            // TODO
-            Optional<AvailablePlayer> optPlayer = availablePlayerRepository
-                    .findAvailablePlayerInSessionByNameAndLeaveTimeNull(
-                            sessionService.findListCurrentSession().getFirst(), paymentDTO.getPlayerName());
-            AvailablePlayerCheck.isAvailablePlayerPresent(optPlayer);
             AvailablePlayerPayModel savedPlayer = coreAvailablePlayerService.updatePaidAvailablePlayer(toAvaPlayerDTO(paymentDTO, payDebitsResponse));
 
-            AvailablePlayer availablePlayer = optPlayer.get();
-            List<ServiceDTO> services = paymentDTO.getServices() != null
-                    ? new ArrayList<>(paymentDTO.getServices())
-                    : new ArrayList<>();
-            if (paymentDTO.getDebit() != null) {
-                services.add(new ServiceDTO(ServiceConstants.CREATE_DEBIT_VN,
-                        paymentDTO.getDebit().getDebitAmount().floatValue()));
-            }
-            if (payDebitsResponse != null) {
-                services.add(
-                        new ServiceDTO(ServiceConstants.PAY_DEBIT_VN, payDebitsResponse.getPaidDebts().floatValue()));
-            }
-            availablePlayer.setServices(ServiceUtil.buildJsonArrayStr(services));
-            availablePlayer.setLeaveTime(sessionService.getUTCPlus7Instant());
-            availablePlayer.setPayType(paymentDTO.getPayType());
-            availablePlayer.setPayAmount(Float.valueOf(paymentDTO.getTotalPay()));
             return convertToModel(savedPlayer, payDebitsResponse, paymentDTO.getDebit());
         } catch (BusinessException e) {
             TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
@@ -96,35 +78,6 @@ public class CorePaymentService {
         }
     }
 
-            AvailablePlayer savedPlayer = availablePlayerRepository.save(availablePlayer);
-
-            // Issue the bill inside the payment tx — a failure rolls the payment back.
-            // The final services list (incl. appended Ghi nợ / Trả nợ lines) is
-            // what the bill itemizes.
-            paymentDTO.setServices(services);
-            Invoice bill = coreBillingService.issueCheckoutBill(paymentDTO, savedPlayer);
-
-            paymentDebitModel = new PaymentDebitModel();
-            paymentDebitModel.setPayFor(savedPlayer.getPlayer().getPlayerName());
-            paymentDebitModel.setPayType(savedPlayer.getPayType());
-            paymentDebitModel.setPayAmount(BigDecimal.valueOf(savedPlayer.getPayAmount()));
-            paymentDebitModel.setPayTime(savedPlayer.getLeaveTime());
-            paymentDebitModel.setServices(savedPlayer.getCurrentServices());
-            paymentDebitModel
-                    .setDebitAmount(paymentDTO.getDebit() != null ? paymentDTO.getDebit().getDebitAmount() : null);
-            if (payDebitsResponse != null) {
-                paymentDebitModel.setPaidDebts(payDebitsResponse.getPaidDebts());
-                paymentDebitModel.setRemainingDebts(payDebitsResponse.getRemainingDebts());
-                paymentDebitModel.setNumPaidDebts(payDebitsResponse.getNumPaidDebts());
-                paymentDebitModel.setNumRemainingDebts(payDebitsResponse.getNumRemainingDebts());
-                paymentDebitModel.setPayDebitsMessage(payDebitsResponse.getMessage());
-            }
-            paymentDebitModel.setBillId(bill.getInvoiceId());
-            paymentDebitModel.setBillNo(bill.getBillNo());
-            return paymentDebitModel;
-        } catch (BusinessException e) {
-            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
-            throw e;
     private PaymentDebitModel convertToModel(AvailablePlayerPayModel savedPlayer, AllocateDebitPaymentResponse payDebitsResponse, CreateDebitDTO debit) {
         PaymentDebitModel paymentDebitModel = new PaymentDebitModel();
         paymentDebitModel.setPayFor(savedPlayer.getName());
