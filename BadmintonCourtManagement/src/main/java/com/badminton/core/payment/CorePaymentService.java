@@ -1,37 +1,28 @@
 package com.badminton.core.payment;
 
 import com.badminton.constant.ServiceConstants;
-import com.badminton.core.billing.CoreBillingService;
 import com.badminton.core.debit.CoreDebitService;
-import com.badminton.entity.Invoice;
-import com.badminton.entity.AvailablePlayer;
+import com.badminton.core.player.CoreAvailablePlayerService;
 import com.badminton.entity.Payment;
 import com.badminton.enums.PaymentStatus;
 import com.badminton.exception.BusinessException;
+import com.badminton.exception.ErrorUtils;
 import com.badminton.exception.enums.ErrorCodeEnum;
-import com.badminton.exception.validation.AvailablePlayerCheck;
 import com.badminton.exception.validation.DebitCheck;
-import com.badminton.model.dto.AllocateDebitPaymentResponse;
-import com.badminton.model.dto.PaymentDTO;
-import com.badminton.model.dto.ServiceDTO;
+import com.badminton.model.dto.*;
 import com.badminton.model.payment.PaymentDebitModel;
 import com.badminton.model.payment.PaymentModel;
 import com.badminton.model.player.AvailablePlayerPayModel;
-import com.badminton.repository.AvailablePlayerRepository;
 import com.badminton.repository.PaymentRepository;
-import com.badminton.service.SessionServiceImpl;
-import com.badminton.util.ServiceUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.interceptor.TransactionAspectSupport;
 
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -39,15 +30,10 @@ public class CorePaymentService {
     @Autowired
     CoreDebitService coreDebitService;
     @Autowired
-    CoreSession coreSession;
-    @Autowired
     CoreAvailablePlayerService coreAvailablePlayerService;
 
     @Autowired
     PaymentRepository paymentRepository;
-
-    @Autowired
-    CoreBillingService coreBillingService;
 
     @Transactional
     public PaymentDebitModel payForPlayerAndCreateDebt(PaymentDTO paymentDTO) throws BusinessException {

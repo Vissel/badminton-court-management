@@ -2,11 +2,8 @@ package com.badminton.core.debit;
 
 import com.badminton.core.billing.CoreBillingService;
 import com.badminton.core.player.CoreAvailablePlayerService;
-import com.badminton.entity.Debit;
-import com.badminton.entity.DebitSummary;
-import com.badminton.entity.Invoice;
-import com.badminton.entity.Player;
-import com.badminton.entity.Session;
+import com.badminton.core.session.CoreSession;
+import com.badminton.entity.*;
 import com.badminton.enums.DebitStatus;
 import com.badminton.enums.PaymentStatus;
 import com.badminton.exception.BusinessException;
@@ -19,11 +16,9 @@ import com.badminton.repository.PaymentDebitRepository;
 import com.badminton.repository.UserRepository;
 import com.badminton.requestmodel.Pagination;
 import com.badminton.response.debit.*;
-import com.badminton.service.SessionServiceImpl;
 import com.badminton.util.MoneyUtils;
 import com.badminton.util.TimeUtils;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.tuple.Pair;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -35,7 +30,6 @@ import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import java.math.BigDecimal;
 import java.text.Normalizer;
 import java.time.Instant;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -51,10 +45,6 @@ public class CoreDebitService {
     private UserRepository userRepository;
     @Autowired
     private DebitRepository debitRepository;
-    @Autowired
-    private SessionServiceImpl sessionService;
-    @Autowired
-    private CoreAvailablePlayerService coreAvailablePlayerService;
     @Autowired
     private CorePayDebitService corePayDebitService;
     @Autowired
@@ -263,7 +253,7 @@ public class CoreDebitService {
     }
 
     private RemainingDebitModel convertToDebitModel(Optional<DebitSummary> debitSummaryOpt, Page<Debit> debitPage,
-            String playerName) {
+                                                    String playerName) {
         BigDecimal totalDebts = debitSummaryOpt.map(DebitSummary::getTotalDebts).orElse(BigDecimal.ZERO);
         int numberDebit = debitSummaryOpt.map(DebitSummary::getNumDebts).orElse(0);
 

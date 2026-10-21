@@ -36,6 +36,10 @@ public class Court {
         this.courtId = id;
     }
 
+    public Court(int id) {
+        this.courtId = id;
+    }
+
     @OneToMany(mappedBy = "court")
     public List<Game> games;
 

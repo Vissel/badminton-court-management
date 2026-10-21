@@ -7,7 +7,7 @@ import java.util.Map;
 
 @Data
 public class GameEndConfirmDTO {
-    private int gameId;
+    private String courtId;
     private Map<ShuttleBallModel, Integer> shuttleBallModelMap;
     private boolean isFinish = true;
 }

@@ -473,8 +473,11 @@ public class CourtServicesService {
             return false;
         }
 
-        Optional<Game> gameOfCourtOpt = gameRepo.findByCourtAndStateAndEndedDateIsNull(courtOpt.get(),
-                GameState.NOT_START.getValue());
+        // Look up any game row that is still open on this court (ended_date IS NULL),
+        // regardless of state, then validate state in Java so a stale state ('Start',
+        // 'Finish', 'Cancel' with ended_date not written) is surfaced explicitly
+        // instead of silently falling through and creating a duplicate active game.
+        Optional<Game> gameOfCourtOpt = gameRepo.findByCourtIdAndEndedDateIsNull(courtOpt.get().getCourtId());
         Game game = null;
         if (gameOfCourtOpt.isPresent()) {
             game = gameOfCourtOpt.get();

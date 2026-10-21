@@ -2,7 +2,9 @@ package com.badminton.repository;
 
 import com.badminton.entity.Court;
 import com.badminton.entity.Game;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -15,9 +17,11 @@ public interface GameRepository extends JpaRepository<Game, Integer> {
 
     List<Game> findAllByStateInAndEndedDateIsNull(Set<String> stateIncludes);
 
-
     @Query("select g from Game g where g.court.courtId = ?1 and g.endedDate is null")
     Optional<Game> findByCourtIdAndEndedDateIsNull(int idOfCourt);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<Game> findByCourtAndEndedDateIsNull(Court court);
 
     @Query("select g from Game g where g.court.courtId = ?1 and g.endedDate is null and g.state = ?2")
     Optional<Game> findByCourtIdAndEndedDateIsNullAndGameStateNotStart(int idOfCourt, String gameState);

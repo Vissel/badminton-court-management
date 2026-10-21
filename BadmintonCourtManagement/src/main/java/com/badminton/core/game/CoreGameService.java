@@ -2,6 +2,7 @@ package com.badminton.core.game;
 
 import com.badminton.constant.GameState;
 import com.badminton.constant.GameType;
+import com.badminton.dao.DaoGame;
 import com.badminton.entity.AvailablePlayer;
 import com.badminton.entity.Game;
 import com.badminton.entity.GameShuttleMap;
@@ -15,6 +16,7 @@ import com.badminton.util.ServiceUtil;
 import com.badminton.util.TimeUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -25,14 +27,18 @@ public class CoreGameService {
 
     @Autowired
     GameRepository gameRepository;
+    @Autowired
+    DaoGame daoGame;
 
     /**
      * Finish the active game on the court described by {@link GameModel}:
      * uses pre-calculated game type, team expenses and win flags from GameModel,
      * stamps endedDate and persists the game as FINISH.
      */
+    @Transactional
     public Boolean finishGame(GameModel gameModel) throws BusinessException {
-        Game game = findActiveGame(gameModel.getCourtModel().getCourtId());
+        Game game = daoGame.findActiveGameByCourtIdForUpdate(gameModel.getCourtModel().getCourtId())
+                .orElseThrow(() -> new BusinessException(ErrorCodeEnum.GAME_NOT_FOUND, "Game is not found to execute."));
         game.setGtype(gameModel.getGameType().name());
         // Set team expenses and win flags from GameModel
         if (gameModel.getTeamOneExpenseOne() != null) {
@@ -61,12 +67,13 @@ public class CoreGameService {
     }
 
     public Game findActiveGame(String courtId) throws BusinessException {
-        Optional<Game> gOption = gameRepository.findByCourtIdAndEndedDateIsNull(Integer.valueOf(courtId));
+        Optional<Game> gOption = daoGame.findActiveGameByCourtId(courtId);
         if (!gOption.isPresent()) {
             throw new BusinessException(ErrorCodeEnum.GAME_NOT_FOUND, "Game is not found to execute.");
         }
         return gOption.get();
     }
+
 
     public GameModel findActiveGameModel(int gameId) throws BusinessException {
         Optional<Game> gOption = gameRepository.findById(gameId);
@@ -204,12 +211,95 @@ public class CoreGameService {
         return null;
     }
 
+    @Transactional
     public Boolean cancelGame(GameModel gameModel) throws BusinessException {
-        Game game = findActiveGame(gameModel.getCourtModel().getCourtId());
+        Game game = daoGame.findActiveGameByCourtIdForUpdate(gameModel.getCourtModel().getCourtId()).get();
         game.setEndedDate(TimeUtils.getUTCPlus7Instant());
         game.setState(GameState.CANCEL.getValue());
         gameRepository.save(game);
         return true;
+    }
+
+    /**
+     * Compensating action for {@link #cancelGame}: restore a game that was just
+     * cancelled back to its prior active state (clear endedDate + previous state).
+     * Used when a downstream step (e.g. inventory confirmation) fails after the
+     * cancel has already been committed.
+     */
+    @Transactional
+    public void revertCancelledGame(int gameId, String previousState) {
+        gameRepository.findById(gameId).ifPresent(game -> {
+            game.setEndedDate(null);
+            game.setState(previousState);
+            gameRepository.save(game);
+        });
+    }
+
+    /**
+     * Capture the mutable fields of the active game on a court before a finish
+     * transition, so {@link #revertFinishedGame} can undo it as a compensating
+     * action. Runs in a read transaction so lazy team associations load safely.
+     */
+    @Transactional(readOnly = true)
+    public GameSnapshot snapshotActiveGame(String courtId) throws BusinessException {
+        Game game = findActiveGame(courtId);
+        GameSnapshot snapshot = new GameSnapshot();
+        snapshot.setGameId(game.getGameId());
+        snapshot.setState(game.getState());
+        snapshot.setEndedDate(game.getEndedDate());
+        snapshot.setGtype(game.getGtype());
+        if (game.getTeamOne() != null) {
+            snapshot.setTeamOneExpenseOne(game.getTeamOne().getExpenseOne());
+            snapshot.setTeamOneExpenseTwo(game.getTeamOne().getExpenseTwo());
+            snapshot.setTeamOneWin(game.getTeamOne().isWin());
+        }
+        if (game.getTeamTwo() != null) {
+            snapshot.setTeamTwoExpenseOne(game.getTeamTwo().getExpenseOne());
+            snapshot.setTeamTwoExpenseTwo(game.getTeamTwo().getExpenseTwo());
+            snapshot.setTeamTwoWin(game.getTeamTwo().isWin());
+        }
+        return snapshot;
+    }
+
+    /**
+     * Compensating action for {@link #finishGame}: restore the game to the state
+     * captured by {@link #snapshotActiveGame} (state, endedDate, gtype and team
+     * expenses/win flags). Used when a downstream step (e.g. inventory
+     * confirmation) fails after the finish has already been committed.
+     */
+    @Transactional
+    public void revertFinishedGame(GameSnapshot snapshot) {
+        if (snapshot == null) {
+            return;
+        }
+        gameRepository.findById(snapshot.getGameId()).ifPresent(game -> {
+            game.setState(snapshot.getState());
+            game.setEndedDate(snapshot.getEndedDate());
+            game.setGtype(snapshot.getGtype());
+            if (game.getTeamOne() != null) {
+                if (snapshot.getTeamOneExpenseOne() != null) {
+                    game.getTeamOne().setExpenseOne(snapshot.getTeamOneExpenseOne());
+                }
+                if (snapshot.getTeamOneExpenseTwo() != null) {
+                    game.getTeamOne().setExpenseTwo(snapshot.getTeamOneExpenseTwo());
+                }
+                if (snapshot.getTeamOneWin() != null) {
+                    game.getTeamOne().setWin(snapshot.getTeamOneWin());
+                }
+            }
+            if (game.getTeamTwo() != null) {
+                if (snapshot.getTeamTwoExpenseOne() != null) {
+                    game.getTeamTwo().setExpenseOne(snapshot.getTeamTwoExpenseOne());
+                }
+                if (snapshot.getTeamTwoExpenseTwo() != null) {
+                    game.getTeamTwo().setExpenseTwo(snapshot.getTeamTwoExpenseTwo());
+                }
+                if (snapshot.getTeamTwoWin() != null) {
+                    game.getTeamTwo().setWin(snapshot.getTeamTwoWin());
+                }
+            }
+            gameRepository.save(game);
+        });
     }
 
     public Boolean checkGameExistById(int gameId) {

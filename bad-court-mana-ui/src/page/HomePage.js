@@ -14,7 +14,7 @@ import Snackbar from "@mui/material/Snackbar";
 import Alert from "@mui/material/Alert";
 
 import "../App.css";
-import api from "../api/index";
+import api, { responseMessage } from "../api/index";
 import { emitApiError } from "../api/errorBus";
 import { checkStockItem } from "../api/inventoryApi";
 
@@ -115,7 +115,11 @@ function HomePage() {
     return response != null && response.status === 200 && response.data != null;
   };
   const responseDataTrue = (response) => {
-    return responseSuccess(response) && response.data === true;
+    if (!responseSuccess(response)) return false;
+    const result = response.data;
+    // Support both a raw boolean payload and the { success, data } envelope format.
+    if (result === true) return true;
+    return result?.success === true && result?.data === true;
   };
 
   const getCurrentBall = () => {
@@ -374,7 +378,7 @@ function HomePage() {
           startTime: rentData.startTime,
           endTime: rentData.endTime,
           costPerHour: rentData.fee
-        });
+        }, { skipErrorToast: true });
       } else {
         // Create new rental
         res = await api.post("/court-mana/applyRentByTime", {
@@ -386,7 +390,7 @@ function HomePage() {
           startTime: rentData.startTime,
           endTime: rentData.endTime,
           costPerHour: rentData.fee
-        });
+        }, { skipErrorToast: true });
       }
 
       if (responseSuccess(res)) {
@@ -399,7 +403,20 @@ function HomePage() {
       }
     } catch (error) {
       console.error("Error applying rent by time:", error);
-      emitApiError("Có lỗi khi thuê sân theo giờ. Vui lòng thử lại!");
+      const data = error.response?.data;
+      const msg = responseMessage(data, "");
+      const isPlayerNotInSession =
+        error.response?.status === 400 &&
+        /player not found in active session/i.test(msg);
+      if (isPlayerNotInSession) {
+        emitApiError(
+          "Người chơi chưa có trong phiên hoạt động. Vui lòng thêm người chơi vào sân trước khi thuê theo giờ!"
+        );
+      } else if (msg) {
+        emitApiError(msg);
+      } else {
+        emitApiError("Có lỗi khi thuê sân theo giờ. Vui lòng thử lại!");
+      }
     }
   };
   // drop player back to available players area
@@ -524,21 +541,23 @@ function HomePage() {
           {
             shuttleName: ball.shuttleName,
             shuttleCost: ball.cost,
-            quantity: 1,
+            ballQuantity: 1,
           },
         ],
         gameState: "Start",
       })
       .then((response) => {
-        if (response.status === 200) {
+        // Backend wraps the business payload in an envelope:
+        // { success, data, errorMessage, errorCode } — so response.data is the
+        // envelope object, not the raw boolean. Unwrap it before checking.
+        const result = response?.data;
+        if (response.status === 200 && result?.success && result.data === true) {
           console.log(
-            `Response: ${response.data}. court [${courtId}] has been started.`
+            `Response: ${JSON.stringify(result)}. court [${courtId}] has been started.`
           );
-          if (response.data === true) {
-            setLockedCourts((prev) => ({ ...prev, [courtId]: true }));
-          } else {
-            emitApiError(" Không thể bắt đầu. Số lượng người chơi mới không hợp lệ .");
-          }
+          setLockedCourts((prev) => ({ ...prev, [courtId]: true }));
+        } else {
+          emitApiError(result?.errorMessage || " Không thể bắt đầu. Số lượng người chơi mới không hợp lệ .");
         }
       })
       .catch(() => { });
@@ -1367,6 +1386,7 @@ function HomePage() {
             courtName={rentCourtName}
             playerName={rentPlayerName}
             ballOptions={ballOptions}
+            availablePlayers={availablePlayers}
             editMode={rentEditMode}
             initialData={rentInitialData}
             hourlyRate={rentByTime || 100000}

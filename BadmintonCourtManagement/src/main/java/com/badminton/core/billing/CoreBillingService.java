@@ -7,25 +7,14 @@ import com.badminton.core.billing.print.BillPdfService;
 import com.badminton.core.billing.print.EscPosNetworkPrinter;
 import com.badminton.core.billing.print.ReceiptComposer;
 import com.badminton.core.billing.print.ReceiptDocument;
+import com.badminton.core.session.CoreSession;
 import com.badminton.entity.*;
-import com.badminton.enums.EInvoiceStatus;
-import com.badminton.enums.InvoiceItemType;
-import com.badminton.enums.InvoiceStatus;
-import com.badminton.enums.InvoiceType;
-import com.badminton.enums.PrinterMode;
+import com.badminton.enums.*;
 import com.badminton.exception.BusinessException;
 import com.badminton.exception.enums.ErrorCodeEnum;
 import com.badminton.model.billing.BuyerInfo;
-import com.badminton.model.dto.AllocateDebitPaymentRequest;
-import com.badminton.model.dto.AllocateDebitPaymentResponse;
-import com.badminton.model.dto.DebitPayDTO;
-import com.badminton.model.dto.PaymentDTO;
-import com.badminton.model.dto.ServiceDTO;
-import com.badminton.repository.BillConfigRepository;
-import com.badminton.repository.InvoiceItemRepository;
-import com.badminton.repository.InvoiceRepository;
-import com.badminton.repository.InvoiceSeriesRepository;
-import com.badminton.repository.UserRepository;
+import com.badminton.model.dto.*;
+import com.badminton.repository.*;
 import com.badminton.requestmodel.billing.BillConfigRequest;
 import com.badminton.requestmodel.billing.BillListRequest;
 import com.badminton.response.PageResponse;
@@ -33,7 +22,6 @@ import com.badminton.response.billing.BillConfigResponse;
 import com.badminton.response.billing.BillItemResponse;
 import com.badminton.response.billing.BillResponse;
 import com.badminton.response.billing.ReceiptResponse;
-import com.badminton.service.SessionServiceImpl;
 import com.badminton.util.MoneyUtils;
 import com.badminton.util.TimeUtils;
 import lombok.extern.slf4j.Slf4j;
@@ -78,7 +66,7 @@ public class CoreBillingService {
     @Autowired
     private UserRepository userRepository;
     @Autowired
-    private SessionServiceImpl sessionService;
+    private CoreSession coreSession;
     @Autowired
     private ReceiptComposer receiptComposer;
     @Autowired
@@ -130,7 +118,7 @@ public class CoreBillingService {
      */
     @Transactional(propagation = Propagation.REQUIRED)
     public Invoice issueDebitSettlementBill(AllocateDebitPaymentRequest request,
-            AllocateDebitPaymentResponse allocation) {
+                                            AllocateDebitPaymentResponse allocation) {
         Invoice invoice = new Invoice();
         invoice.setInvoiceType(InvoiceType.DEBT_SETTLEMENT);
         invoice.setPayType(allocation.getPaymentMethod() != null ? allocation.getPaymentMethod() : PayType.CASH);
@@ -266,7 +254,7 @@ public class CoreBillingService {
         invoice.setStatus(InvoiceStatus.ISSUED);
         invoice.setEinvoiceStatus(EInvoiceStatus.NONE);
         invoice.setIssuedBy(currentUser());
-        invoice.setIssuedAt(sessionService.getUTCPlus7Instant());
+        invoice.setIssuedAt(coreSession.getUTCPlus7Instant());
         invoice.setCurrency(MoneyUtils.CURRENCY_VN);
         return invoiceRepository.save(invoice);
     }
@@ -341,11 +329,11 @@ public class CoreBillingService {
         Assert.isTrue(!InvoiceStatus.VOIDED.equals(invoice.getStatus()), "Bill is already voided");
         Assert.isTrue(StringUtils.isNotBlank(reason), "Void reason must not be blank");
         Assert.isTrue(invoice.getEinvoiceStatus() == EInvoiceStatus.NONE
-                || invoice.getEinvoiceStatus() == EInvoiceStatus.FAILED,
+                        || invoice.getEinvoiceStatus() == EInvoiceStatus.FAILED,
                 "Cannot void a bill with a live e-invoice — cancel the e-invoice first");
         invoice.setStatus(InvoiceStatus.VOIDED);
         invoice.setVoidedBy(currentUser());
-        invoice.setVoidedAt(sessionService.getUTCPlus7Instant());
+        invoice.setVoidedAt(coreSession.getUTCPlus7Instant());
         invoice.setVoidReason(reason);
         return toBillResponseDetail(invoiceRepository.save(invoice));
     }
@@ -354,7 +342,7 @@ public class CoreBillingService {
     public BillResponse markPrinted(Long billId) throws BusinessException {
         Invoice invoice = loadInvoice(billId);
         invoice.setPrintCount(invoice.getPrintCount() + 1);
-        invoice.setLastPrintedAt(sessionService.getUTCPlus7Instant());
+        invoice.setLastPrintedAt(coreSession.getUTCPlus7Instant());
         return toBillResponseDetail(invoiceRepository.save(invoice));
     }
 
@@ -383,11 +371,13 @@ public class CoreBillingService {
             escPosNetworkPrinter.print(doc, config.getPrinterIp(), port, paper);
         }
         invoice.setPrintCount(invoice.getPrintCount() + 1);
-        invoice.setLastPrintedAt(sessionService.getUTCPlus7Instant());
+        invoice.setLastPrintedAt(coreSession.getUTCPlus7Instant());
         return toBillResponseDetail(invoiceRepository.save(invoice));
     }
 
-    /** Connectivity probe for the configured network printer. */
+    /**
+     * Connectivity probe for the configured network printer.
+     */
     public void testPrinter() throws BusinessException {
         BillConfig config = loadConfig();
         Assert.isTrue(StringUtils.isNotBlank(config.getPrinterIp()), "Printer IP is not configured");

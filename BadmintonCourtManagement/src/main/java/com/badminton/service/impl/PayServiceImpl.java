@@ -93,8 +93,8 @@ public class PayServiceImpl implements PayService {
         dto.setPlayerName(request.getPlayerName());
         dto.setServices(request.getServiceRequests() != null
                 ? request.getServiceRequests().stream()
-                        .map(ServiceConverter::convertRequestToDTO)
-                        .collect(Collectors.toList())
+                .map(ServiceConverter::convertRequestToDTO)
+                .collect(Collectors.toList())
                 : null);
         dto.setTotalPay(request.getTotalExpense());
         dto.setPayType(request.getPayType());
@@ -115,11 +115,11 @@ public class PayServiceImpl implements PayService {
                 .note(request.getNote())
                 .listDebitPay(request.getListDebitPay() != null
                         ? request.getListDebitPay().stream()
-                                .map(debitPay -> DebitPayDTO.builder()
-                                        .dateTime(debitPay.getDateTime())
-                                        .payAmount(BigDecimal.valueOf(debitPay.getPayAmount()))
-                                        .build())
-                                .collect(Collectors.toList())
+                        .map(debitPay -> DebitPayDTO.builder()
+                                .dateTime(debitPay.getDateTime())
+                                .payAmount(BigDecimal.valueOf(debitPay.getPayAmount()))
+                                .build())
+                        .collect(Collectors.toList())
                         : null)
                 .build();
     }

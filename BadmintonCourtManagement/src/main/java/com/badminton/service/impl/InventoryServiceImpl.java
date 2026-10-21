@@ -14,11 +14,7 @@ import com.badminton.model.inventory.GameEndConfirmDTO;
 import com.badminton.model.inventory.StockIntakePlan;
 import com.badminton.model.inventory.StockIntakeRow;
 import com.badminton.repository.*;
-import com.badminton.requestmodel.inventory.AdjustmentRequest;
-import com.badminton.requestmodel.inventory.BallConsumeInGameRequest;
-import com.badminton.requestmodel.inventory.ChangeShuttleBallQuantityRequest;
-import com.badminton.requestmodel.inventory.InventoryItemRequest;
-import com.badminton.requestmodel.inventory.PurchaseRequest;
+import com.badminton.requestmodel.inventory.*;
 import com.badminton.response.inventory.*;
 import com.badminton.response.product.ProductImportCounts;
 import com.badminton.response.result.Result;
@@ -28,9 +24,13 @@ import com.badminton.service.ServiceTemplate;
 import com.badminton.service.product.StockIntakeParser;
 import com.badminton.service.report.InventoryExcelWriter;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.Assert;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -107,6 +107,9 @@ public class InventoryServiceImpl implements InventoryService {
 
     @Autowired
     private CoreInventoryService coreInventoryService;
+
+    @Autowired
+    private TransactionTemplate transactionTemplate;
 
     // ------------------------------------------------------------------
     // items
@@ -541,7 +544,6 @@ public class InventoryServiceImpl implements InventoryService {
     // ------------------------------------------------------------------
 
     @Override
-    @Transactional
     public Result<Boolean> recordBallConsumption(BallConsumeInGameRequest ballConsumeInGameRequest) {
         return serviceTemplate.execute(new ProcessCallback<BallConsumeInGameRequest, Boolean>() {
             @Override
@@ -557,31 +559,37 @@ public class InventoryServiceImpl implements InventoryService {
 
             @Override
             public Boolean process() throws BusinessException {
-                if (getRequest().getShuttleBallDTOList().isEmpty()) {
-                    return false;
-                }
-                Map<InventoryItem, Integer> items = toConsumptionMap(getRequest());
-                List<ConsumedItemsModel> consumedItems = new ArrayList<>();
-                Long gameId = (long) getRequest().getInGame();
-                for (Map.Entry<InventoryItem, Integer> entry : items.entrySet()) {
-                    InventoryItem item = entry.getKey();
-                    Integer qty = entry.getValue();
-                    if (item == null || qty == null || qty <= 0) {
-                        continue;
+                return transactionTemplate.execute(new TransactionCallback<Boolean>() {
+                    @Override
+                    public Boolean doInTransaction(TransactionStatus status) {
+                        if (getRequest().getShuttleBallDTOList().isEmpty()) {
+                            return true;
+                        }
+                        Map<InventoryItem, Integer> items = toConsumptionMap(getRequest());
+                        List<ConsumedItemsModel> consumedItems = new ArrayList<>();
+                        Long gameId = (long) getRequest().getInGame();
+                        for (Map.Entry<InventoryItem, Integer> entry : items.entrySet()) {
+                            InventoryItem item = entry.getKey();
+                            Integer qty = entry.getValue();
+                            if (item == null || qty == null || qty <= 0) {
+                                continue;
+                            }
+                            ConsumedItemsModel model = new ConsumedItemsModel();
+                            model.setItemName(item.getItemName());
+                            model.setItemType(item.getItemType());
+                            model.setConsumeType(StockMovementType.GAME_CONSUMPTION);
+                            model.setQuantity(qty);
+                            model.setSign(-1);
+                            model.setReferenceType(MovementReferenceType.GAME);
+                            model.setReferenceId(gameId);
+                            model.setNote("Game " + gameId);
+                            consumedItems.add(model);
+                        }
+                        coreInventoryService.writeItemMovements(consumedItems);
+                        return true;
                     }
-                    ConsumedItemsModel model = new ConsumedItemsModel();
-                    model.setItemName(item.getItemName());
-                    model.setItemType(item.getItemType());
-                    model.setConsumeType(StockMovementType.GAME_CONSUMPTION);
-                    model.setQuantity(qty);
-                    model.setSign(-1);
-                    model.setReferenceType(MovementReferenceType.GAME);
-                    model.setReferenceId(gameId);
-                    model.setNote("Game " + gameId);
-                    consumedItems.add(model);
-                }
-                coreInventoryService.writeItemMovements(consumedItems);
-                return true;
+                });
+
             }
         });
     }
@@ -680,7 +688,6 @@ public class InventoryServiceImpl implements InventoryService {
     }
 
     @Override
-    @Transactional
     public Result<Boolean> confirmMovementItemEndGame(GameEndConfirmDTO gameEndConfirmDTO) {
         return serviceTemplate.execute(new ProcessCallback<GameEndConfirmDTO, Boolean>() {
             @Override
@@ -691,7 +698,7 @@ public class InventoryServiceImpl implements InventoryService {
             @Override
             public void preProcess(GameEndConfirmDTO request) {
                 Assert.notNull(request, "Request must not be null");
-                Assert.isTrue(request.getGameId() > 0, "Game ID must be valid");
+                Assert.isTrue(StringUtils.isNotBlank(request.getCourtId()), "Game ID must be valid");
             }
 
             @Override

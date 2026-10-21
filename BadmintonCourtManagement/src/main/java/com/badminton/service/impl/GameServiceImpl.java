@@ -4,6 +4,8 @@ import com.badminton.constant.GameState;
 import com.badminton.constant.GameType;
 import com.badminton.core.game.CoreGameService;
 import com.badminton.entity.Game;
+import com.badminton.entity.GameShuttleMap;
+import com.badminton.entity.ShuttleBall;
 import com.badminton.entity.Team;
 import com.badminton.exception.BusinessException;
 import com.badminton.exception.ErrorUtils;
@@ -22,13 +24,11 @@ import com.badminton.service.calculator.GameExpenseCalculator;
 import com.badminton.util.CommonUtil;
 import com.badminton.util.MoneyUtils;
 import com.badminton.util.ServiceUtil;
-import com.badminton.util.TimeUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.TransactionStatus;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.Assert;
@@ -129,7 +129,6 @@ public class GameServiceImpl implements GameService {
                                 case START -> isRentGameType(gameRequest.getGameType())
                                         ? processStartRentGame(game, gameRequest)
                                         : processStartGame(game, gameRequest);
-                                case FINISH, CANCEL -> processEndGame(game, gameRequest, changeGameState);
                                 default ->
                                         throw new RuntimeException(ErrorUtils.buildErrorMessage(ErrorCodeEnum.GAME_STATE_ERROR));
                             };
@@ -161,26 +160,32 @@ public class GameServiceImpl implements GameService {
 
             @Override
             public Boolean process() throws BusinessException {
-                return transactionTemplate.execute(new TransactionCallback<Boolean>() {
-                    @Override
-                    public Boolean doInTransaction(TransactionStatus status) {
-                        try {
-                            GameModel gameModel = calculateGameExpensetoGameModel(gameRequest);
-                            // 2. convert the request to GameModel and delegate finish logic to CoreGameService
-                            coreGameService.finishGame(gameModel);
-                            // 3. confirm in the inventory
-                            int gameId = coreGameService.findActiveGameId(gameModel.getCourtModel().getCourtId());
-                            inventoryService.confirmMovementItemEndGame(toGameEndConfirmDTO(
-                                    gameId
-                                    , true
-                            ));
-                            return true;
-                        } catch (BusinessException e) {
-                            throw new RuntimeException(e);
-                        }
+                GameModel gameModel = calculateGameExpensetoGameModel(gameRequest);
+                String courtId = gameModel.getCourtModel().getCourtId();
+                // Snapshot the active game's mutable fields BEFORE finishing, so the finish can be
+                // reverted by gameId later (once endedDate is set the row is no longer "active"
+                // and can't be found by court lookup).
+                GameSnapshot snapshot = coreGameService.snapshotActiveGame(courtId);
+                boolean confirmSucceeded = false;
+                try {
+                    // 1. delegate finish logic to CoreGameService (commits in its own transaction)
+                    coreGameService.finishGame(gameModel);
+                    // 2. confirm in the inventory (its own transaction; rolls back on error)
+                    Result<Boolean> confirmResult = inventoryService.confirmMovementItemEndGame(
+                            toGameEndConfirmDTO(courtId, true));
+                    if (confirmResult == null || !confirmResult.isSuccess()) {
+                        throw new BusinessException(ErrorCodeEnum.FLOW_ERROR,
+                                "Inventory confirmation failed for the finished game.");
                     }
-                });
-
+                    confirmSucceeded = true;
+                    return true;
+                } finally {
+                    // confirmMovementItemEndGame threw/rolled back its own transaction, but the
+                    // finishGame write already committed - revert the Game to keep them consistent.
+                    if (!confirmSucceeded) {
+                        coreGameService.revertFinishedGame(snapshot);
+                    }
+                }
             }
         });
     }
@@ -205,24 +210,36 @@ public class GameServiceImpl implements GameService {
 
             @Override
             public Boolean process() throws BusinessException {
-                return transactionTemplate.execute(new TransactionCallback<Boolean>() {
-                    @Override
-                    public Boolean doInTransaction(TransactionStatus status) {
-                        try {
-                            GameModel gameModel = toGameModelForTerminate(gameRequest);
-                            // 1. delegate terminate logic to CoreGameService
-                            coreGameService.cancelGame(gameModel);
-                            // 2. confirm in the inventory (return items for termination)
-                            inventoryService.confirmMovementItemEndGame(toGameEndConfirmDTO(
-                                    coreGameService.findActiveGameId(gameModel.getCourtModel().getCourtId())
-                                    , false
-                            ));
-                            return true;
-                        } catch (BusinessException e) {
-                            throw new RuntimeException(e);
-                        }
+                GameModel gameModel = toGameModelForTerminate(gameRequest);
+                String courtId = gameModel.getCourtModel().getCourtId();
+                // Capture the active game's identity + prior state BEFORE cancelling, so the
+                // cancel can be reverted by gameId later (once endedDate is set the row is no
+                // longer "active" and can't be found by court lookup).
+                Game activeGame = coreGameService.findActiveGame(courtId);
+                int gameId = activeGame.getGameId();
+                String previousState = activeGame.getState();
+                boolean confirmSucceeded = false;
+                try {
+                    // 1. delegate terminate logic to CoreGameService (commits in its own transaction)
+                    coreGameService.cancelGame(gameModel);
+                    // 2. confirm in the inventory (its own transaction; rolls back on error)
+                    Result<Boolean> confirmResult = inventoryService.confirmMovementItemEndGame(
+                            toGameEndConfirmDTO(courtId, false));
+                    if (confirmResult == null || !confirmResult.isSuccess()) {
+                        throw new BusinessException(ErrorCodeEnum.FLOW_ERROR,
+                                "Inventory confirmation failed for the terminated game.");
                     }
-                });
+                    confirmSucceeded = true;
+                    return true;
+                } catch (Exception e) {
+                    throw new RuntimeException(ErrorUtils.buildErrorMessage(ErrorCodeEnum.FLOW_ERROR), e);
+                } finally {
+                    // confirmMovementItemEndGame threw/rolled back its own transaction, but the
+                    // cancelGame write already committed - revert the Game status to keep them consistent.
+                    if (!confirmSucceeded) {
+                        coreGameService.revertCancelledGame(gameId, previousState);
+                    }
+                }
             }
         });
     }
@@ -519,7 +536,6 @@ public class GameServiceImpl implements GameService {
         return gameType != null && GameType.RENT.name().equals(GameType.getGameTypeString(gameType));
     }
 
-    @Transactional
     public boolean processStartGame(Game game, GameDTO gameRequest) throws BusinessException {
         requireTransition(game, GameState.START);
         if (gameRequest.getGameType() == null && !readyToStart(game.getTeamOne(), game.getTeamTwo())) {
@@ -530,14 +546,16 @@ public class GameServiceImpl implements GameService {
                     "Shuttle ball must be selected to start the game.");
         }
         game.setState(GameState.START.getValue());
-        setSelectedBallIntoGame(game, gameRequest.getShuttleBalls());
+
+        game.setShuttleMap(createNewGameBallMap(game, gameRequest.getShuttleBalls()));
         setGameTypeIfPresent(game, gameRequest.getGameType());
         gameRepository.save(game);
         // reduce the shuttle ball quantity in stock
 //        coreInventoryService.consumeShuttleBallsForGame(game);
         Result<Boolean> result = inventoryService.recordBallConsumption(toBallInGameRequest(gameRequest.getShuttleBalls(), game.getGameId()));
         if (!result.isSuccess()) {
-            throw new RuntimeException("Cannot start the game");
+            log.error("Cannot start the game due to record ball consumption failed");
+            throw new RuntimeException("Cannot start the game due to record ball consumption failed");
         }
         return true;
 
@@ -547,25 +565,13 @@ public class GameServiceImpl implements GameService {
         requireTransition(game, GameState.START);
         game.setState(GameState.START.getValue());
         game.setGtype(GameType.RENT.name());
-        setSelectedBallIntoGame(game, gameRequest.getShuttleBalls());
+        createNewGameBallMap(game, gameRequest.getShuttleBalls());
         gameRepository.save(game);
         // reduce the shuttle ball quantity in stock
         inventoryService.recordBallConsumption(toBallInGameRequest(game));
         return true;
     }
 
-    private boolean processEndGame(Game game, GameDTO gameRequest, GameState targetState) throws BusinessException {
-
-        requireTransition(game, targetState);
-        game.setState(targetState.getValue());
-        setGameTypeIfPresent(game, gameRequest.getGameType());
-        // update ended time for FINISH & CANCEL state
-        game.setEndedDate(TimeUtils.getUTCPlus7Instant());
-        // calculate and save the expense of game.
-        gameExpenseCalculator.calculateGameResult(game);
-        gameRepository.save(game);
-        return true;
-    }
 
     private void requireTransition(Game game, GameState targetState) throws BusinessException {
         GameState currentState = game.getState() == null ? null : GameState.getGameState(game.getState());
@@ -581,13 +587,18 @@ public class GameServiceImpl implements GameService {
         return teamOneReady && teamTwoReady;
     }
 
-    private void setSelectedBallIntoGame(Game game, List<ShuttleBallDTO> shuttleBalls) {
-        if (shuttleBalls == null || shuttleBalls.isEmpty()) {
-            return;
-        }
-        ShuttleBallDTO selectedBall = shuttleBalls.getFirst();
-        game.setShuttleMap(Arrays.asList(
-                shuttleBallService.createGameShuttleMap(game, selectedBall, selectedBall.getBallQuantity())));
+    private List<GameShuttleMap> createNewGameBallMap(Game game, List<ShuttleBallDTO> shuttleBalls) {
+        List<GameShuttleMap> gameShuttleMaps = game.getShuttleMap() == null ? new ArrayList<>() : game.getShuttleMap();
+        shuttleBalls.forEach(ball -> {
+            gameShuttleMaps.add(shuttleBallService.createGameShuttleMap(
+                    game, ball, ball.getBallQuantity()
+            ));
+        });
+        return gameShuttleMaps;
+    }
+
+    private ShuttleBall convertDtoToEntity(ShuttleBallDTO selectedBall) {
+        return new ShuttleBall(selectedBall.getShuttleName(), selectedBall.getShuttleCost());
     }
 
     private void setGameTypeIfPresent(Game game, String gameType) {
@@ -622,9 +633,9 @@ public class GameServiceImpl implements GameService {
         return request;
     }
 
-    private GameEndConfirmDTO toGameEndConfirmDTO(int gameId, boolean isFinishGame) {
+    private GameEndConfirmDTO toGameEndConfirmDTO(String courtId, boolean isFinishGame) {
         GameEndConfirmDTO dto = new GameEndConfirmDTO();
-        dto.setGameId(gameId);
+        dto.setCourtId(courtId);
         dto.setFinish(isFinishGame);
         return dto;
     }

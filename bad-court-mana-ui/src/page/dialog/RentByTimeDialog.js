@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
@@ -8,12 +8,16 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import Stack from "@mui/material/Stack";
 import Box from "@mui/material/Box";
+import Paper from "@mui/material/Paper";
 import Select from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
 import FormControl from "@mui/material/FormControl";
 import InputLabel from "@mui/material/InputLabel";
 import IconButton from "@mui/material/IconButton";
+import InputAdornment from "@mui/material/InputAdornment";
+import ClickAwayListener from "@mui/material/ClickAwayListener";
 import DeleteIcon from "@mui/icons-material/Delete";
+import AddIcon from "@mui/icons-material/Add";
 import { formatVND } from "../MoneyUtils";
 import DraggableResizablePaper, { DIALOG_DRAG_HANDLE } from "./DraggableResizablePaper";
 
@@ -81,6 +85,7 @@ const RentByTimeDialog = ({
     courtName,
     playerName,
     ballOptions,
+    availablePlayers = [],
     editMode = false,
     initialData = null,
     hourlyRate = 100000,
@@ -100,6 +105,10 @@ const RentByTimeDialog = ({
     const [fee, setFee] = useState(hourlyRate);
     // Player name (editable)
     const [localPlayerName, setLocalPlayerName] = useState("");
+    const [playerSearchQuery, setPlayerSearchQuery] = useState("");
+    const [playerTouched, setPlayerTouched] = useState(false);
+    const [playerFocused, setPlayerFocused] = useState(false);
+    const playerInputRef = useRef(null);
     // Shuttles
     const [addedShuttles, setAddedShuttles] = useState([]);
     const [selectedBallName, setSelectedBallName] = useState("");
@@ -117,6 +126,8 @@ const RentByTimeDialog = ({
             setDurH(dur.h); setDurM(dur.m);
             setFee(minutesToFee(totalMin, hourlyRate));
             setLocalPlayerName(playerName || "");
+            setPlayerSearchQuery(playerName || "");
+            setPlayerTouched(false);
             setAddedShuttles(
                 (initialData.shuttleBalls || []).map((b) => ({
                     shuttleName: b.shuttleName,
@@ -135,8 +146,11 @@ const RentByTimeDialog = ({
             setEndH(end.h); setEndM(end.m);
             setFee(hourlyRate);
             setLocalPlayerName(playerName || "");
+            setPlayerSearchQuery(playerName || "");
+            setPlayerTouched(false);
             setAddedShuttles([]);
         }
+        setPlayerFocused(false);
         setSelectedBallName("");
     }, [show, editMode, initialData, hourlyRate, playerName]);
 
@@ -207,8 +221,41 @@ const RentByTimeDialog = ({
         setAddedShuttles((prev) => prev.filter((_, i) => i !== idx));
     };
 
+    // ── Player search / autocomplete ────────────────────────────────────────
+    const isPlayerNameValid = useMemo(() => {
+        const name = (localPlayerName || "").trim();
+        if (!name) return false;
+        if (!availablePlayers || availablePlayers.length === 0) return true;
+        return availablePlayers.some((p) => p.toLowerCase() === name.toLowerCase());
+    }, [localPlayerName, availablePlayers]);
+
+    const filteredPlayers = useMemo(() => {
+        const q = (playerSearchQuery || "").trim().toLowerCase();
+        const list = availablePlayers || [];
+        if (!q) return list;
+        return list.filter((p) => p.toLowerCase().includes(q));
+    }, [availablePlayers, playerSearchQuery]);
+
+    const handlePlayerNameChange = (val) => {
+        setLocalPlayerName(val);
+        setPlayerSearchQuery(val);
+        setPlayerTouched(true);
+    };
+
+    const handleSelectPlayer = (name) => {
+        setLocalPlayerName(name);
+        setPlayerSearchQuery(name);
+        setPlayerTouched(true);
+        setPlayerFocused(false);
+    };
+
     // ── Confirm ─────────────────────────────────────────────────────────────
     const handleConfirm = () => {
+        setPlayerTouched(true);
+        if (!isPlayerNameValid) {
+            if (playerInputRef.current) playerInputRef.current.focus();
+            return;
+        }
         const totalMin = hm2min(durH, durM);
         const numTime = totalMin / 60; // decimal hours for backend
         const ballList = addedShuttles
@@ -254,16 +301,87 @@ const RentByTimeDialog = ({
                     </Stack>
 
                     {/* Player */}
-                    <Stack direction="row" spacing={1} alignItems="center">
-                        <Typography fontWeight={700} sx={{ minWidth: 100 }}>Người chơi:</Typography>
-                        <TextField
-                            size="small"
-                            value={localPlayerName}
-                            onChange={(e) => setLocalPlayerName(e.target.value)}
-                            placeholder="Nhập tên người chơi"
-                            fullWidth
-                        />
-                    </Stack>
+                    <ClickAwayListener onClickAway={() => setPlayerFocused(false)}>
+                        <Stack direction="row" spacing={1} alignItems="flex-start">
+                            <Typography fontWeight={700} sx={{ minWidth: 100, pt: 1 }}>Người chơi:</Typography>
+                            <Box sx={{ flex: 1, position: "relative" }}>
+                                <TextField
+                                    inputRef={playerInputRef}
+                                    size="small"
+                                    placeholder="Tìm người chơi..."
+                                    value={playerSearchQuery}
+                                    onChange={(e) => handlePlayerNameChange(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                                            e.preventDefault();
+                                            if (isPlayerNameValid) {
+                                                setPlayerFocused(false);
+                                            } else if (filteredPlayers.length === 1) {
+                                                handleSelectPlayer(filteredPlayers[0]);
+                                            }
+                                        }
+                                    }}
+                                    onFocus={() => setPlayerFocused(true)}
+                                    fullWidth
+                                    error={playerTouched && !isPlayerNameValid}
+                                    helperText={
+                                        playerTouched && !isPlayerNameValid
+                                            ? "Vui lòng chọn người chơi hợp lệ từ danh sách"
+                                            : ""
+                                    }
+                                    slotProps={{
+                                        input: {
+                                            endAdornment: (
+                                                <InputAdornment position="end">
+                                                    <IconButton
+                                                        size="small"
+                                                        onClick={() => {
+                                                            if (filteredPlayers.length === 1) {
+                                                                handleSelectPlayer(filteredPlayers[0]);
+                                                            }
+                                                        }}
+                                                        disabled={filteredPlayers.length !== 1}
+                                                        tabIndex={-1}
+                                                    >
+                                                        <AddIcon fontSize="small" color="success" />
+                                                    </IconButton>
+                                                </InputAdornment>
+                                            ),
+                                        },
+                                    }}
+                                />
+                                {playerFocused && filteredPlayers.length > 0 && playerSearchQuery.trim() && (
+                                    <Paper
+                                        sx={{
+                                            position: "absolute",
+                                            top: "100%",
+                                            left: 0,
+                                            right: 0,
+                                            zIndex: 30,
+                                            maxHeight: 160,
+                                            overflow: "auto",
+                                            mt: 0.25,
+                                        }}
+                                    >
+                                        {filteredPlayers.map((p) => (
+                                            <Box
+                                                key={p}
+                                                onClick={() => handleSelectPlayer(p)}
+                                                sx={{
+                                                    px: 1.5,
+                                                    py: 0.75,
+                                                    cursor: "pointer",
+                                                    "&:hover": { bgcolor: "action.hover" },
+                                                }}
+                                            >
+                                                {p}
+                                            </Box>
+                                        ))}
+                                    </Paper>
+                                )}
+                            </Box>
+                        </Stack>
+                    </ClickAwayListener>
 
                     {/* Start Time — time-only picker */}
                     <Stack direction="row" spacing={1} alignItems="center">

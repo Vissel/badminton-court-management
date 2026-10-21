@@ -1,5 +1,6 @@
 package com.badminton.core.inventory;
 
+import com.badminton.core.game.CoreGameService;
 import com.badminton.entity.Game;
 import com.badminton.entity.GameShuttleMap;
 import com.badminton.entity.InventoryItem;
@@ -7,10 +8,14 @@ import com.badminton.entity.StockMovement;
 import com.badminton.enums.InventoryItemType;
 import com.badminton.enums.MovementReferenceType;
 import com.badminton.enums.StockMovementType;
+import com.badminton.exception.BusinessException;
 import com.badminton.model.dto.ServiceDTO;
 import com.badminton.model.inventory.ConsumedItemsModel;
 import com.badminton.model.inventory.GameEndConfirmDTO;
-import com.badminton.repository.*;
+import com.badminton.repository.InventoryItemRepository;
+import com.badminton.repository.ServiceRepository;
+import com.badminton.repository.ShuttleBallRepository;
+import com.badminton.repository.StockMovementRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -45,7 +50,7 @@ public class CoreInventoryService {
     @Autowired
     private ServiceRepository serviceRepo;
     @Autowired
-    private GameRepository gameRepository;
+    private CoreGameService coreGameService;
 
     /**
      * Confirms service lines are actually paid: writes negative RETAIL_SALE
@@ -111,72 +116,66 @@ public class CoreInventoryService {
 
     @Transactional
     public boolean confirmMovementItemEndGame(GameEndConfirmDTO gameEndConfirmDTO) {
-        Long gameId = (long) gameEndConfirmDTO.getGameId();
+        try {
+            Game game = coreGameService.findActiveGame(gameEndConfirmDTO.getCourtId());
+            List<StockMovement> movements = stockMovementRepository.findByRefIdAndRefType((long) game.getGameId(), MovementReferenceType.GAME);
+            if (gameEndConfirmDTO.isFinish()) {
+                // Finish: validate that game shuttleMap matches stock movements
+                validateGameShuttleConsumption(game, movements);
+                return true;
+            } else {
+                // Termination: calculate net consumption and return only what was actually consumed
+                Map<String, Integer> netConsumption = new HashMap<>();
 
-        if (gameEndConfirmDTO.isFinish()) {
-            // Finish: validate that game shuttleMap matches stock movements
-            validateGameShuttleConsumption(gameId);
-            return true;
-        } else {
-            // Termination: calculate net consumption and return only what was actually consumed
-            List<StockMovement> movements = stockMovementRepository.findByRefIdAndRefType(gameId, MovementReferenceType.GAME);
-            Map<String, Integer> netConsumption = new HashMap<>();
+                for (StockMovement movement : movements) {
+                    String itemKey = movement.getItem().getItemName() + "|" + movement.getItem().getItemType().name();
+                    int delta = movement.getQuantityDelta();
 
-            for (StockMovement movement : movements) {
-                String itemKey = movement.getItem().getItemName() + "|" + movement.getItem().getItemType().name();
-                int delta = movement.getQuantityDelta();
+                    if (movement.getMovementType() == StockMovementType.GAME_CONSUMPTION) {
+                        netConsumption.put(itemKey, netConsumption.getOrDefault(itemKey, 0) + delta);
+                    } else if (movement.getMovementType() == StockMovementType.RETURN) {
+                        netConsumption.put(itemKey, netConsumption.getOrDefault(itemKey, 0) + delta);
+                    }
+                }
 
-                if (movement.getMovementType() == StockMovementType.GAME_CONSUMPTION) {
-                    netConsumption.put(itemKey, netConsumption.getOrDefault(itemKey, 0) + delta);
-                } else if (movement.getMovementType() == StockMovementType.RETURN) {
-                    netConsumption.put(itemKey, netConsumption.getOrDefault(itemKey, 0) + delta);
+                List<ConsumedItemsModel> returnItems = new ArrayList<>();
+                for (Map.Entry<String, Integer> entry : netConsumption.entrySet()) {
+                    int netDelta = entry.getValue();
+                    if (netDelta < 0) {
+                        // Net consumption exists - return it
+                        String[] parts = entry.getKey().split("\\|");
+                        ConsumedItemsModel model = new ConsumedItemsModel();
+                        model.setItemName(parts[0]);
+                        model.setItemType(InventoryItemType.valueOf(parts[1]));
+                        model.setConsumeType(StockMovementType.RETURN);
+                        model.setQuantity(Math.abs(netDelta));
+                        model.setSign(1);
+                        model.setReferenceType(MovementReferenceType.GAME);
+                        model.setReferenceId((long) game.getGameId());
+                        model.setNote("Terminated game " + game.getGameId() + " - return items");
+                        returnItems.add(model);
+                    }
+                }
+                if (!returnItems.isEmpty()) {
+                    writeItemMovements(returnItems);
                 }
             }
-
-            List<ConsumedItemsModel> returnItems = new ArrayList<>();
-            for (Map.Entry<String, Integer> entry : netConsumption.entrySet()) {
-                int netDelta = entry.getValue();
-                if (netDelta < 0) {
-                    // Net consumption exists - return it
-                    String[] parts = entry.getKey().split("\\|");
-                    ConsumedItemsModel model = new ConsumedItemsModel();
-                    model.setItemName(parts[0]);
-                    model.setItemType(InventoryItemType.valueOf(parts[1]));
-                    model.setConsumeType(StockMovementType.RETURN);
-                    model.setQuantity(Math.abs(netDelta));
-                    model.setSign(1);
-                    model.setReferenceType(MovementReferenceType.GAME);
-                    model.setReferenceId(gameId);
-                    model.setNote("Terminated game " + gameId + " - return items");
-                    returnItems.add(model);
-                }
-            }
-
-            if (!returnItems.isEmpty()) {
-                writeItemMovements(returnItems);
-            }
-            return true;
+        } catch (BusinessException e) {
+            log.warn("Game in courtId [{}] not found for shuttle consumption validation", gameEndConfirmDTO.getCourtId());
         }
+        return true;
     }
 
     /**
      * Validates that the shuttle balls tracked in Game.shuttleMap match the
      * GAME_CONSUMPTION stock movements for the game. Logs warnings for discrepancies.
      */
-    private void validateGameShuttleConsumption(Long gameId) {
-        Game game = gameRepository.findById(gameId.intValue())
-                .orElse(null);
-        if (game == null) {
-            log.warn("Game {} not found for shuttle consumption validation", gameId);
-            return;
-        }
-
+    private void validateGameShuttleConsumption(Game game, List<StockMovement> movements) {
         List<GameShuttleMap> shuttleMap = game.getShuttleMap();
         if (shuttleMap == null || shuttleMap.isEmpty()) {
             // No shuttle balls in game - check if movements exist
-            List<StockMovement> movements = stockMovementRepository.findByRefIdAndRefType(gameId, MovementReferenceType.GAME);
             if (!movements.isEmpty()) {
-                log.warn("Game {} has no shuttleMap but has {} stock movements - data inconsistency", gameId, movements.size());
+                log.warn("Game in courtId [{}] has no shuttleMap but has [{}] stock movements - data inconsistency", game.getCourt().getCourtId(), movements.size());
             }
             return;
         }
@@ -193,7 +192,6 @@ public class CoreInventoryService {
         }
 
         // Sum actual GAME_CONSUMPTION movements (ignoring RETURN - those are for termination)
-        List<StockMovement> movements = stockMovementRepository.findByRefIdAndRefType(gameId, MovementReferenceType.GAME);
         Map<Integer, Integer> actualConsumption = new HashMap<>();
         for (StockMovement movement : movements) {
             if (movement.getMovementType() == StockMovementType.GAME_CONSUMPTION) {
@@ -211,8 +209,8 @@ public class CoreInventoryService {
             if (expected != actual) {
                 InventoryItem item = inventoryItemRepository.findById(itemId).orElse(null);
                 String itemName = item != null ? item.getItemName() : "unknown";
-                log.warn("Game {} shuttle consumption mismatch for item '{}': expected {}, actual {}",
-                        gameId, itemName, expected, actual);
+                log.warn("Game in courtId [{}] shuttle consumption mismatch for item '[{}]': expected [{}], actual [{}]",
+                        game.getCourt().getCourtId(), itemName, expected, actual);
             }
         }
 
@@ -221,8 +219,8 @@ public class CoreInventoryService {
             if (!expectedConsumption.containsKey(entry.getKey())) {
                 InventoryItem item = inventoryItemRepository.findById(entry.getKey()).orElse(null);
                 String itemName = item != null ? item.getItemName() : "unknown";
-                log.warn("Game {} has GAME_CONSUMPTION for item '{}' (qty {}) but not in shuttleMap",
-                        gameId, itemName, entry.getValue());
+                log.warn("Game in courtId [{}] has GAME_CONSUMPTION for item '{}' (qty {}) but not in shuttleMap",
+                        game.getCourt().getCourtId(), itemName, entry.getValue());
             }
         }
     }
