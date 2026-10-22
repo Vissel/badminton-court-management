@@ -59,6 +59,11 @@ public class CoreGameService {
         if (gameModel.getTeamTwoWin() != null) {
             game.getTeamTwo().setWin(gameModel.getTeamTwoWin());
         }
+        // Record the game cost as a service onto each player's available-player
+        // row so the SHARE/NEGO expense is billed. Players with zero expense are
+        // skipped inside buildService().
+        recordCostServiceToPlayers(game, gameModel.getCourtModel());
+
         // set value: state, endedDate.
         game.setEndedDate(TimeUtils.getUTCPlus7Instant());
         game.setState(GameState.FINISH.getValue());
@@ -304,5 +309,39 @@ public class CoreGameService {
 
     public Boolean checkGameExistById(int gameId) {
         return gameRepository.findById(gameId).isPresent();
+    }
+
+
+    /**
+     * Append the "Tiền {courtName}" cost service to the available player sitting
+     * in each occupied area, based on that area's expense in the court model.
+     */
+    private void recordCostServiceToPlayers(Game game, CourtModel courtModel) {
+        Map<String, CourtAreaModel> areaMap = mapAreaStrKey(courtModel);
+        for (Map.Entry<String, CourtAreaModel> entry : areaMap.entrySet()) {
+            AvailablePlayer player = resolvePlayerByArea(game, entry.getKey());
+            setServiceInToAvaPlayer(player,
+                    buildService(game.getCourt().getCourtName(), entry.getValue().getExpense()));
+        }
+    }
+
+    private AvailablePlayer resolvePlayerByArea(Game game, String area) {
+        switch (area) {
+            case GameState.Player.PLAYER_A -> {
+                return game.getTeamOne() != null ? game.getTeamOne().getPlayerOne() : null;
+            }
+            case GameState.Player.PLAYER_B -> {
+                return game.getTeamOne() != null ? game.getTeamOne().getPlayerTwo() : null;
+            }
+            case GameState.Player.PLAYER_C -> {
+                return game.getTeamTwo() != null ? game.getTeamTwo().getPlayerOne() : null;
+            }
+            case GameState.Player.PLAYER_D -> {
+                return game.getTeamTwo() != null ? game.getTeamTwo().getPlayerTwo() : null;
+            }
+            default -> {
+                return null;
+            }
+        }
     }
 }

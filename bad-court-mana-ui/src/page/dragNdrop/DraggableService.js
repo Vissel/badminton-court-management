@@ -13,6 +13,13 @@ const DraggableService = ({ serviceName, cost, costFormat, currency, itemId, sto
   const isStockable = itemId != null;
   const outOfStock = isStockable && (stockOnHand ?? 0) <= 0;
   const lowStock = isStockable && !outOfStock && stockOnHand <= LOW_STOCK_LIMIT;
+  // Remaining count shown on hover. `stockOnHand` is refreshed by /checkStock
+  // after each successful add, so the tooltip reflects the latest stock.
+  const stockTip = !isStockable
+    ? ""
+    : outOfStock
+      ? "Hết hàng"
+      : `Còn ${stockOnHand ?? "…"}`;
   const [{ isDragging }, drag] = useDrag(
     () => ({
       type: ItemTypes.SERVICE,
@@ -27,7 +34,7 @@ const DraggableService = ({ serviceName, cost, costFormat, currency, itemId, sto
 
   return (
     <Tooltip
-      title={outOfStock ? "Hết hàng" : ""}
+      title={stockTip}
       placement="right"
       arrow
     >
@@ -51,7 +58,7 @@ const DraggableService = ({ serviceName, cost, costFormat, currency, itemId, sto
             {serviceName} - {costFormat} {currency}
           </Typography>
           {lowStock && (
-            <Tooltip title={`Còn ${stockOnHand}`} arrow>
+            <Tooltip title="Sắp hết hàng" arrow>
               <WarningAmberIcon color="warning" fontSize="small" />
             </Tooltip>
           )}

@@ -147,10 +147,6 @@ const runPool = (items, worker, concurrency = 6) => {
   );
 };
 
-// Wide page for date-filtered history scans: `total` stays accurate beyond
-// it, but the paid/unpaid split is derived from the fetched items.
-const FILTERED_HISTORY_PAGE = { current: 1, pageSize: 100, totalPage: 0 };
-
 // Under a date range /listRemainingDebts' debitSummary stays all-time — the
 // filtered debit page itself is the source of truth for the row.
 const summaryFromDebits = (playerName, debits) => ({
@@ -374,46 +370,33 @@ export default function DebtManagementPage() {
 
   // ── history fetches (only ever called after entering history mode or
   //    clicking the per-player "Xem lịch sử" link) ──
+  // The per-player history summary powers the history table rows. With the
+  // default all-time filter ("Tất cả") it reads /summaryHistory. Under a date
+  // range ("Lọc") it instead derives the row from /history, because
+  // /summaryHistory aggregates all-time and ignores from/to — using it under a
+  // filter would keep showing stale all-time counts for players who have no
+  // debts in the range. /history honours the range, so those rows drop out.
   const fetchHistSummary = useCallback((playerName) => {
     const epoch = filterEpochRef.current;
     setHistPending((n) => n + 1);
-    return getDebitHistorySummary(playerName)
-      .then((r) => {
-        if (epoch !== filterEpochRef.current) return;
-        const b = r?.data;
-        setHistSummaries((s) => ({
-          ...s,
-          [playerName]: b?.success && b.data ? b.data : null,
-        }));
-      })
-      .catch(() => {
-        if (epoch !== filterEpochRef.current) return;
-        setHistSummaries((s) => ({ ...s, [playerName]: null }));
-      })
-      .finally(() => setHistPending((n) => n - 1));
-  }, []);
-
-  // Date-range mode: /summaryHistory takes no filter, so the stream scans the
-  // player's filtered /history page — the response seeds both the row's
-  // accumulate fields and the expanded panel.
-  const fetchHistFiltered = useCallback((playerName) => {
-    const epoch = filterEpochRef.current;
-    setHistPending((n) => n + 1);
-    return listDebitHistory(playerName, FILTERED_HISTORY_PAGE, activeFilterRef.current)
-      .then((res) => {
-        if (epoch !== filterEpochRef.current) return;
-        const b = res?.data;
-        const data = b?.success ? b.data : null;
-        setHistSummaries((s) => ({
-          ...s,
-          [playerName]: data ? histSummaryFromItems(playerName, data) : null,
-        }));
-        if (data) {
-          setHistDetails((d) => ({
-            ...d,
-            [playerName]: { loading: false, page: 1, data },
-          }));
+    const f = activeFilterRef.current;
+    const filtered = f !== REMAINING_DEBTS_FILTER;
+    const request = filtered
+      ? listDebitHistory(playerName, { current: 1, pageSize: 10, totalPage: 0 }, f).then(
+        (res) => {
+          const b = res?.data;
+          const data = b?.success ? b.data : null;
+          return data ? histSummaryFromItems(playerName, data) : null;
         }
+      )
+      : getDebitHistorySummary(playerName).then((r) => {
+        const b = r?.data;
+        return b?.success && b.data ? b.data : null;
+      });
+    return request
+      .then((summary) => {
+        if (epoch !== filterEpochRef.current) return;
+        setHistSummaries((s) => ({ ...s, [playerName]: summary }));
       })
       .catch(() => {
         if (epoch !== filterEpochRef.current) return;
@@ -426,11 +409,9 @@ export default function DebtManagementPage() {
     (playerName) => {
       if (histRequestedRef.current.has(playerName)) return;
       histRequestedRef.current.add(playerName);
-      return activeFilterRef.current !== REMAINING_DEBTS_FILTER
-        ? fetchHistFiltered(playerName)
-        : fetchHistSummary(playerName);
+      return fetchHistSummary(playerName);
     },
-    [fetchHistSummary, fetchHistFiltered]
+    [fetchHistSummary]
   );
 
   const fetchHistory = useCallback((playerName, page = 1) => {
@@ -714,10 +695,12 @@ export default function DebtManagementPage() {
     if (expandedRows.has(playerName)) fetchDetails(playerName);
   };
 
+  // "Lọc" — run the same full-roster history scan as "Tất cả", but constrain
+  // it to the chosen date range (each side falls back to the all-time bound
+  // when left blank). Always fires the stream, even with no dates entered.
   const applyDateFilter = () => {
     if (!isHistory) return;
     const { from, to } = dateInput;
-    if (!from && !to) return;
     setHistScanAll(true);
     resetHistoryData();
     setActiveFilter({
@@ -1301,7 +1284,7 @@ export default function DebtManagementPage() {
           placeholder="Tìm theo tên người chơi..."
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
-          sx={{ minWidth: { md: 200 }, maxWidth:{md:300}, flex: { md: "1 1 280px" } }}
+          sx={{ minWidth: { md: 200 }, maxWidth: { md: 300 }, flex: { md: "1 1 280px" } }}
           slotProps={{
             input: {
               startAdornment: (
@@ -1400,7 +1383,9 @@ export default function DebtManagementPage() {
                       <CircularProgress size={16} /> Đang tải dữ liệu nợ...
                     </Box>
                   ) : isHistory ? (
-                    "Không có người từng nợ nào."
+                    activeFilter !== REMAINING_DEBTS_FILTER
+                      ? "Không có nợ nào trong khoảng thời gian đã lọc."
+                      : "Không có người từng nợ nào."
                   ) : (
                     "Không có người nợ nào."
                   )}

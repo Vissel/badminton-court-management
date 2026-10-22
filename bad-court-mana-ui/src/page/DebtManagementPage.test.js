@@ -138,7 +138,7 @@ test("exports all filtered players in current mode", async () => {
   expect(window.URL.revokeObjectURL).toHaveBeenCalledWith("blob:debt-report");
 });
 
-test("history mode: Tất cả scans the whole roster via /summaryHistory, Lọc filters via /history", async () => {
+test("history mode: Tất cả scans via /summaryHistory, Lọc re-scans via /history honouring the date range", async () => {
   // Only An currently owes money → the entry seed stream covers An alone.
   getDebitSummary.mockImplementation((name) =>
     Promise.resolve({
@@ -201,16 +201,19 @@ test("history mode: Tất cả scans the whole roster via /summaryHistory, Lọc
   await waitFor(() => expect(getDebitHistorySummary).toHaveBeenCalledWith("Binh"));
   await screen.findByText("Binh");
 
-  // "Lọc" scans the roster through /history with the range;
-  // "Đến ngày" is pushed to end-of-day so the picked date is included.
+  // "Lọc" re-scans the roster through /history (which honours the date range),
+  // forwarding the chosen bounds ("Đến ngày" is pushed to end-of-day so the
+  // picked date itself is included). Only players with debts in the range stay.
   fireEvent.change(screen.getByLabelText("Từ ngày"), { target: { value: "2026-09-01" } });
   fireEvent.change(screen.getByLabelText("Đến ngày"), { target: { value: "2026-09-30" } });
   await userEvent.click(screen.getByRole("button", { name: "Lọc" }));
 
-  const expectedFilter = { from: "2026-09-01", to: "2026-09-30T23:59:59", amountFrom: 0, amountTo: 0 };
-  await waitFor(() => expect(listDebitHistory).toHaveBeenCalledTimes(2));
-  expect(listDebitHistory).toHaveBeenCalledWith("An", { current: 1, pageSize: 100, totalPage: 0 }, expectedFilter);
-  expect(listDebitHistory).toHaveBeenCalledWith("Binh", { current: 1, pageSize: 100, totalPage: 0 }, expectedFilter);
+  const range = expect.objectContaining({ from: "2026-09-01", to: "2026-09-30T23:59:59" });
+  await waitFor(() =>
+    expect(listDebitHistory).toHaveBeenCalledWith("An", { current: 1, pageSize: 10, totalPage: 0 }, range)
+  );
+  expect(listDebitHistory).toHaveBeenCalledWith("Binh", { current: 1, pageSize: 10, totalPage: 0 }, range);
+  // Binh has no debts in the range → row drops out; An (total 1) remains.
   await waitFor(() => expect(screen.queryByText("Binh")).not.toBeInTheDocument());
   expect(screen.getByText("An")).toBeInTheDocument();
 });

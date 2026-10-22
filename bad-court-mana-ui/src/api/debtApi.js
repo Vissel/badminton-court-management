@@ -87,14 +87,20 @@ export const payDebits = ({ playerName, totalPayAmount, paymentMethod = "CASH", 
     ...(listDebitPay && listDebitPay.length > 0 ? { listDebitPay } : {}),
   });
 
-// GET /api/v1/debit/summaryHistory?playerName=
+// GET /api/v1/debit/summaryHistory?playerName=&from=&to=
 // → Result<DebitHistorySummaryResponse>: { playerName, totalDebitAmount,
 //   totalPaidAmount, totalRemainingAmount, numDebits, numPaidDebits,
 //   numUnpaidDebits, currency } — accumulated over paid + remaining debts.
-export const getDebitHistorySummary = (playerName) =>
-  api.get(`/api/v1/debit/summaryHistory?playerName=${encodeURIComponent(playerName)}`, {
+// from/to are optional date bounds (YYYY-MM-DD or ISO-8601); omit them for an
+// all-time summary.
+export const getDebitHistorySummary = (playerName, from, to) => {
+  const params = new URLSearchParams({ playerName });
+  if (from) params.append("from", from);
+  if (to) params.append("to", to);
+  return api.get(`/api/v1/debit/summaryHistory?${params.toString()}`, {
     skipErrorToast: true,
   });
+};
 
 // POST /api/v1/debit/history → Result<PageResponse<DebitHistoryItemResponse>>
 // item: { playerName, debtAmount, debtDateTime, paidAmount, paidDateTime,

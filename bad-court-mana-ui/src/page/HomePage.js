@@ -832,6 +832,8 @@ function HomePage() {
   }, []);
 
   const saveServiceToPlayer = async (playerName, serviceName, cost, meta = {}) => {
+    // eslint-disable-next-line no-console
+    console.log("[checkStock] saveServiceToPlayer ENTER:", playerName, serviceName, meta);
     if (!playerName) return;
     const response = await api
       .post(`/court-mana/addServiceToPlayer?playerName=${playerName}`, {
@@ -842,9 +844,16 @@ function HomePage() {
           : {}),
       })
       .catch(() => null);
-    if (responseSuccess(response) && meta.itemId != null) {
-      // stock changed on the backend (RETAIL_SALE) - refresh the option
-      refreshItemStock([meta.itemId]);
+    // Once the add succeeds, re-check stock for the linked inventory item and
+    // patch the service option's remaining count. Resolve the item from the
+    // dropped payload, falling back to the service list by name so the check
+    // still fires when the drag item didn't carry an itemId.
+    if (responseSuccess(response)) {
+      const itemId =
+        meta.itemId ?? services.find((s) => s.serviceName === serviceName)?.itemId;
+      // eslint-disable-next-line no-console
+      console.log("[checkStock] service:", serviceName, "resolved itemId:", itemId);
+      if (itemId != null) refreshItemStock([itemId]);
     }
     return response;
   };
