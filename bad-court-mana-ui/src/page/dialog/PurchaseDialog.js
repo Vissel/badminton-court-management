@@ -179,19 +179,18 @@ const PurchaseDialog = ({ open, items, onClose, onSaved }) => {
             )}
           </Box>
 
-          {isNewItem && (
-            <FormControl fullWidth>
-              <InputLabel>Loại (mặt hàng mới)</InputLabel>
-              <Select
-                label="Loại (mặt hàng mới)"
-                value={itemType}
-                onChange={(e) => setItemType(e.target.value)}
-              >
-                <MenuItem value="SHUTTLE_BALL">{ITEM_TYPES.SHUTTLE_BALL}</MenuItem>
-                <MenuItem value="GOODS">{ITEM_TYPES.GOODS}</MenuItem>
-              </Select>
-            </FormControl>
-          )}
+          <FormControl fullWidth>
+            <InputLabel id="purchase-item-type-label">Loại</InputLabel>
+            <Select
+              labelId="purchase-item-type-label"
+              label="Loại"
+              value={itemType}
+              onChange={(e) => setItemType(e.target.value)}
+            >
+              <MenuItem value="SHUTTLE_BALL">{ITEM_TYPES.SHUTTLE_BALL}</MenuItem>
+              <MenuItem value="GOODS">{ITEM_TYPES.GOODS}</MenuItem>
+            </Select>
+          </FormControl>
 
           {hasPackage && (
             <ToggleButtonGroup
@@ -263,15 +262,6 @@ const PurchaseDialog = ({ open, items, onClose, onSaved }) => {
           {hasPackage && effectiveUnit === "PACKAGE" && qtyNum > 0 && (
             <Typography variant="body2" color="text.secondary">
               = {baseQty} {unitConfig.unit}
-            </Typography>
-          )}
-
-          {qtyNum > 0 && unitCost !== "" && (
-            <Typography variant="body2" color="text.secondary">
-              Tổng nhập: {formatVND(qtyNum * rawNumber(unitCost))} {VN_CURRENCY}
-              {hasPackage && effectiveUnit === "PACKAGE" && (
-                <> (≈ {formatVND(rawNumber(unitCost) / unitConfig.unitsPerPackage)}{VN_CURRENCY}/{unitConfig.unit})</>
-              )}
             </Typography>
           )}
 

@@ -23,7 +23,6 @@ import Tooltip from "@mui/material/Tooltip";
 import DownloadIcon from "@mui/icons-material/Download";
 import UploadIcon from "@mui/icons-material/Upload";
 import AddShoppingCartIcon from "@mui/icons-material/AddShoppingCart";
-import AddIcon from "@mui/icons-material/Add";
 import HistoryIcon from "@mui/icons-material/History";
 import FactCheckIcon from "@mui/icons-material/FactCheck";
 import EditIcon from "@mui/icons-material/Edit";
@@ -120,14 +119,6 @@ export default function InventoryPage() {
         <Typography variant="h4" component="h1" sx={{ flexGrow: 1 }}>
           Quản lý kho
         </Typography>
-        <Button
-          variant="outlined"
-          startIcon={<AddIcon />}
-          onClick={() => setDialog({ type: "item" })}
-          disabled={loading}
-        >
-          Thêm mặt hàng
-        </Button>
         <Button
           variant="outlined"
           startIcon={<AddShoppingCartIcon />}
@@ -346,7 +337,7 @@ export default function InventoryPage() {
                     <Typography color="text.secondary">
                       {searchQuery
                         ? `Không tìm thấy "${searchQuery}".`
-                        : `Chưa có ${TAB_TYPES[activeType].label.toLowerCase()} nào. Nhấn "Thêm mặt hàng" hoặc "Nhập file" để bắt đầu.`}
+                        : `Chưa có ${TAB_TYPES[activeType].label.toLowerCase()} nào. Nhấn "Nhập kho" hoặc "Nhập file" để bắt đầu.`}
                     </Typography>
                   </TableCell>
                 </TableRow>
