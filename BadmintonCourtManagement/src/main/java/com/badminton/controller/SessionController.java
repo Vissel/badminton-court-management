@@ -29,7 +29,8 @@ public class SessionController {
     public Result<SessionResult> checkCreateNewSession() {
         Result<SessionResult> result = new Result<>();
         try {
-            SessionResult data = sessionService.checkCreateSession();
+            int startTime = 0;
+            SessionResult data = sessionService.checkCreateSession(startTime);
             result.setData(data);
             result.setSuccess(true);
         } catch (Exception e) {

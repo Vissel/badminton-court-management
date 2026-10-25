@@ -8,6 +8,7 @@ import com.badminton.entity.Player;
 import com.badminton.entity.Session;
 import com.badminton.exception.BusinessException;
 import com.badminton.model.dto.ServiceDTO;
+import com.badminton.model.session.SessionModel;
 import com.badminton.repository.AvailablePlayerRepository;
 import com.badminton.repository.SessionRepository;
 import com.badminton.repository.UserRepository;
@@ -18,7 +19,6 @@ import com.badminton.requestmodel.debit.DebitRequest;
 import com.badminton.response.result.Result;
 import com.badminton.response.result.SessionResult;
 import com.badminton.time.model.SessionScope;
-import com.badminton.util.Converter;
 import com.badminton.util.MoneyUtils;
 import com.badminton.util.ServiceUtil;
 import com.badminton.util.TimeUtils;
@@ -50,6 +50,7 @@ import java.util.stream.Collectors;
 @Service
 @Slf4j
 public class SessionServiceImpl {
+    private static final int MAX_RETRY_CREATE_SESSION = 3;
     @Autowired
     CoreSession coreSession;
 
@@ -92,16 +93,36 @@ public class SessionServiceImpl {
     }
 
     /**
+     * this is the 1st api call in the home page to check and create session
+     * it must be success
      *
      * @return
      */
-    @Transactional(rollbackFor = Exception.class)
-    public SessionResult checkCreateSession() {
-        Boolean check = checkAvailableSession();
-        if (check != null && check.equals(Boolean.FALSE)) {
-            return createNewSessionInDay();
+    public SessionResult checkCreateSession(int startTime) {
+        try {
+            SessionModel sessionModel = coreSession.checkAndCreateNewSession();
+            return toSessionResult(sessionModel, startTime);
+        } catch (Exception e) {
+            log.error("checkCreateSession got error. Message: {}", e.getMessage());
+            return retryCheckCreateSession(startTime);
         }
-        return null;
+    }
+
+    private SessionResult retryCheckCreateSession(int retry) {
+        retry++;
+        if (retry > MAX_RETRY_CREATE_SESSION) {
+            throw new RuntimeException("Cannot create session after retry 3 times.");
+        }
+        return checkCreateSession(retry);
+    }
+
+    private SessionResult toSessionResult(SessionModel sessionModel, int retry) {
+        SessionResult result = new SessionResult();
+        result.setFromTime(TimeUtils.convertInstantToTimeStr(sessionModel.getFromTime()));
+        result.setToTime(TimeUtils.convertInstantToTimeStr(sessionModel.getToTime()));
+        result.setMessage(sessionModel.getMessage());
+        result.setRetry(retry);
+        return result;
     }
 
     @Transactional(readOnly = true)
@@ -116,48 +137,6 @@ public class SessionServiceImpl {
         return Boolean.FALSE;
     }
 
-    @Transactional
-    public SessionResult createNewSessionInDay() {
-        log.info("createNewSessionInDay...");
-        Session createdSession = new Session();
-        sessionRepo.save(createdSession);
-        return createdSessionResult(createdSession);
-    }
-
-    private SessionResult availableSessionResult() {
-        SessionResult res = new SessionResult();
-        res.setMessage("Session is available.");
-        return res;
-    }
-
-    private SessionResult createdSessionResult(Session createdSession) {
-        SessionResult res = new SessionResult();
-        res.setId(createdSession.getSessionId());
-        res.setFromTime(createdSession.getFromTime());
-        return res;
-    }
-
-    /**
-     * Schedule job will call
-     *
-     * @return
-     */
-    @Deprecated
-    public List<SessionResult> deactiveSessions() {
-        List<SessionResult> deactiveList = new ArrayList<>();
-        List<Session> currSessions = findListCurrentSession();
-        if (!currSessions.isEmpty()) {
-            Instant toTime = Instant.now();
-            currSessions.stream().forEach(s -> {
-                s.setActive(false);
-                s.setToTime(toTime);
-                deactiveList.add(Converter.convertorToSessionResult(s));
-            });
-            sessionRepo.saveAll(currSessions);
-
-        }
-        return deactiveList;
-    }
 
     @Transactional(readOnly = true)
     public List<Session> findListCurrentSession() {

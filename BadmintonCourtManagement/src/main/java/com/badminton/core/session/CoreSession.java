@@ -1,10 +1,12 @@
 package com.badminton.core.session;
 
 import com.badminton.entity.Session;
+import com.badminton.model.session.SessionModel;
 import com.badminton.repository.SessionRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.Calendar;
@@ -28,13 +30,39 @@ public class CoreSession {
         return calendar.toInstant();
     }
 
+    /**
+     * create new session if not available
+     *
+     * @return
+     */
+    @Transactional
+    public com.badminton.model.session.SessionModel checkAndCreateNewSession() {
+        if (findAvailableSessions(getUTCPlus7Instant()).isEmpty()) {
+            return createNewSession();
+        }
+        return new SessionModel();
+    }
+
+    /**
+     * Find available sessions
+     *
+     * @param fromCurrentTime
+     * @return
+     */
     public List<Session> findAvailableSessions(Instant fromCurrentTime) {
         return sessionRepo.findByFromTimeLessThanAndToTimeIsNullAndIsActive(fromCurrentTime, true,
                 Sort.by(Sort.Order.desc("sessionId")));
     }
 
-    public void createNewAvailableSession() {
-        sessionRepo.save(new Session());
+    public SessionModel createNewSession() {
+        return toSessionModel(sessionRepo.save(new Session()));
+    }
+
+    private SessionModel toSessionModel(Session save) {
+        SessionModel sessionModel = new SessionModel();
+        sessionModel.setFromTime(save.getFromTime());
+        sessionModel.setToTime(save.getToTime());
+        return sessionModel;
     }
 
     public Session findCurrentSession() {

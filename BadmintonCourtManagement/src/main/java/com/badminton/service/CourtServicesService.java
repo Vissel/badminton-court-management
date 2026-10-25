@@ -504,7 +504,6 @@ public class CourtServicesService {
         return addAvailablePlayerIntoGame(game, playerName, courtDTO.getCourtAreas().getFirst().getArea());
     }
 
-    @Transactional
     private boolean addAvailablePlayerIntoGame(Game game, String playerName, String area) {
         try {
             Team team = getTeam(game, area);

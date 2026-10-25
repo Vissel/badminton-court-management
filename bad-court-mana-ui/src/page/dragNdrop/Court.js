@@ -139,7 +139,6 @@ export default function Court({
             gap: "5px",
             p: "10px",
             position: "relative",
-            transition: "all 2s ease",
           }}
         >
           {areaKeys.map((areaKey) => (
