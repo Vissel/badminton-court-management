@@ -18,8 +18,9 @@ public class SettingsController {
     AdminService adminService;
 
     @GetMapping(value = "/getSetupServices")
-    public ResponseEntity<SetUpServiceResponse> getSetupService() {
-        SetUpServiceResponse setupServiceRes = adminService.getSetUpService();
+    public ResponseEntity<SetUpServiceResponse> getSetupService(
+            @RequestParam(name = "includeInactive", defaultValue = "false") boolean includeInactive) {
+        SetUpServiceResponse setupServiceRes = adminService.getSetUpService(includeInactive);
         return ResponseEntity.ok().body(setupServiceRes);
 
     }

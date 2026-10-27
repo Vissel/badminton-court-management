@@ -30,22 +30,31 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Text that belongs in the console, not on screen: SQL statements, Hibernate
+// and Java stack fragments the backend may still return on an unexpected 500.
+const TECHNICAL_MESSAGE =
+  /could not execute statement|SQL \[|deadlock found|lock wait timeout|nested exception|hibernate|java\.[a-z]|javax\.|org\.springframework|constraint \[/i;
+
 // Extracts a human-readable message from an error body. Handles JSON error
 // payloads ({errorMessage|message}) and plain-string bodies (e.g. SuperAdmin
-// endpoints); HTML error pages fall back to the generic message.
+// endpoints); HTML error pages and technical text fall back to the generic
+// message, so the user is never shown code.
 export const responseMessage = (data, fallback) => {
+  let message = null;
   if (data && typeof data === "object") {
-    return data.errorMessage || data.message || fallback;
-  }
-  if (
+    message = data.errorMessage || data.message || null;
+  } else if (
     typeof data === "string" &&
     data.trim() &&
     data.length <= 300 &&
     !data.trimStart().startsWith("<")
   ) {
-    return data;
+    message = data;
   }
-  return fallback;
+  if (!message || TECHNICAL_MESSAGE.test(message)) {
+    return fallback;
+  }
+  return message;
 };
 
 let refreshPromise = null;
@@ -132,7 +141,10 @@ api.interceptors.response.use(
     ================================ */
     if (status >= 500) {
       console.error("Server error:", error.response);
-      if (!silent) emitApiError(responseMessage(data, "Lỗi hệ thống. Vui lòng thử lại sau."));
+      if (!silent)
+        emitApiError(
+          responseMessage(data, "Lỗi hệ thống. Vui lòng thử lại sau vài giây.")
+        );
       return Promise.resolve(null);
     }
 

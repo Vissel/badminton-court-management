@@ -1,7 +1,7 @@
 package com.badminton.core.player;
 
 import com.badminton.entity.Player;
-import com.badminton.model.PlayerModel;
+import com.badminton.model.player.PlayerModel;
 import com.badminton.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;

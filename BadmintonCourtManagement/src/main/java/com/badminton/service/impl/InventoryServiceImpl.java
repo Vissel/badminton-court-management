@@ -1,6 +1,8 @@
 package com.badminton.service.impl;
 
+import com.badminton.core.inventory.CoreCatalogSyncService;
 import com.badminton.core.inventory.CoreInventoryService;
+import com.badminton.core.inventory.ServiceItemLinker;
 import com.badminton.entity.*;
 import com.badminton.enums.ImportAction;
 import com.badminton.enums.InventoryItemType;
@@ -95,6 +97,11 @@ public class InventoryServiceImpl implements InventoryService {
     @Autowired
     private ServiceRepository serviceRepo;
 
+    @Autowired
+    private ServiceItemLinker serviceItemLinker;
+
+    @Autowired
+    private CoreCatalogSyncService catalogSyncService;
 
     @Autowired
     private StockIntakeParser stockIntakeParser;
@@ -140,7 +147,7 @@ public class InventoryServiceImpl implements InventoryService {
     @Override
     @Transactional(readOnly = true)
     public Result<StockCheckResponse> checkStock(Integer itemId, String itemName,
-                                                 InventoryItemType itemType) {
+            InventoryItemType itemType) {
         Result<StockCheckResponse> result = new Result<>();
         try {
             InventoryItem item = null;
@@ -210,8 +217,12 @@ public class InventoryServiceImpl implements InventoryService {
                 }
             }
             validatePackageConfig(item);
+            InventoryItem saved = itemRepo.save(item);
+            // Quản lý kho owns name / Giá bán / active; push them into the catalog
+            // rows so the Setup page and the bill never show a stale price.
+            catalogSyncService.syncCatalogFromItem(saved);
             result.setSuccess(true);
-            result.setData(toResponse(itemRepo.save(item)));
+            result.setData(toResponse(saved));
         } catch (IllegalArgumentException e) {
             result.setSuccess(false);
             result.setErrorCode(400);
@@ -236,6 +247,13 @@ public class InventoryServiceImpl implements InventoryService {
         try {
             validatePurchase(request);
             InventoryItem item = resolveOrCreateItem(request);
+            if (request.getRetailPrice() != null) {
+                if (request.getRetailPrice().signum() < 0) {
+                    throw new IllegalArgumentException("Giá bán không được âm");
+                }
+                item.setRetailPrice(request.getRetailPrice());
+                itemRepo.save(item);
+            }
             UnitSelection selection = resolveUnitSelection(item, request.getUnit());
             int baseQty = request.getQuantity() * selection.multiplier();
 
@@ -772,7 +790,7 @@ public class InventoryServiceImpl implements InventoryService {
             }
             InventoryItem item = ball.getItem() != null ? ball.getItem()
                     : itemRepo.findByItemNameIgnoreCaseAndItemType(
-                    ball.getShuttleName(), InventoryItemType.SHUTTLE_BALL).orElse(null);
+                            ball.getShuttleName(), InventoryItemType.SHUTTLE_BALL).orElse(null);
             if (item == null) {
                 continue;
             }
@@ -785,19 +803,17 @@ public class InventoryServiceImpl implements InventoryService {
     }
 
     @Override
-    @Transactional
     public void recordRetailSales(List<ServiceDTO> services, Long refId) {
         coreInventoryService.retailItem(services, refId);
     }
 
     @Override
-    @Transactional
     public void recordServiceReturns(List<ServiceDTO> services, Long refId) {
         recordServiceMovements(services, refId, StockMovementType.RETURN, 1);
     }
 
     private void recordServiceMovements(List<ServiceDTO> services, Long refId,
-                                        StockMovementType type, int sign) {
+            StockMovementType type, int sign) {
         if (services == null) {
             return;
         }
@@ -825,11 +841,23 @@ public class InventoryServiceImpl implements InventoryService {
             return null;
         }
         com.badminton.entity.Service service = serviceRepo.findBySerName(line.getServiceName()).orElse(null);
-        if (service != null && service.getItem() != null) {
-            return service.getItem();
+        if (service == null) {
+            log.warn("Retail/return service skipped: unknown service '{}'", line.getServiceName());
+            return null;
         }
-        log.warn("Retail/return service skipped: no stock item for '{}'", line.getServiceName());
-        return null;
+        // Catalogs built from Setup / product import carry no item link; the linker
+        // heals it by name so the return is recorded against the right item.
+        InventoryItem item = serviceItemLinker.resolve(service);
+        if (item == null) {
+            log.warn("Retail/return service skipped: no inventory item named '{}'", line.getServiceName());
+        }
+        return item;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public InventoryItem findActiveGoodsItemByName(String itemName) {
+        return serviceItemLinker.findByServiceName(itemName);
     }
 
     @Override
@@ -925,7 +953,7 @@ public class InventoryServiceImpl implements InventoryService {
     }
 
     private StockMovement baseMovement(InventoryItem item, StockMovementType type,
-                                       int delta, String note) {
+            int delta, String note) {
         StockMovement movement = new StockMovement();
         movement.setItem(item);
         movement.setMovementType(type);
@@ -968,6 +996,11 @@ public class InventoryServiceImpl implements InventoryService {
             if (request.getItemName() == null || request.getItemName().isBlank()) {
                 throw new IllegalArgumentException("Tên sản phẩm trống");
             }
+            // Giá bán drives the Setup page price and the bill, so a product
+            // cannot exist without one.
+            if (request.getRetailPrice() == null) {
+                throw new IllegalArgumentException("Giá bán không được để trống");
+            }
         }
         if (request.getRetailPrice() != null && request.getRetailPrice().signum() < 0) {
             throw new IllegalArgumentException("Giá bán không được âm");
@@ -976,7 +1009,6 @@ public class InventoryServiceImpl implements InventoryService {
             throw new IllegalArgumentException("Quy đổi (số đơn vị/" + "ống) phải lớn hơn 0");
         }
     }
-
 
     /**
      * Default units: SHUTTLE_BALL → quả base / ống package of 12; GOODS keep

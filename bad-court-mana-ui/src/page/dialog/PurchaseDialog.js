@@ -39,6 +39,7 @@ const PurchaseDialog = ({ open, items, onClose, onSaved }) => {
   const [unit, setUnit] = useState("PACKAGE");
   const [quantity, setQuantity] = useState("");
   const [unitCost, setUnitCost] = useState("");
+  const [retailPrice, setRetailPrice] = useState("");
   const [purchaseDate, setPurchaseDate] = useState(todayStr());
   const [supplier, setSupplier] = useState("");
   const [note, setNote] = useState("");
@@ -52,6 +53,7 @@ const PurchaseDialog = ({ open, items, onClose, onSaved }) => {
       setUnit("PACKAGE");
       setQuantity("");
       setUnitCost("");
+      setRetailPrice("");
       setPurchaseDate(todayStr());
       setSupplier("");
       setNote("");
@@ -106,6 +108,7 @@ const PurchaseDialog = ({ open, items, onClose, onSaved }) => {
       unit: effectiveUnit,
       quantity: qtyNum,
       unitCost: rawNumber(unitCost),
+      ...(retailPrice !== "" ? { retailPrice: rawNumber(retailPrice) } : {}),
       ...(supplier.trim() ? { supplier: supplier.trim() } : {}),
       ...(note.trim() ? { note: note.trim() } : {}),
     };
@@ -157,6 +160,9 @@ const PurchaseDialog = ({ open, items, onClose, onSaved }) => {
                     onClick={() => {
                       setName(opt.itemName);
                       setItemType(opt.itemType);
+                      if (opt.retailPrice != null) {
+                        setRetailPrice(formatVND(opt.retailPrice));
+                      }
                     }}
                     sx={{
                       px: 1.5,
@@ -235,6 +241,24 @@ const PurchaseDialog = ({ open, items, onClose, onSaved }) => {
               }}
             />
           </Stack>
+
+          <TextField
+            label="Giá bán"
+            value={retailPrice}
+            onChange={(e) =>
+              setRetailPrice(
+                e.target.value === "" ? "" : formatVND(rawNumber(e.target.value))
+              )
+            }
+            fullWidth
+            slotProps={{
+              input: {
+                endAdornment: (
+                  <InputAdornment position="end">{VN_CURRENCY}</InputAdornment>
+                ),
+              },
+            }}
+          />
 
           <TextField
             label="Ngày nhập"

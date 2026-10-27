@@ -9,6 +9,7 @@ public enum ErrorCodeEnum {
     SHUTTLE_BALL_NOT_FOUND("102", "SHUTTLE_BALL_NOT_FOUND", "No shuttle ball finding"),
     PLAYER_NOT_FOUND("103", "PLAYER_NOT_FOUND", "Player is not found"),
     AVAILABLE_PLAYER_NOT_FOUND("104", "AVAILABLE_PLAYER_NOT_FOUND", "Available player“““ is not found"),
+    COURT_NOT_FOUND("105", "COURT_NOT_FOUND", "Court is not found"),
     INCORRECT_TYPE("411", "INCORRECT_TYPE", "Provided data type is incorrect."),
     FLOW_ERROR("412", "FLOW_ERROR", "Consequence flow has error."),
     EXPORTING_ERROR("413", "EXPORTING_ERROR", "Error while exporting."),

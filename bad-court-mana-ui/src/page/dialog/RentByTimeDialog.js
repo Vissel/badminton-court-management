@@ -16,7 +16,6 @@ import InputLabel from "@mui/material/InputLabel";
 import IconButton from "@mui/material/IconButton";
 import InputAdornment from "@mui/material/InputAdornment";
 import ClickAwayListener from "@mui/material/ClickAwayListener";
-import Tooltip from "@mui/material/Tooltip";
 import DeleteIcon from "@mui/icons-material/Delete";
 import AddIcon from "@mui/icons-material/Add";
 import { formatVND } from "../MoneyUtils";
@@ -183,20 +182,6 @@ const RentByTimeDialog = ({
         setDurH(dur.h); setDurM(dur.m);
         setFee(minutesToFee(totalMin, hourlyRate));
     };
-
-    /** Capture the current clicking time and settle the rental to it (updates end time + fee). */
-    const handleSettleNow = () => {
-        const now = new Date();
-        handleEndChange(now.getHours(), now.getMinutes());
-    };
-
-    /** The originally-booked fee of the rent-by-time service (before any cut-to-now). */
-    const originalMoney = useMemo(() => {
-        if (editMode && initialData?.numTime) {
-            return minutesToFee(Math.round((initialData.numTime || 0) * 60), hourlyRate);
-        }
-        return 0;
-    }, [editMode, initialData, hourlyRate]);
 
     /** Admin changes fee → back-derive duration + end time. */
     const handleFeeChange = (val) => {
@@ -436,7 +421,7 @@ const RentByTimeDialog = ({
                         />
                     </Stack>
 
-                    {/* End Time — time-only picker + settle-now */}
+                    {/* End Time — time-only picker */}
                     <Stack direction="row" spacing={1} alignItems="center">
                         <Typography fontWeight={700} sx={{ minWidth: 100 }}>Kết thúc:</Typography>
                         <TextField
@@ -447,21 +432,11 @@ const RentByTimeDialog = ({
                                 const [h, m] = (e.target.value || "00:00").split(":").map(Number);
                                 handleEndChange(isNaN(h) ? 0 : h, isNaN(m) ? 0 : m);
                             }}
-                            sx={{ flex: 1 }}
+                            fullWidth
                         />
-                        {editMode && (
-                            <Button
-                                size="small"
-                                variant="outlined"
-                                onClick={handleSettleNow}
-                                sx={{ whiteSpace: "nowrap" }}
-                            >
-                                Bây giờ
-                            </Button>
-                        )}
                     </Stack>
 
-                    {/* Fee — editable, back-derives duration; original money shown on the right */}
+                    {/* Fee — editable, back-derives duration */}
                     <Stack direction="row" spacing={1} alignItems="center">
                         <Typography fontWeight={700} sx={{ minWidth: 100 }}>Phí:</Typography>
                         <TextField
@@ -470,26 +445,8 @@ const RentByTimeDialog = ({
                             inputProps={{ min: 0, step: 50000 }}
                             value={fee}
                             onChange={(e) => handleFeeChange(e.target.value)}
-                            sx={{ flex: 1 }}
+                            fullWidth
                         />
-                        {editMode && originalMoney > 0 && (
-                            <Tooltip title="Bấm để dùng phí gốc của dịch vụ thuê theo giờ" placement="top">
-                                <Typography
-                                    onClick={() => handleFeeChange(originalMoney)}
-                                    sx={{
-                                        minWidth: 96,
-                                        textAlign: "right",
-                                        cursor: "pointer",
-                                        fontWeight: 600,
-                                        color: "primary.main",
-                                        textDecoration: "underline dotted",
-                                        "&:hover": { color: "primary.dark" },
-                                    }}
-                                >
-                                    Gốc: {formatVND(originalMoney)}
-                                </Typography>
-                            </Tooltip>
-                        )}
                     </Stack>
 
                     {/* Shuttle Section */}

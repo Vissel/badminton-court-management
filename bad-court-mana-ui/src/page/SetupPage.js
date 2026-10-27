@@ -16,6 +16,9 @@ import InputAdornment from "@mui/material/InputAdornment";
 import MenuItem from "@mui/material/MenuItem";
 import Checkbox from "@mui/material/Checkbox";
 import FormControlLabel from "@mui/material/FormControlLabel";
+import Chip from "@mui/material/Chip";
+import Tooltip from "@mui/material/Tooltip";
+import Alert from "@mui/material/Alert";
 import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
 import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
 import api from "../api/index";
@@ -41,8 +44,77 @@ const EMPTY_BILL_CONFIG = {
   einvoiceTemplate: "",
 };
 
+// ---------------------------------------------------------------------------
+// Catalog rows: everything about quantity, Giá bán and availability is owned by
+// the inventory page (Quản lý kho). These helpers only render what the backend
+// enriched (stockOnHand, retailPrice, active, itemId).
+// ---------------------------------------------------------------------------
+const isRowInactive = (row) => row.active === false && !row.isRestored;
+const isRowPendingDelete = (row) => Boolean(row.isDeleted);
+const rowActionIcon = (row) =>
+  row.isDeleted || isRowInactive(row) ? <RefreshOutlinedIcon /> : <DeleteOutlinedIcon />;
+const rowActionTitle = (row) =>
+  row.isDeleted ? "Quay lại" : isRowInactive(row) ? "Mở bán lại" : "Xoá";
+const rowActionColor = (row) =>
+  row.isDeleted || isRowInactive(row) ? "primary" : "error";
+
+const StockCell = ({ row }) => {
+  if (row.stockOnHand == null) {
+    return (
+      <TableCell align="right">
+        <Typography variant="body2" color="text.secondary">
+          —
+        </Typography>
+      </TableCell>
+    );
+  }
+  const color =
+    row.stockOnHand <= 0 ? "error.main" : row.lowStock ? "warning.main" : "text.primary";
+  return (
+    <TableCell align="right">
+      <Tooltip title={row.stockBreakdown || "Số lượng còn lại trong Quản lý kho"}>
+        <Typography variant="body2" fontWeight={600} sx={{ color }}>
+          {row.stockOnHand} {row.unit || ""}
+        </Typography>
+      </Tooltip>
+    </TableCell>
+  );
+};
+
+const PriceCell = ({ row }) => (
+  <TableCell align="right">
+    {row.retailPrice != null ? (
+      <Typography variant="body2">
+        {row.retailPriceFormat || formatVND(row.retailPrice)}
+      </Typography>
+    ) : (
+      <Tooltip title="Nhập Giá bán trong Quản lý kho để đồng bộ về đây">
+        <Chip size="small" color="warning" variant="outlined" label="Thiếu giá bán" />
+      </Tooltip>
+    )}
+  </TableCell>
+);
+
+const RowStatusChip = ({ row }) => {
+  if (row.isDeleted || isRowInactive(row)) {
+    return (
+      <Chip size="small" label="Ngừng bán" sx={{ bgcolor: "grey.300", color: "text.primary" }} />
+    );
+  }
+  if (row.itemId == null) {
+    return <Chip size="small" color="info" variant="outlined" label="Chưa liên kết kho" />;
+  }
+  return <Chip size="small" color="success" variant="outlined" label="Đang bán" />;
+};
+
+const LOAD_FAILED_MESSAGE =
+  "Không tải được thiết lập sân cầu. Dữ liệu đang hiển thị có thể chưa phải mới nhất.";
+const SAVE_FAILED_MESSAGE =
+  "Chưa lưu được thiết lập do hệ thống đang bận. Vui lòng thử lại sau vài giây.";
+
 function SetupPage() {
   const [errorMess, setErrorMess] = useState(null);
+  const [loadError, setLoadError] = useState(null);
   const [totalCourt, setTotalCourt] = useState(7);
   const [costInPerson, setCostInPerson] = useState();
   const [costInPersonFormatted, setcostInPersonFormatted] = useState("");
@@ -208,9 +280,15 @@ function SetupPage() {
     try {
       setDeletingRow(true);
       setTableServices((prev) =>
-        prev.map((item, i) =>
-          i === idx ? { ...item, isDeleted: !item.isDeleted } : item
-        )
+        prev.map((item, i) => {
+          if (i !== idx) return item;
+          // A row that is already inactive on the server is restored through
+          // the add list, an active one is queued for deletion.
+          if (item.active === false) {
+            return { ...item, isRestored: !item.isRestored, isDeleted: false };
+          }
+          return { ...item, isDeleted: !item.isDeleted };
+        })
       );
       setSelectedRow(null);
     } catch (err) {
@@ -231,9 +309,13 @@ function SetupPage() {
     try {
       setDeletingBall(true);
       setTableShuttleBalls((prev) =>
-        prev.map((item, i) =>
-          i === idx ? { ...item, isDeleted: !item.isDeleted } : item
-        )
+        prev.map((item, i) => {
+          if (i !== idx) return item;
+          if (item.active === false) {
+            return { ...item, isRestored: !item.isRestored, isDeleted: false };
+          }
+          return { ...item, isDeleted: !item.isDeleted };
+        })
       );
       setSelectedBall(null);
     } catch (err) {
@@ -247,6 +329,8 @@ function SetupPage() {
   const existedInTableService = (newService) => {
     return tableServices.some((s) => {
       return (
+        !s.isDeleted &&
+        s.active !== false &&
         s.serviceName === newService.serviceName &&
         Number(s.cost) === Number(newService.cost)
       );
@@ -255,6 +339,8 @@ function SetupPage() {
   const existedInTableShuttleBall = (newBall) => {
     return tableShuttleBalls.some((b) => {
       return (
+        !b.isDeleted &&
+        b.active !== false &&
         b.shuttleName === newBall.shuttleName &&
         Number(b.shuttleCost) === Number(newBall.shuttleCost)
       );
@@ -295,21 +381,35 @@ function SetupPage() {
     }
     const rawNumber = Number(costInPerson.toString().replace(/\D/g, ""));
     const rawRentByTime = Number(rentByTime.toString().replace(/\D/g, ""));
+    const restoredServices = tableServices.filter((s) => s.isRestored);
+    const restoredBalls = tableShuttleBalls.filter((b) => b.isRestored);
     const payload = {
       totalCourt: totalCourt,
       costInPerson: rawNumber,
       rentByTime: rawRentByTime,
-      addedShuttleBalls: shuttleBall.map((b) => ({
-        shuttleName: b.shuttleName,
-        shuttleCost: b.cost,
-      })),
+      addedShuttleBalls: [
+        ...shuttleBall.map((b) => ({
+          shuttleName: b.shuttleName,
+          shuttleCost: b.cost,
+        })),
+        ...restoredBalls.map((b) => ({
+          shuttleName: b.shuttleName,
+          shuttleCost: Number(b.cost) || 0,
+        })),
+      ],
       deletedShuttleBalls: tableShuttleBalls
         .filter((b) => b.isDeleted)
         .map(({ shuttleName, cost }) => ({
           shuttleName: shuttleName,
           shuttleCost: cost,
         })),
-      addedServices: services,
+      addedServices: [
+        ...services,
+        ...restoredServices.map((s) => ({
+          serviceName: s.serviceName,
+          cost: Number(s.cost) || 0,
+        })),
+      ],
       deletedServices: tableServices
         .filter((s) => s.isDeleted)
         .map(({ serviceName, cost }) => ({
@@ -320,28 +420,27 @@ function SetupPage() {
 
     try {
       const response = await api.post(`/api/updateSetupService`, payload, {});
+      if (!response) {
+        // 5xx: the error popup already explained it, keep the form usable
+        setErrorMess(SAVE_FAILED_MESSAGE);
+        return;
+      }
       if (response.status === 200) {
-        alert("Lưu thiết lập thành công!");
-        setTableShuttleBalls([
-          ...tableShuttleBalls.filter((ball) => !ball.isDeleted),
-          ...shuttleBall,
-        ]);
-
-        setTableServices([
-          ...tableServices.filter((ser) => !ser.isDeleted),
-          ...services,
-        ]);
-
+        // Reload instead of merging locally: quantity, Giá bán and status are
+        // now computed by the backend from inventory.
+        await fetchEntries();
         setShuttleBall([]);
         setOneBall(true);
         setServices([]);
         setCostInPersonEditing(false);
         setRentByTimeEditing(false);
+        alert("Lưu thiết lập thành công!");
       } else {
         setErrorMess(`${response.data.message}`);
       }
     } catch (error) {
-      emitApiError("Có lỗi khi lưu thiết lập. Kiểm tra lỗi màu đỏ bên dưới.");
+      console.error(error);
+      setErrorMess(SAVE_FAILED_MESSAGE);
     }
   };
 
@@ -362,7 +461,13 @@ function SetupPage() {
 
   const fetchEntries = async () => {
     try {
-      const res = await api.get(`/api/getSetupServices`);
+      const res = await api.get(`/api/getSetupServices?includeInactive=true`);
+      if (!res) {
+        // 5xx is already surfaced by the api interceptor; the tables below would
+        // otherwise look empty for no visible reason.
+        setLoadError(LOAD_FAILED_MESSAGE);
+        return;
+      }
       if (res.status === 200 && res.data !== "") {
         setTotalCourt(res.data.totalCourt);
         setCostInPerson(res.data.costInPerson);
@@ -372,8 +477,10 @@ function SetupPage() {
         setTableShuttleBalls(res.data.shuttleBalls);
         setTableServices(res.data.services);
       }
+      setLoadError(null);
     } catch (error) {
       console.error(error);
+      setLoadError(LOAD_FAILED_MESSAGE);
     }
   };
 
@@ -401,11 +508,12 @@ function SetupPage() {
     };
   }, []);
 
-  const rowSx = (deleted, selected) => ({
+  const rowSx = (deleted, selected, inactive) => ({
     cursor: deleted ? "not-allowed" : "pointer",
     textDecoration: deleted ? "line-through" : "none",
     opacity: deleted ? 0.5 : 1,
     transition: "all 0.2s ease",
+    ...(inactive && !deleted ? { color: "text.secondary" } : {}),
     ...(selected ? { bgcolor: "action.selected" } : {}),
   });
 
@@ -490,6 +598,21 @@ function SetupPage() {
           />
         </Grid>
 
+        {loadError && (
+          <Grid size={{ xs: 12 }}>
+            <Alert
+              severity="warning"
+              action={
+                <Button color="inherit" size="small" onClick={fetchEntries}>
+                  Thử lại
+                </Button>
+              }
+            >
+              {loadError} Bấm “Thử lại”.
+            </Alert>
+          </Grid>
+        )}
+
         {errorMess && (
           <Grid size={{ xs: 12 }}>
             <Typography color="error">{errorMess}</Typography>
@@ -557,12 +680,22 @@ function SetupPage() {
             <Typography variant="h6" gutterBottom>
               Danh sách Loại cầu
             </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Số lượng, giá bán và trạng thái lấy từ Quản lý kho.
+            </Typography>
             <TableContainer component={Paper} variant="outlined" ref={tableBallRef}>
               <Table size="small">
                 <TableHead>
                   <TableRow>
                     <TableCell>Loại cầu</TableCell>
-                    <TableCell>Giá ({VN_CURRENCY}/trái)</TableCell>
+                    <TableCell sx={{ width: 90 }}>Đơn vị</TableCell>
+                    <TableCell sx={{ width: 120 }} align="right">
+                      Còn lại
+                    </TableCell>
+                    <TableCell sx={{ width: 140 }} align="right">
+                      Giá bán
+                    </TableCell>
+                    <TableCell sx={{ width: 160 }}>Trạng thái</TableCell>
                     <TableCell sx={{ width: 72 }}>Xoá</TableCell>
                   </TableRow>
                 </TableHead>
@@ -570,26 +703,31 @@ function SetupPage() {
                   {tableShuttleBalls.map((ball, idx) => (
                     <TableRow
                       key={idx}
-                      hover={!ball.isDeleted}
+                      hover={!isRowPendingDelete(ball)}
                       selected={selectedBall === idx}
-                      onClick={() => !ball.isDeleted && handleBallClick(idx)}
-                      sx={rowSx(ball.isDeleted, selectedBall === idx)}
+                      onClick={() => !isRowPendingDelete(ball) && handleBallClick(idx)}
+                      sx={rowSx(isRowPendingDelete(ball), selectedBall === idx, isRowInactive(ball))}
                     >
                       <TableCell>{ball.shuttleName}</TableCell>
-                      <TableCell>{ball.costFormat}</TableCell>
+                      <TableCell>{ball.unit || "—"}</TableCell>
+                      <StockCell row={ball} />
+                      <PriceCell row={ball} />
                       <TableCell>
-                        {(selectedBall === idx || ball.isDeleted) && (
+                        <RowStatusChip row={ball} />
+                      </TableCell>
+                      <TableCell>
+                        {(selectedBall === idx || ball.isDeleted || ball.isRestored) && (
                           <IconButton
                             size="small"
-                            title={ball.isDeleted ? "Quay lại" : "Xoá"}
-                            color={ball.isDeleted ? "primary" : "error"}
+                            title={rowActionTitle(ball)}
+                            color={rowActionColor(ball)}
                             onClick={(e) => {
                               e.stopPropagation();
                               handleDeleteBall(ball, idx);
                             }}
                             disabled={deletingBall}
                           >
-                            {ball.isDeleted ? <RefreshOutlinedIcon /> : <DeleteOutlinedIcon />}
+                            {rowActionIcon(ball)}
                           </IconButton>
                         )}
                       </TableCell>
@@ -654,39 +792,54 @@ function SetupPage() {
             <Typography variant="h6" gutterBottom>
               Danh sách Dịch vụ
             </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Số lượng, giá bán và trạng thái lấy từ Quản lý kho.
+            </Typography>
             <TableContainer component={Paper} variant="outlined" ref={tableRef}>
               <Table size="small">
                 <TableHead>
                   <TableRow>
                     <TableCell>Dịch vụ</TableCell>
-                    <TableCell>Giá ({VN_CURRENCY})</TableCell>
-                    <TableCell sx={{ width: 72 }}>Xoá </TableCell>
+                    <TableCell sx={{ width: 90 }}>Đơn vị</TableCell>
+                    <TableCell sx={{ width: 120 }} align="right">
+                      Còn lại
+                    </TableCell>
+                    <TableCell sx={{ width: 140 }} align="right">
+                      Giá bán
+                    </TableCell>
+                    <TableCell sx={{ width: 160 }}>Trạng thái</TableCell>
+                    <TableCell sx={{ width: 72 }}>Xoá</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {tableServices.map((ser, index) => (
                     <TableRow
                       key={index}
-                      hover={!ser.isDeleted}
+                      hover={!isRowPendingDelete(ser)}
                       selected={selectedRow === index}
-                      onClick={() => !ser.isDeleted && handleRowClick(index)}
-                      sx={rowSx(ser.isDeleted, selectedRow === index)}
+                      onClick={() => !isRowPendingDelete(ser) && handleRowClick(index)}
+                      sx={rowSx(isRowPendingDelete(ser), selectedRow === index, isRowInactive(ser))}
                     >
                       <TableCell>{ser.serviceName}</TableCell>
-                      <TableCell>{ser.costFormat}</TableCell>
+                      <TableCell>{ser.unit || "—"}</TableCell>
+                      <StockCell row={ser} />
+                      <PriceCell row={ser} />
                       <TableCell>
-                        {(selectedRow === index || ser.isDeleted) && (
+                        <RowStatusChip row={ser} />
+                      </TableCell>
+                      <TableCell>
+                        {(selectedRow === index || ser.isDeleted || ser.isRestored) && (
                           <IconButton
                             size="small"
-                            title={ser.isDeleted ? "Quay lại" : "Xoá"}
-                            color={ser.isDeleted ? "primary" : "error"}
+                            title={rowActionTitle(ser)}
+                            color={rowActionColor(ser)}
                             onClick={(e) => {
                               e.stopPropagation();
                               handleDeleteService(ser, index);
                             }}
                             disabled={deletingRow}
                           >
-                            {ser.isDeleted ? <RefreshOutlinedIcon /> : <DeleteOutlinedIcon />}
+                            {rowActionIcon(ser)}
                           </IconButton>
                         )}
                       </TableCell>

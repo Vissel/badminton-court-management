@@ -1,5 +1,6 @@
 package com.badminton.repository;
 
+import com.badminton.entity.InventoryItem;
 import com.badminton.entity.ShuttleBall;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -18,4 +19,9 @@ public interface ShuttleBallRepository extends JpaRepository<ShuttleBall, Intege
     List<ShuttleBall> findAllByShuttleNameAndCostAndIsActiveTrue(String shuttleName, float cost);
 
     Optional<ShuttleBall> findByIsSelectedTrueAndIsActiveTrue();
+
+    /**
+     * Active catalog rows linked to one stock item (Setup ↔ inventory sync).
+     */
+    List<ShuttleBall> findAllByItemAndIsActive(InventoryItem item, boolean isActive);
 }

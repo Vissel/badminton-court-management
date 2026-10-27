@@ -15,6 +15,7 @@ import java.util.Set;
 public interface GameRepository extends JpaRepository<Game, Integer> {
     Optional<Game> findByCourtAndStateAndEndedDateIsNull(Court court, String stateString);
 
+    @Lock(LockModeType.PESSIMISTIC_READ)
     List<Game> findAllByStateInAndEndedDateIsNull(Set<String> stateIncludes);
 
     @Query("select g from Game g where g.court.courtId = ?1 and g.endedDate is null")
@@ -22,9 +23,6 @@ public interface GameRepository extends JpaRepository<Game, Integer> {
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<Game> findByCourtAndEndedDateIsNull(Court court);
-
-    @Query("select g from Game g where g.court.courtId = ?1 and g.endedDate is null and g.state = ?2")
-    Optional<Game> findByCourtIdAndEndedDateIsNullAndGameStateNotStart(int idOfCourt, String gameState);
 
     @Query("select g from Game g where g.court.courtId = ?1 and g.endedDate is null")
     List<Game> findAllByCourtIdAndEndedDateIsNull(int idOfCourt);

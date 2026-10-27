@@ -18,6 +18,7 @@ import com.badminton.requestmodel.CourtAreaDTO;
 import com.badminton.requestmodel.CourtDTO;
 import com.badminton.requestmodel.GameDTO;
 import com.badminton.requestmodel.inventory.BallConsumeInGameRequest;
+import com.badminton.requestmodel.rent.EndRentGameRequest;
 import com.badminton.response.result.*;
 import com.badminton.service.*;
 import com.badminton.service.calculator.GameExpenseCalculator;
@@ -29,6 +30,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.Assert;
@@ -57,6 +59,7 @@ public class GameServiceImpl implements GameService {
     @Autowired
     TransactionTemplate transactionTemplate;
 
+    @Transactional
     @Override
     public List<Game> findAllInprogress() {
         return gameRepository.findAllByStateInAndEndedDateIsNull(getNonFinishGameState());
@@ -242,6 +245,45 @@ public class GameServiceImpl implements GameService {
                 }
             }
         });
+    }
+
+    @Override
+    public List<String> findOpenGameStates(int courtId) {
+        return gameRepository.findAllByCourtIdAndEndedDateIsNull(courtId).stream()
+                .map(Game::getState)
+                .toList();
+    }
+
+    @Override
+    public Result<Boolean>
+    endRentGame(EndRentGameRequest request) {
+        return serviceTemple.execute(new ProcessCallback<EndRentGameRequest, Boolean>() {
+
+            @Override
+            public EndRentGameRequest getRequest() {
+                return request;
+            }
+
+            @Override
+            public void preProcess(EndRentGameRequest req) {
+                Assert.notNull(req, "End rent game request must not be null.");
+                Assert.isTrue(StringUtils.isNotBlank(req.getCourtId()), "Court id must not be empty.");
+                GameState targetState = toEndGameState(req.getGameState());
+                Assert.notNull(targetState, "Invalid game state: " + req.getGameState());
+                Assert.isTrue(ServiceUtil.isEndedState(targetState),
+                        "Only Finish or Cancel can end a rent game.");
+            }
+
+            @Override
+            public Boolean process() throws BusinessException {
+                return coreGameService.endRentGame(request.getCourtId(),
+                        toEndGameState(request.getGameState()));
+            }
+        });
+    }
+
+    private GameState toEndGameState(String gameState) {
+        return StringUtils.isBlank(gameState) ? null : GameState.getGameState(gameState);
     }
 
     @Override

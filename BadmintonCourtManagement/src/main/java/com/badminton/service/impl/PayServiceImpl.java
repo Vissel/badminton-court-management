@@ -1,11 +1,13 @@
 package com.badminton.service.impl;
 
 import com.badminton.core.payment.CorePaymentService;
+import com.badminton.core.session.CoreSession;
 import com.badminton.exception.BusinessException;
 import com.badminton.model.dto.AllocateDebitPaymentRequest;
 import com.badminton.model.dto.CreateDebitDTO;
 import com.badminton.model.dto.DebitPayDTO;
 import com.badminton.model.dto.PaymentDTO;
+import com.badminton.model.dto.SessionDTO;
 import com.badminton.model.payment.PaymentDebitModel;
 import com.badminton.requestmodel.PayRequest;
 import com.badminton.requestmodel.debit.PayDebitRequest;
@@ -22,6 +24,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.Assert;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.format.DateTimeFormatter;
+import java.time.ZoneOffset;
+import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
@@ -30,6 +36,8 @@ public class PayServiceImpl implements PayService {
     ServiceTemplate serviceTemple;
     @Autowired
     CorePaymentService corePaymentService;
+    @Autowired
+    CoreSession coreSession;
 
     @Override
     public Result<PayResponse> payToPlayer(PayRequest payRequest) {
@@ -93,8 +101,8 @@ public class PayServiceImpl implements PayService {
         dto.setPlayerName(request.getPlayerName());
         dto.setServices(request.getServiceRequests() != null
                 ? request.getServiceRequests().stream()
-                .map(ServiceConverter::convertRequestToDTO)
-                .collect(Collectors.toList())
+                        .map(ServiceConverter::convertRequestToDTO)
+                        .collect(Collectors.toList())
                 : null);
         dto.setTotalPay(request.getTotalExpense());
         dto.setPayType(request.getPayType());
@@ -115,11 +123,11 @@ public class PayServiceImpl implements PayService {
                 .note(request.getNote())
                 .listDebitPay(request.getListDebitPay() != null
                         ? request.getListDebitPay().stream()
-                        .map(debitPay -> DebitPayDTO.builder()
-                                .dateTime(debitPay.getDateTime())
-                                .payAmount(BigDecimal.valueOf(debitPay.getPayAmount()))
-                                .build())
-                        .collect(Collectors.toList())
+                                .map(debitPay -> DebitPayDTO.builder()
+                                        .dateTime(debitPay.getDateTime())
+                                        .payAmount(BigDecimal.valueOf(debitPay.getPayAmount()))
+                                        .build())
+                                .collect(Collectors.toList())
                         : null)
                 .build();
     }
@@ -131,6 +139,24 @@ public class PayServiceImpl implements PayService {
         dto.setNote(request.getNote());
         dto.setPlayerName(request.getPlayerName());
         dto.setCreatedTime(TimeUtils.convertToInstant(request.getCreatedTime()));
+
+        // Resolve the active session the same way /api/v1/debit/create does;
+        // CoreDebitService requires it to link the debt to a session.
+        Instant createdTime = dto.getCreatedTime();
+        String createdTimeStr = DateTimeFormatter.ISO_LOCAL_DATE_TIME
+                .withZone(ZoneOffset.UTC)
+                .format(createdTime);
+        List<com.badminton.entity.Session> sessions = coreSession.findSessionsByDateTime(createdTimeStr);
+        if (!sessions.isEmpty()) {
+            com.badminton.entity.Session session = sessions.getFirst();
+            SessionDTO sessionDTO = new SessionDTO();
+            sessionDTO.setSessionId(session.getSessionId());
+            sessionDTO.setFromTime(session.getFromTime());
+            sessionDTO.setToTime(session.getToTime());
+            sessionDTO.setActive(session.isActive());
+            dto.setSession(sessionDTO);
+        }
+
         return dto;
     }
 

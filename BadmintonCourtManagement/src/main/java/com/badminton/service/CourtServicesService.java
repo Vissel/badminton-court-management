@@ -2,11 +2,12 @@ package com.badminton.service;
 
 import com.badminton.BadmintonCourtManagementApplication;
 import com.badminton.constant.CommonConstant;
-import com.badminton.constant.GameState;
+import com.badminton.core.court.CoreCourtService;
+import com.badminton.core.game.CoreGameService;
 import com.badminton.core.player.CoreAvailablePlayerService;
+import com.badminton.core.inventory.ServiceItemLinker;
 import com.badminton.entity.*;
 import com.badminton.exception.BusinessException;
-import com.badminton.exception.ErrorMess;
 import com.badminton.exception.enums.ErrorCodeEnum;
 import com.badminton.model.dto.ServiceDTO;
 import com.badminton.model.dto.ShuttleBallDTO;
@@ -45,6 +46,8 @@ public class CourtServicesService {
     @Autowired
     GameService gameService;
     @Autowired
+    CoreGameService coreGameService;
+    @Autowired
     ShuttleBallServiceImpl shuttleBallService;
     @Autowired
     private UserRepository userRepo;
@@ -61,15 +64,13 @@ public class CourtServicesService {
     private AvailablePlayerRepository avaPlayerRepo;
 
     @Autowired
-    private GameRepository gameRepo;
-    @Autowired
-    private ShuttleBallRepository ballRepo;
-    @Autowired
     private CourtRepositoty courtRepo;
     @Autowired
-    private TeamRepository teamRepo;
-    @Autowired
     private InventoryService inventoryService;
+    @Autowired
+    private ServiceItemLinker serviceItemLinker;
+    @Autowired
+    private CoreCourtService coreCourtService;
 
     private static final Long NULL_OF_LONG = -1L;
     private static final int FIRST = 0;
@@ -79,13 +80,27 @@ public class CourtServicesService {
         this.badmintonCourtManagementApplication = badmintonCourtManagementApplication;
     }
 
+    @Transactional
     public List<ServiceResponse> getActiveServices() {
         List<Service> activeServices = serviceRepo.findAllByIsActive(true);
         return activeServices.stream().map(s -> {
+            InventoryItem item = linkInventoryItem(s);
             ServiceResponse response = new ServiceResponse(s);
-            enrichStock(response, s.getItem());
+            enrichStock(response, item);
             return response;
         }).collect(Collectors.toList());
+    }
+
+    /**
+     * Services created from Setup / product import are inserted without a stock
+     * item
+     * link, which silently disables stock tracking: no itemId on the picker (so the
+     * client never asks for stock) and no RETAIL_SALE movement when one is dropped
+     * on
+     * a player. Heal the link from an active inventory item carrying the same name.
+     */
+    private InventoryItem linkInventoryItem(Service service) {
+        return serviceItemLinker.resolve(service);
     }
 
     private void enrichStock(ServiceResponse response, InventoryItem item) {
@@ -350,6 +365,7 @@ public class CourtServicesService {
         AvailablePlayer availablePlayer = session.getAvailablePlayerInActiveSession(playerName);
         if (availablePlayer != null) {
             ServiceDTO serviceDTO = ServiceConverter.convertRequestToDTO(serviceRequest);
+            stampStockItem(serviceDTO);
             availablePlayer
                     .setServices(ServiceUtil.addServiceToJsonArray(availablePlayer.getCurrentServices(), serviceDTO));
             avaPlayerRepo.save(availablePlayer);
@@ -357,6 +373,25 @@ public class CourtServicesService {
             return true;
         }
         return false;
+    }
+
+    /**
+     * Put the resolved stock item and the sold quantity on the line before it is
+     * stored in the player's JSON. Without this the line keeps
+     * {@code itemId = null}, so the ledger can only resolve the item by name and
+     * later add/remove deltas compare a name key against an id key - which never
+     * cancel out and double the movements.
+     */
+    private void stampStockItem(ServiceDTO serviceDTO) {
+        if (serviceDTO.getQuantity() == null || serviceDTO.getQuantity() <= 0) {
+            serviceDTO.setQuantity(1);
+        }
+        if (serviceDTO.getItemId() != null) {
+            return;
+        }
+        serviceRepo.findBySerName(serviceDTO.getServiceName())
+                .map(serviceItemLinker::resolve)
+                .ifPresent(item -> serviceDTO.setItemId(item.getItemId()));
     }
 
     /**
@@ -396,6 +431,7 @@ public class CourtServicesService {
             List<ServiceDTO> listServiceDTO = listServiceRequest.stream()
                     .map(req -> ServiceConverter.convertRequestToDTO(req))
                     .collect(Collectors.toList());
+            listServiceDTO.forEach(this::stampStockItem);
             List<ServiceDTO> previous = ServiceUtil.convertStringToListService(availablePlayer.getCurrentServices());
             recordServiceDeltas(previous, listServiceDTO, availablePlayer.getAvaId());
             String listServiceString = ServiceUtil.buildJsonArrayStr(listServiceDTO);
@@ -442,7 +478,10 @@ public class CourtServicesService {
         if (dto.getItemId() != null) {
             return "ID:" + dto.getItemId();
         }
-        return dto.getServiceName();
+        // Lines stored before the inventory link existed only carry a name; resolve
+        // them to the same id key so an unchanged line nets to zero.
+        InventoryItem item = serviceItemLinker.findByServiceName(dto.getServiceName());
+        return item != null ? "ID:" + item.getItemId() : dto.getServiceName();
     }
 
     private ServiceDTO keyToDto(String key) {
@@ -459,130 +498,12 @@ public class CourtServicesService {
      * Determine team for player based on court area \n team 1:[player1, player2] =
      * [area_A,area_B] \n team 2:[player1, player2] = [area_C,area_D] \n
      *
-     * @param playerName
-     * @param courtDTO
-     * @return
+     * <p>
+     * The game/team rows belong to the court core, so this only delegates.
+     * </p>
      */
-    @Transactional(rollbackFor = Exception.class)
-    public Boolean addAvailablePlayerToCourtArea(String playerName, CourtDTO courtDTO, ShuttleBallDTO shuttleBallDTO)
-            throws Exception {
-        log.info(ErrorMess.ADD_PLAYER_INTO_COURT, CommonConstant.START);
-        // create game if there is new, update otherwise
-        Optional<Court> courtOpt = courtRepo.findById(Integer.valueOf(courtDTO.getCourtId()));
-        if (!courtOpt.isPresent()) {
-            return false;
-        }
-
-        // Look up any game row that is still open on this court (ended_date IS NULL),
-        // regardless of state, then validate state in Java so a stale state ('Start',
-        // 'Finish', 'Cancel' with ended_date not written) is surfaced explicitly
-        // instead of silently falling through and creating a duplicate active game.
-        Optional<Game> gameOfCourtOpt = gameRepo.findByCourtIdAndEndedDateIsNull(courtOpt.get().getCourtId());
-        Game game = null;
-        if (gameOfCourtOpt.isPresent()) {
-            game = gameOfCourtOpt.get();
-            if (!GameState.NOT_START.getValue().equals(game.getState())) {
-                log.error(ErrorMess.GAME_STATE_ERROR, courtDTO.getCourtName(), GameState.NOT_START, game.getState());
-                return false;
-            }
-        } else {
-            List<ShuttleBall> balls = ballRepo.findAllByShuttleNameAndCostAndIsActiveTrue(
-                    shuttleBallDTO.getShuttleName(), shuttleBallDTO.getShuttleCost());
-
-            if (balls.isEmpty()) {
-                log.error("No finding shuttleName:{} with cost:{}", shuttleBallDTO.getShuttleName(),
-                        shuttleBallDTO.getShuttleCost());
-                return false;
-            }
-
-            // create new game
-            game = new Game(courtOpt.get(), balls.get(0));
-            gameRepo.save(game);
-        }
-
-        // create team 1 or 2 if there is new, update otherwise
-        return addAvailablePlayerIntoGame(game, playerName, courtDTO.getCourtAreas().getFirst().getArea());
-    }
-
-    private boolean addAvailablePlayerIntoGame(Game game, String playerName, String area) {
-        try {
-            Team team = getTeam(game, area);
-
-            Optional<AvailablePlayer> optPlayer = avaPlayerRepo
-                    .findAvailablePlayerInSessionByNameAndLeaveTimeNull(session.findListCurrentSession().getFirst(),
-                            playerName);
-            if (!optPlayer.isPresent()) {
-                throw new BusinessException(ErrorCodeEnum.PLAYER_NOT_FOUND, "Available player is not found.");
-            }
-            AvailablePlayer player = optPlayer.get();
-            // Determine team for
-            switch (area) {
-                case GameState.Player.PLAYER_A, GameState.Player.PLAYER_C:
-                    team.setPlayerOne(player);
-                    log.info("added {} to player one.", playerName);
-                    break;
-                case GameState.Player.PLAYER_B, GameState.Player.PLAYER_D:
-                    team.setPlayerTwo(player);
-                    log.info("added {} to player two.", playerName);
-                    break;
-                default:
-            }
-            boolean updateGame = team.getTeamId() == 0;
-            teamRepo.save(team);
-            log.info("Saved {} to tbl_team DB.", playerName);
-            // update new team to game
-            // game.getTeamOne is null or team.getTeamTwo is null
-            if (updateGame) {
-
-                if (areaOfTeamOne(area)) {
-                    game.setTeamOne(team);
-                } else {
-                    game.setTeamTwo(team);
-                }
-                gameRepo.save(game);
-                log.info("Saved {} to tbl_game DB.", team.getTeamId());
-            }
-
-            return true;
-        } catch (NullPointerException e) {
-            log.error(ErrorMess.ADD_PLAYER_INTO_COURT, " has null exception:{}", e.getMessage());
-        } catch (BusinessException e) {
-            log.error(e.getErrorCodeEnum().getName());
-        } finally {
-            log.info(ErrorMess.ADD_PLAYER_INTO_COURT, CommonConstant.END);
-        }
-        return false;
-    }
-
-    private Team getTeam(Game game, String area) {
-        Team team = null;
-        if (game.getTeamOne() != null && areaOfTeamOne(area)) {
-            team = game.getTeamOne();
-            log.info("Team one...");
-        } else if (game.getTeamTwo() != null && !areaOfTeamOne(area)) {
-            team = game.getTeamTwo();
-            log.info("Team two...");
-        } else {
-            team = new Team();
-            team.setGame(game);
-            log.info("Init new Team...");
-        }
-        return team;
-    }
-
-    private boolean areaOfTeamOne(String area) {
-        boolean isTeamOne = true;
-        // Determine team for
-        switch (area) {
-            case GameState.Player.PLAYER_A, GameState.Player.PLAYER_B:
-                break;
-            case GameState.Player.PLAYER_C, GameState.Player.PLAYER_D:
-                isTeamOne = false;
-                break;
-            default:
-
-        }
-        return isTeamOne;
+    public Boolean addAvailablePlayerToCourtArea(String playerName, CourtDTO courtDTO, ShuttleBallDTO shuttleBallDTO) {
+        return coreCourtService.addAvailablePlayerToCourtArea(playerName, courtDTO, shuttleBallDTO);
     }
 
     private long getAvaIdFromPlayer(AvailablePlayer avaPlayer) {
@@ -599,39 +520,13 @@ public class CourtServicesService {
         return !name.matches(harmfulPattern);
     }
 
+    /**
+     * Free the requested court area; the court core owns the game/team rows and
+     * drops the court's
+     * game once no player is left on it.
+     */
     public Boolean removeAvailablePlayerFromCourtArea(CourtDTO courtDTO) {
-
-        // 1. Get game by courtid
-        Optional<Game> gameOpt = gameRepo.findByCourtIdAndEndedDateIsNull(Integer.valueOf(courtDTO.getCourtId()));
-        if (!gameOpt.isPresent() || !GameState.NOT_START.getValue().equals(gameOpt.get().getState())) {
-            return Boolean.FALSE;
-        }
-
-        // 2. Determine Team by areaKey && Remove player from team.
-        Team team;
-        final String area = courtDTO.getCourtAreas().getFirst().getArea();
-        switch (area) {
-            case GameState.Player.PLAYER_A, GameState.Player.PLAYER_B:
-                team = gameOpt.get().getTeamOne();
-                if (GameState.Player.PLAYER_A.equals(area)) {
-                    team.setPlayerOne(null);
-                } else {
-                    team.setPlayerTwo(null);
-                }
-                break;
-            case GameState.Player.PLAYER_C, GameState.Player.PLAYER_D:
-                team = gameOpt.get().getTeamTwo();
-                if (GameState.Player.PLAYER_C.equals(area)) {
-                    team.setPlayerOne(null);
-                } else {
-                    team.setPlayerTwo(null);
-                }
-                break;
-            default:
-        }
-        // 3. Save to DB
-        gameRepo.save(gameOpt.get());
-        return Boolean.TRUE;
+        return coreCourtService.removeAvailablePlayerFromCourtArea(courtDTO);
     }
 
     @Transactional
@@ -658,5 +553,11 @@ public class CourtServicesService {
                 });
             }
         });
+    }
+
+    public Boolean isCourtReadyForRent(int courtId) {
+        return courtRepo.findById(courtId).map(court -> {
+            return coreGameService.isGameNotStartInCourt(court);
+        }).orElse(false);
     }
 }

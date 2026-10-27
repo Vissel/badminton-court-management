@@ -30,8 +30,9 @@ class UserServiceImplTest {
     private final RoleRepository roleRepository = mock(RoleRepository.class);
     private final AppCache appCache = new AppCache();
     private final RsaKeyService rsaKeyService = mock(RsaKeyService.class);
+    private final JwtService jwtService = mock(JwtService.class);
     private final UserServiceImpl service = new UserServiceImpl(
-            encoder, playerRepository, appUserRepository, roleRepository, appCache, rsaKeyService);
+            encoder, playerRepository, appUserRepository, roleRepository, appCache, rsaKeyService, jwtService);
 
     @AfterEach
     void clearContext() {

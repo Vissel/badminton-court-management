@@ -20,6 +20,8 @@ import Snackbar from "@mui/material/Snackbar";
 import Alert from "@mui/material/Alert";
 import CircularProgress from "@mui/material/CircularProgress";
 import Tooltip from "@mui/material/Tooltip";
+import Checkbox from "@mui/material/Checkbox";
+import FormControlLabel from "@mui/material/FormControlLabel";
 import DownloadIcon from "@mui/icons-material/Download";
 import UploadIcon from "@mui/icons-material/Upload";
 import AddShoppingCartIcon from "@mui/icons-material/AddShoppingCart";
@@ -33,24 +35,29 @@ import PurchaseDialog from "./dialog/PurchaseDialog";
 import StockIntakeDialog from "./dialog/StockIntakeDialog";
 import StockLedgerDialog from "./dialog/StockLedgerDialog";
 import StockAdjustDialog from "./dialog/StockAdjustDialog";
-import { listInventoryItems, exportInventory } from "../api/inventoryApi";
-import { formatVND } from "./MoneyUtils";
+import { listInventoryItems, exportInventory, updateInventoryItem } from "../api/inventoryApi";
+import { VN_CURRENCY, formatVND, rawNumber } from "./MoneyUtils";
 import { normalizeSearchText } from "./TextUtils";
 
 // No badminton icon exists in @mui/icons-material - use the shuttlecock emoji.
 const TAB_TYPES = {
   SHUTTLE_BALL: { label: ITEM_TYPES.SHUTTLE_BALL, icon: "🏸" },
   GOODS: { label: ITEM_TYPES.GOODS, icon: <FastfoodIcon fontSize="small" /> },
+  ALL: { label: "Tất cả", icon: "📦" },
 };
 const TAB_KEYS = Object.keys(TAB_TYPES);
 
 export default function InventoryPage() {
   const [itemsByType, setItemsByType] = useState({});
   const [activeType, setActiveType] = useState("SHUTTLE_BALL");
-  const [searchByTab, setSearchByTab] = useState({ SHUTTLE_BALL: "", GOODS: "" });
+  const [searchByTab, setSearchByTab] = useState({ SHUTTLE_BALL: "", GOODS: "", ALL: "" });
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
   const [dialog, setDialog] = useState({ type: null, item: null });
+  const [priceEditId, setPriceEditId] = useState(null);
+  const [priceDraft, setPriceDraft] = useState("");
+  const [savingPrice, setSavingPrice] = useState(false);
+  const [missingPriceOnly, setMissingPriceOnly] = useState(false);
 
   const showToast = useCallback((message, severity = "success") => {
     setToast({ message, severity });
@@ -60,7 +67,8 @@ export default function InventoryPage() {
     async (itemType) => {
       setLoading(true);
       try {
-        const res = await listInventoryItems(itemType);
+        // "ALL" means fetch all items (no itemType filter)
+        const res = await listInventoryItems(itemType === "ALL" ? null : itemType);
         const body = res?.data;
         if (body?.success && Array.isArray(body.data)) {
           setItemsByType((prev) => ({ ...prev, [itemType]: body.data }));
@@ -103,9 +111,62 @@ export default function InventoryPage() {
 
   const items = itemsByType[activeType] || [];
   const searchQuery = searchByTab[activeType] || "";
-  const visibleItems = items.filter((i) =>
-    normalizeSearchText(i.itemName).includes(normalizeSearchText(searchQuery))
+  const visibleItems = items.filter(
+    (i) =>
+      (!missingPriceOnly || i.retailPrice == null) &&
+      normalizeSearchText(i.itemName).includes(normalizeSearchText(searchQuery))
   );
+  const isAllMode = activeType === "ALL";
+
+  const startPriceEdit = (item) => {
+    setPriceEditId(item.itemId);
+    setPriceDraft(item.retailPrice != null ? formatVND(item.retailPrice) : "");
+  };
+
+  // Inline Giá bán edit: same PUT as the item dialog, so the backend pushes the
+  // new price into the Setup page (service.cost) as well.
+  const handlePriceSave = async (item) => {
+    if (priceEditId !== item.itemId || savingPrice) return;
+    const raw = rawNumber(priceDraft);
+    const current = item.retailPrice != null ? Number(item.retailPrice) : null;
+    if (priceDraft === "" || raw === current) {
+      setPriceEditId(null);
+      return;
+    }
+    setSavingPrice(true);
+    try {
+      const pkg = item.packageUnit || "";
+      const res = await updateInventoryItem(item.itemId, {
+        itemName: item.itemName,
+        itemType: item.itemType,
+        unit: item.unit || "",
+        packageUnit: pkg,
+        ...(pkg && item.unitsPerPackage
+          ? { unitsPerPackage: item.unitsPerPackage }
+          : {}),
+        retailPrice: raw,
+        isActive: item.active,
+      });
+      if (res?.data?.success && res.data.data) {
+        const updated = res.data.data;
+        setItemsByType((prev) => ({
+          ...prev,
+          [activeType]: (prev[activeType] || []).map((it) =>
+            it.itemId === updated.itemId ? updated : it
+          ),
+        }));
+        showToast("Cập nhật Giá bán thành công!");
+        setPriceEditId(null);
+      } else {
+        showToast(res?.data?.errorMessage || "Cập nhật Giá bán thất bại.", "error");
+      }
+    } catch (err) {
+      console.error("Update retail price failed", err);
+      showToast("Cập nhật Giá bán thất bại.", "error");
+    } finally {
+      setSavingPrice(false);
+    }
+  };
 
   return (
     <Box sx={{ maxWidth: 1200, mx: "auto", p: { xs: 1, sm: 2 } }}>
@@ -194,7 +255,7 @@ export default function InventoryPage() {
         </ToggleButtonGroup>
         <TextField
           size="small"
-          placeholder={`Tìm ${TAB_TYPES[activeType].label.toLowerCase()}...`}
+          placeholder={`Tìm ${isAllMode ? "mặt hàng" : TAB_TYPES[activeType].label.toLowerCase()}...`}
           value={searchQuery}
           onChange={(e) =>
             setSearchByTab((prev) => ({ ...prev, [activeType]: e.target.value }))
@@ -223,6 +284,7 @@ export default function InventoryPage() {
               <TableRow>
                 <TableCell sx={{ width: 50 }}>#</TableCell>
                 <TableCell>Tên mặt hàng</TableCell>
+                {isAllMode && <TableCell>Loại</TableCell>}
                 <TableCell>Thời gian nhập hàng</TableCell>
                 {activeType === "SHUTTLE_BALL" ? (
                   <>
@@ -276,6 +338,16 @@ export default function InventoryPage() {
                         )}
                       </Stack>
                     </TableCell>
+                    {isAllMode && (
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          label={item.itemType === "SHUTTLE_BALL" ? "Cầu lông" : "Hàng hoá"}
+                          color={item.itemType === "SHUTTLE_BALL" ? "default" : "primary"}
+                          variant="outlined"
+                        />
+                      </TableCell>
+                    )}
                     <TableCell>
                       {item.lastPurchaseDate
                         ? item.lastPurchaseDate.split("-").reverse().join("/")
@@ -293,7 +365,60 @@ export default function InventoryPage() {
                       {item.stockOnHand} {item.unit}
                     </TableCell>
                     <TableCell align="right">
-                      {item.retailPrice != null ? formatVND(item.retailPrice) : "-"} / {item.unit}
+                      {priceEditId === item.itemId ? (
+                        <TextField
+                          size="small"
+                          autoFocus
+                          value={priceDraft}
+                          disabled={savingPrice}
+                          onChange={(e) =>
+                            setPriceDraft(
+                              e.target.value === ""
+                                ? ""
+                                : formatVND(rawNumber(e.target.value))
+                            )
+                          }
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handlePriceSave(item);
+                            if (e.key === "Escape") setPriceEditId(null);
+                          }}
+                          onBlur={() => handlePriceSave(item)}
+                          slotProps={{
+                            input: {
+                              endAdornment: (
+                                <InputAdornment position="end">
+                                  {VN_CURRENCY}
+                                </InputAdornment>
+                              ),
+                            },
+                          }}
+                          sx={{ width: 150 }}
+                        />
+                      ) : (
+                        <Tooltip title="Nhấn để sửa Giá bán (dùng cho trang Cài đặt)">
+                          <Stack
+                            direction="row"
+                            spacing={0.5}
+                            justifyContent="flex-end"
+                            alignItems="center"
+                            onClick={() => startPriceEdit(item)}
+                            sx={{ cursor: "pointer" }}
+                          >
+                            {item.retailPrice != null ? (
+                              <Typography variant="body2">
+                                {formatVND(item.retailPrice)} / {item.unit}
+                              </Typography>
+                            ) : (
+                              <Chip
+                                size="small"
+                                color="warning"
+                                variant="outlined"
+                                label="Thiếu giá bán"
+                              />
+                            )}
+                          </Stack>
+                        </Tooltip>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Tooltip title="Lịch sử kho">
@@ -330,14 +455,16 @@ export default function InventoryPage() {
               {visibleItems.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={activeType === "SHUTTLE_BALL" ? 8 : 7}
+                    colSpan={isAllMode || activeType === "SHUTTLE_BALL" ? 8 : 7}
                     align="center"
                     sx={{ py: 4 }}
                   >
                     <Typography color="text.secondary">
                       {searchQuery
                         ? `Không tìm thấy "${searchQuery}".`
-                        : `Chưa có ${TAB_TYPES[activeType].label.toLowerCase()} nào. Nhấn "Nhập kho" hoặc "Nhập file" để bắt đầu.`}
+                        : isAllMode
+                          ? `Chưa có mặt hàng nào. Nhấn "Nhập kho" hoặc "Nhập file" để bắt đầu.`
+                          : `Chưa có ${TAB_TYPES[activeType].label.toLowerCase()} nào. Nhấn "Nhập kho" hoặc "Nhập file" để bắt đầu.`}
                     </Typography>
                   </TableCell>
                 </TableRow>

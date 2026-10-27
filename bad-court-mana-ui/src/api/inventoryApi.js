@@ -64,7 +64,11 @@ export const checkStockItem = ({ itemId, item, itemType } = {}) => {
   if (itemId != null) params.set("itemId", itemId);
   if (item) params.set("item", item);
   if (itemType) params.set("itemType", itemType);
-  return api.get(`/api/inventory/checkStock?${params.toString()}`);
+  // Background refresh: a row that is not linked to inventory (400 "Item not
+  // found") is an expected answer, so never surface a toast for it.
+  return api.get(`/api/inventory/checkStock?${params.toString()}`, {
+    skipErrorToast: true,
+  });
 };
 
 export const recordPurchase = (request) =>

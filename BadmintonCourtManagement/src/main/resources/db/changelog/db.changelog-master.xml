@@ -58,4 +58,10 @@
     <changeSet id="028" author="devin">
         <sqlFile path="db/changelog/billing-einvoice-error.sql"/>
     </changeSet>
+    <changeSet id="029" author="thach">
+        <sqlFile path="db/changelog/rent-by-time-actual-fee.sql"/>
+    </changeSet>
+    <changeSet id="030" author="thach">
+        <sqlFile path="db/changelog/service-item-relink.sql"/>
+    </changeSet>
 </databaseChangeLog>

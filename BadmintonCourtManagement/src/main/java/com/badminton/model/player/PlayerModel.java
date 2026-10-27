@@ -1,4 +1,4 @@
-package com.badminton.model;
+package com.badminton.model.player;
 
 import lombok.Data;
 

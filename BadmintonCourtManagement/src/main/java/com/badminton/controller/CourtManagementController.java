@@ -3,9 +3,12 @@ package com.badminton.controller;
 import com.badminton.model.dto.ServiceDTO;
 import com.badminton.model.dto.ShuttleBallDTO;
 import com.badminton.requestmodel.*;
+import com.badminton.requestmodel.rent.CancelRentByTimeRequest;
+import com.badminton.requestmodel.rent.EndRentByTimeRequest;
+import com.badminton.requestmodel.rent.RentByTimeRequest;
 import com.badminton.response.CourtManagementResponse;
-import com.badminton.response.RentByTimeResponse;
 import com.badminton.response.ServiceResponse;
+import com.badminton.response.rentbytime.RentByTimeResponse;
 import com.badminton.response.result.Result;
 import com.badminton.response.result.ShuttleBallResponse;
 import com.badminton.service.*;
@@ -153,6 +156,10 @@ public class CourtManagementController {
     public ResponseEntity<Boolean> addAvaPlayerToCourt(@RequestBody GameDTO gameDTO) throws Exception {
         Boolean res = courtService.addAvailablePlayerToCourtArea(gameDTO.getPlayerName(), gameDTO.getCourt(),
                 gameDTO.getShuttleBalls().getFirst());
+        // The boolean is the only signal that the court did not get its game row, and a rent
+        // on that court is refused afterwards, so log it here where the chain starts.
+        log.info("Add player {} into court {} returns {}", gameDTO.getPlayerName(),
+                gameDTO.getCourt().getCourtId(), res);
         // Error cases are not handled
         return ResponseEntity.ok(res);
     }
@@ -161,6 +168,9 @@ public class CourtManagementController {
     public ResponseEntity<Boolean> removePlayerFromCourtArea(@RequestBody CourtDTO courtDTO) {
         if (CommonUtil.checkValidCourt(courtDTO)) {
             Boolean res = courtService.removeAvailablePlayerFromCourtArea(courtDTO);
+            // Removing the last player also deletes the court's game row, so the outcome matters.
+            log.info("Remove player from area {} of court {} returns {}",
+                    courtDTO.getCourtAreas().getFirst().getArea(), courtDTO.getCourtId(), res);
             // Error cases are not handled
             return ResponseEntity.ok(res);
         }
@@ -195,16 +205,15 @@ public class CourtManagementController {
         return ResponseEntity.ok().body(res);
     }
 
-    @PostMapping(value = "/payRentByTime")
-    public ResponseEntity<RentByTimeResponse> payRentByTime(@RequestParam int rentId,
-                                                            @RequestParam(required = false) Float customFee) {
-        RentByTimeResponse res = rentByTimeService.payRentByTime(rentId, customFee);
+    @PostMapping(value = "/endRentByTime")
+    public ResponseEntity<RentByTimeResponse> endRentByTime(@RequestBody EndRentByTimeRequest endRentByTimeRequest) {
+        RentByTimeResponse res = rentByTimeService.finishRentByTime(endRentByTimeRequest);
         return ResponseEntity.ok().body(res);
     }
 
     @PostMapping(value = "/cancelRentByTime")
-    public ResponseEntity<RentByTimeResponse> cancelRentByTime(@RequestParam int rentId) {
-        RentByTimeResponse res = rentByTimeService.cancelRentByTime(rentId);
+    public ResponseEntity<RentByTimeResponse> cancelRentByTime(@RequestBody CancelRentByTimeRequest cancelRentByTimeRequest) {
+        RentByTimeResponse res = rentByTimeService.cancelRentByTime(cancelRentByTimeRequest);
         return ResponseEntity.ok().body(res);
     }
 

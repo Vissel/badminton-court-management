@@ -40,7 +40,13 @@ public interface InventoryService {
      * otherwise by (itemName, itemType).
      */
     Result<StockCheckResponse> checkStock(Integer itemId, String itemName,
-                                          InventoryItemType itemType);
+            InventoryItemType itemType);
+
+    /**
+     * Active GOODS item carrying the given name, or null. Catalog services are
+     * created without a stock item link, so callers use this to heal the link.
+     */
+    InventoryItem findActiveGoodsItemByName(String itemName);
 
     /**
      * Creates an item (itemId null) or updates name/unit/retailPrice/isActive.

@@ -37,6 +37,11 @@ public class PurchaseRequest {
      */
     private BigDecimal unitCost;
 
+    /**
+     * Optional retail price per base unit; when present it updates the item.
+     */
+    private BigDecimal retailPrice;
+
     private String supplier;
 
     private String note;

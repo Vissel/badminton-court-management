@@ -12,4 +12,11 @@ public class ServiceConverter {
         dto.setQuantity(request.getQuantity());
         return dto;
     }
+
+    public static ServiceRequest buildServiceRequest(String serName, float cost) {
+        ServiceRequest serviceRequest = new ServiceRequest();
+        serviceRequest.setServiceName(serName);
+        serviceRequest.setCost(String.valueOf(cost));
+        return serviceRequest;
+    }
 }

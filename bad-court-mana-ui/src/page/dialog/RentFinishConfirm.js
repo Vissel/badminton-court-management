@@ -7,6 +7,7 @@ import Button from "@mui/material/Button";
 import Typography from "@mui/material/Typography";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
+import Tooltip from "@mui/material/Tooltip";
 import DraggableResizablePaper, { DIALOG_DRAG_HANDLE } from "./DraggableResizablePaper";
 
 const pad2 = (n) => String(n).padStart(2, "0");
@@ -17,16 +18,73 @@ const formatISOToHM = (iso) => {
     return `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
 };
 
+/** ISO string -> minutes since midnight, using UTC fields (backend wall-clock-as-UTC convention). */
+const isoToMin = (iso) => {
+    if (!iso) return null;
+    const d = new Date(iso);
+    return d.getUTCHours() * 60 + d.getUTCMinutes();
+};
+
+/** Minutes between two clock-minute values (positive; wraps overnight). */
+const diffMin = (a, b) => {
+    let x = b - a;
+    if (x < 0) x += 24 * 60;
+    return x;
+};
+
+/** ISO string for the current wall-clock time, matching the backend's UTC+7-as-UTC convention. */
+const nowWallClockISO = () => {
+    const now = new Date();
+    const d = new Date();
+    d.setUTCHours(now.getHours(), now.getMinutes(), 0, 0);
+    return d.toISOString();
+};
+
 const formatVND = (n) =>
     Number(n).toLocaleString("it-IT", { style: "currency", currency: "VND" });
+
+/** Decimal hours -> "Xh Ym" (omitting zero parts). */
+const formatHoursMinutes = (hours) => {
+    if (!hours) return "";
+    const totalMin = Math.round(hours * 60);
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    if (h && m) return `${h}h ${m}m`;
+    if (h) return `${h}h`;
+    return `${m}m`;
+};
+
+/** Compute the settled end time (now), prorated court fee, and elapsed hours for a rental. */
+const computeSettleNow = (rental) => {
+    const iso = nowWallClockISO();
+    const sMin = isoToMin(rental?.startTime);
+    const bookedMin = isoToMin(rental?.endTime);
+    const nowMin = isoToMin(iso);
+    let fee = rental?.fee || 0;
+    let numTime = rental?.numTime || 0;
+    if (sMin != null && bookedMin != null && nowMin != null) {
+        const booked = diffMin(sMin, bookedMin);
+        const elapsed = diffMin(sMin, nowMin);
+        if (booked > 0) {
+            fee = Math.round(((rental.fee || 0) * elapsed) / booked);
+            numTime = Math.round((elapsed / 60) * 100) / 100;
+        }
+    }
+    return { iso, fee, numTime };
+};
 
 const RentFinishConfirm = ({ show, rental, onConfirm, onExit }) => {
     const [shuttleList, setShuttleList] = useState([]);
     const [courtFee, setCourtFee] = useState(0);
+    const [endISO, setEndISO] = useState(null);
+    const [numTime, setNumTime] = useState(0);
 
     useEffect(() => {
         if (show && rental) {
-            setCourtFee(rental.fee || 0);
+            const { iso, fee, numTime: settledNumTime } = computeSettleNow(rental);
+            setCourtFee(fee);
+            setEndISO(iso);
+            setNumTime(settledNumTime);
             if (rental.shuttleBalls) {
                 setShuttleList(
                     rental.shuttleBalls.map((b) => ({
@@ -43,6 +101,15 @@ const RentFinishConfirm = ({ show, rental, onConfirm, onExit }) => {
         const n = parseFloat(val);
         setCourtFee(isNaN(n) || n < 0 ? 0 : n);
     };
+
+    /** Override the fee field with the originally-booked rent-by-time amount. */
+    const handleUseOriginal = () => {
+        setCourtFee(rental?.fee || 0);
+        setEndISO(rental?.endTime || null);
+        setNumTime(rental?.numTime || 0);
+    };
+
+    const originalMoney = rental?.fee || 0;
 
     const handleQuantityChange = (idx, val) => {
         const n = parseInt(val, 10);
@@ -87,11 +154,11 @@ const RentFinishConfirm = ({ show, rental, onConfirm, onExit }) => {
                         </Stack>
                         <Stack direction="row" spacing={1} alignItems="center">
                             <Typography fontWeight={700} sx={{ minWidth: 100 }}>Kết thúc:</Typography>
-                            <Typography>{formatISOToHM(rental.endTime)}</Typography>
+                            <Typography sx={{ flex: 1 }}>{formatISOToHM(endISO)}</Typography>
                         </Stack>
                         <Stack direction="row" spacing={1} alignItems="center">
                             <Typography fontWeight={700} sx={{ minWidth: 100 }}>Số giờ:</Typography>
-                            <Typography>{rental.numTime ? `${rental.numTime}h` : ""}</Typography>
+                            <Typography>{formatHoursMinutes(numTime)}</Typography>
                         </Stack>
                         <Stack direction="row" spacing={1} alignItems="center">
                             <Typography fontWeight={700} sx={{ minWidth: 100 }}>Phí sân:</Typography>
@@ -103,6 +170,23 @@ const RentFinishConfirm = ({ show, rental, onConfirm, onExit }) => {
                                 onChange={(e) => handleFeeChange(e.target.value)}
                                 sx={{ flex: 1 }}
                             />
+                            {originalMoney > 0 && (
+                                <Tooltip title="Bấm để dùng phí gốc của dịch vụ thuê theo giờ" placement="top">
+                                    <Typography
+                                        onClick={handleUseOriginal}
+                                        sx={{
+                                            minWidth: 96,
+                                            textAlign: "right",
+                                            cursor: "pointer",
+                                            color: "primary.main",
+                                            textDecoration: "underline dotted",
+                                            "&:hover": { color: "primary.dark" },
+                                        }}
+                                    >
+                                        Gốc: {formatVND(originalMoney)}
+                                    </Typography>
+                                </Tooltip>
+                            )}
                         </Stack>
 
                         {/* Editable shuttle ball list — same pattern as GameDialog */}
@@ -129,7 +213,7 @@ const RentFinishConfirm = ({ show, rental, onConfirm, onExit }) => {
                         {/* Total fee */}
                         <Stack direction="row" spacing={1} alignItems="center">
                             <Typography fontWeight={700} sx={{ minWidth: 100 }}>Tổng cộng:</Typography>
-                            <Typography fontWeight={700} color="primary">
+                            <Typography fontWeight={900} color="primary">
                                 {formatVND(totalFee)}
                             </Typography>
                         </Stack>
@@ -140,7 +224,7 @@ const RentFinishConfirm = ({ show, rental, onConfirm, onExit }) => {
                 <Button variant="outlined" color="inherit" onClick={onExit}>
                     Tắt
                 </Button>
-                <Button variant="contained" color="success" onClick={() => onConfirm({ courtFee, shuttleList })}>
+                <Button variant="contained" color="success" onClick={() => onConfirm({ courtFee, shuttleList, endTime: endISO, numTime })}>
                     Xác nhận kết thúc
                 </Button>
             </DialogActions>

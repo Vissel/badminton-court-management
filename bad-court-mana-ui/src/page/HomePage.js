@@ -39,6 +39,17 @@ export const TYPE = {
   CANCEL: "CANCEL",
 };
 export const ADVANCE_SERVICE_NAME = "Trả trước";
+
+/**
+ * ISO-8601 string for the current wall clock, carrying Vietnam local digits in UTC
+ * fields (the backend's "wall clock kept as UTC" convention). Same as the rent dialogs.
+ */
+const nowWallClockISO = () => {
+  const now = new Date();
+  const d = new Date();
+  d.setUTCHours(now.getHours(), now.getMinutes(), 0, 0);
+  return d.toISOString();
+};
 /* HomePage */
 function HomePage() {
   const [activeCourts, setActiveCourts] = useState([]);
@@ -79,6 +90,12 @@ function HomePage() {
   const [ballOptions, setBallOptions] = useState([]);
   const [selectedBallVO, setSelectedBallVO] = useState("");
   const [services, setServices] = useState([]);
+  // Latest service options: the react-dnd drop targets keep the handler captured
+  // when the player was mounted, so reading the state directly can be stale.
+  const servicesRef = useRef([]);
+  useEffect(() => {
+    servicesRef.current = services;
+  }, [services]);
   const [costInPerson, setCostInPerson] = useState();
   const [rentByTime, setRentByTime] = useState();
   const [availablePlayers, setAvailablePlayers] = useState([]);
@@ -434,18 +451,31 @@ function HomePage() {
   };
 
   // Step 2: Actual API call happens after user confirms in the dialog
-  const handleConfirmFinishRent = async ({ courtFee, shuttleList }) => {
+  const handleConfirmFinishRent = async ({ courtFee, shuttleList, endTime, numTime }) => {
     const rental = rentalInfoMap[finishRentCourtId];
     if (!rental) return;
     try {
-      const res = await api.post(
-        `/court-mana/payRentByTime?rentId=${rental.id}`
-        // ,
-        // {
-        //   courtFee,
-        //   shuttleBalls: shuttleList,
-        // }
-      );
+      // Single billable player: whoever is on the court now, else the renter on the rental.
+      const playerName = findPlayerNameFromCourt(finishRentCourtId) || rental.playerName;
+      // Same List<ShuttleBallDTO> shape as applyRentByTime: the dialog keeps the
+      // quantities under cost/quantity, the DTO expects shuttleCost/ballQuantity.
+      const shuttleBalls = (shuttleList || [])
+        .filter((s) => s.quantity > 0)
+        .map((s) => ({
+          shuttleName: s.shuttleName,
+          shuttleCost: s.cost,
+          ballQuantity: s.quantity,
+        }));
+      const payload = {
+        rentId: rental.id,
+        courtId: finishRentCourtId,
+        playerName,
+        endedTime: endTime,
+        numTime,
+        actualFee: courtFee,
+        shuttleBalls,
+      };
+      const res = await api.post("/court-mana/endRentByTime", payload);
       if (responseSuccess(res)) {
         setRentalInfoMap((prev) => {
           const next = { ...prev };
@@ -472,7 +502,11 @@ function HomePage() {
     if (!rental) return;
     if (!window.confirm("Bạn có chắc muốn huỷ thuê sân?")) return;
     try {
-      const res = await api.post(`/court-mana/cancelRentByTime?rentId=${rental.id}`);
+      const res = await api.post("/court-mana/cancelRentByTime", {
+        rentId: rental.id,
+        courtId: String(courtId),
+        endedTime: nowWallClockISO(),
+      });
       if (responseSuccess(res)) {
         setRentalInfoMap((prev) => {
           const next = { ...prev };
@@ -807,22 +841,52 @@ function HomePage() {
     setShowDialog(true);
   };
   // After a successful add/update/remove, re-check stock for the affected
-  // items and patch the service options in place - no page reload needed.
-  const refreshItemStock = useCallback(async (itemIds) => {
-    const ids = [...new Set((itemIds || []).filter((id) => id != null))];
-    if (ids.length === 0) return;
+  // services and patch the service options in place - no page reload needed.
+  // Targets are { itemId } for catalog rows linked to inventory, or
+  // { serviceName } so the backend resolves the item by name.
+  const refreshItemStock = useCallback(async (targets) => {
+    const entries = [];
+    const seen = new Set();
+    (targets || []).forEach((t) => {
+      const key =
+        t?.itemId != null
+          ? `id:${t.itemId}`
+          : t?.serviceName
+            ? `name:${t.serviceName}`
+            : null;
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      entries.push(t);
+    });
+    if (entries.length === 0) return;
     const results = await Promise.all(
-      ids.map((id) => checkStockItem({ itemId: id }).catch(() => null))
+      entries.map((t) =>
+        checkStockItem(
+          t.itemId != null
+            ? { itemId: t.itemId }
+            : { item: t.serviceName, itemType: "GOODS" }
+        )
+          .then((res) => (res?.data?.success ? res.data.data : null))
+          .catch(() => null)
+      )
     );
+    const found = new Map();
+    results.forEach((data, index) => {
+      if (!data) return;
+      found.set(`id:${data.itemId}`, data);
+      const { serviceName } = entries[index];
+      if (serviceName) found.set(`name:${serviceName}`, data);
+    });
+    if (found.size === 0) return;
     setServices((prev) =>
       prev.map((s) => {
-        const hit = results.find(
-          (r) => r?.data?.success && r.data.data?.itemId === s.itemId
-        );
-        if (!hit) return s;
-        const d = hit.data.data;
+        const d = found.get(`id:${s.itemId}`) || found.get(`name:${s.serviceName}`);
+        if (!d) return s;
         return {
           ...s,
+          // Learn the link when it was resolved by name, so the option becomes
+          // stock-aware (badge + drag guard) from the next refresh on.
+          itemId: s.itemId ?? d.itemId,
           stockOnHand: d.stockOnHand,
           lowStock: d.lowStock,
           outOfStock: d.outOfStock,
@@ -832,8 +896,6 @@ function HomePage() {
   }, []);
 
   const saveServiceToPlayer = async (playerName, serviceName, cost, meta = {}) => {
-    // eslint-disable-next-line no-console
-    console.log("[checkStock] saveServiceToPlayer ENTER:", playerName, serviceName, meta);
     if (!playerName) return;
     const response = await api
       .post(`/court-mana/addServiceToPlayer?playerName=${playerName}`, {
@@ -845,15 +907,20 @@ function HomePage() {
       })
       .catch(() => null);
     // Once the add succeeds, re-check stock for the linked inventory item and
-    // patch the service option's remaining count. Resolve the item from the
-    // dropped payload, falling back to the service list by name so the check
-    // still fires when the drag item didn't carry an itemId.
-    if (responseSuccess(response)) {
-      const itemId =
-        meta.itemId ?? services.find((s) => s.serviceName === serviceName)?.itemId;
-      // eslint-disable-next-line no-console
-      console.log("[checkStock] service:", serviceName, "resolved itemId:", itemId);
-      if (itemId != null) refreshItemStock([itemId]);
+    // patch the service option's remaining count. Any 2xx counts as success: the
+    // endpoint answers with a bare boolean, so the body is not part of the contract.
+    if (response?.status >= 200 && response.status < 300) {
+      const option = servicesRef.current.find((s) => s.serviceName === serviceName);
+      // meta carries the itemId from the dragged card, falling back to the option
+      // that is currently loaded (the drag payload can predate a stock refresh).
+      const itemId = meta.itemId ?? option?.itemId;
+      if (itemId != null) {
+        refreshItemStock([{ itemId, serviceName }]);
+      } else if (option) {
+        // Catalog row without an inventory link yet: let the backend resolve the
+        // item by name so the remaining count still refreshes.
+        refreshItemStock([{ serviceName }]);
+      }
     }
     return response;
   };
@@ -1045,8 +1112,15 @@ function HomePage() {
       // the union of the previous + new lists: a removed item's id is absent
       // from updatedServices, so its RETURN would never trigger a checkStock.
       const prevServices = playerServiceMap[playerName] || [];
+      const optionNames = new Set(servicesRef.current.map((s) => s.serviceName));
       refreshItemStock(
-        [...prevServices, ...updatedServices].map((s) => s.itemId)
+        [...prevServices, ...updatedServices].map((s) =>
+          s.itemId != null
+            ? { itemId: s.itemId }
+            : optionNames.has(s.serviceName)
+              ? { serviceName: s.serviceName }
+              : null
+        )
       );
       return;
     }

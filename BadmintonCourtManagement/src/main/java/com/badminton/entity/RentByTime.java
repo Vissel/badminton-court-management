@@ -41,6 +41,12 @@ public class RentByTime {
     @Column(name = "state")
     private String state;
 
+    @Column(name = "actual_fee", precision = 10, scale = 2)
+    private BigDecimal actualFee;
+
+    @Column(name = "note")
+    private String note;
+
     public RentByTime(AvailablePlayer availablePlayer, Court court, Instant startTime, Instant endTime,
             BigDecimal numTime,
             String shuttles, String state) {

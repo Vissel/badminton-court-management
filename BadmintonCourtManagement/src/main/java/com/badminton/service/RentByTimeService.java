@@ -1,23 +1,32 @@
 package com.badminton.service;
 
-import com.badminton.constant.ApiConstant;
-import com.badminton.constant.GameState;
-import com.badminton.constant.GameType;
-import com.badminton.constant.RentState;
+import com.badminton.constant.*;
+import com.badminton.core.rent.CoreRentByTimeService;
 import com.badminton.entity.AvailablePlayer;
 import com.badminton.entity.Court;
 import com.badminton.entity.RentByTime;
+import com.badminton.model.dto.RentByTimeDTO;
 import com.badminton.model.dto.RentShuttleDTO;
-import com.badminton.model.dto.ServiceDTO;
 import com.badminton.model.dto.ShuttleBallDTO;
-import com.badminton.repository.*;
+import com.badminton.repository.CourtRepositoty;
+import com.badminton.repository.RentByTimeRepository;
+import com.badminton.repository.ServiceRepository;
 import com.badminton.requestmodel.CourtDTO;
 import com.badminton.requestmodel.GameDTO;
-import com.badminton.requestmodel.RentByTimeRequest;
-import com.badminton.response.RentByTimeResponse;
+import com.badminton.requestmodel.player.UpdateAvaPlayerRentRequest;
+import com.badminton.requestmodel.rent.CancelRentByTimeRequest;
+import com.badminton.requestmodel.rent.EndRentByTimeRequest;
+import com.badminton.requestmodel.rent.RentByTimeRequest;
+import com.badminton.requestmodel.rent.RentRequest;
+import com.badminton.response.rentbytime.RentByTimeResponse;
+import com.badminton.response.result.Result;
 import com.badminton.time.model.SessionScope;
+import com.badminton.util.MoneyUtils;
+import com.badminton.util.ServiceConverter;
 import com.badminton.util.ServiceUtil;
+import com.badminton.util.TimeUtils;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,31 +44,26 @@ import java.util.stream.Collectors;
 @Service
 public class RentByTimeService {
 
-    private static final String RENT_BY_TIME_PREFIX = "Thuê theo giờ ";
-
+    @Autowired
+    private CoreRentByTimeService coreRentByTimeService;
     @Autowired
     private RentByTimeRepository rentByTimeRepo;
     @Autowired
     private CourtRepositoty courtRepo;
     @Autowired
-    private AvailablePlayerRepository avaPlayerRepo;
-    @Autowired
     private ServiceRepository serviceRepo;
 
     @Autowired
     private SessionServiceImpl sessionService;
-
+    @Autowired
+    private PlayerService playerService;
     @Autowired
     private CourtServicesService courtService;
     @Autowired
     private GameService gameService;
-    @Autowired
-    private GameRepository gameRepo;
 
-    @Autowired
-    private ShuttleBallServiceImpl shuttleBallService;
 
-    private BigDecimal getHourlyRate() {
+    private BigDecimal getRentByTimeServiceCost() {
         Optional<com.badminton.entity.Service> opt = serviceRepo.findBySerName(ApiConstant.RENT_BY_TIME);
         if (opt.isPresent() && opt.get().getCost() > 0) {
             return BigDecimal.valueOf(opt.get().getCost());
@@ -77,8 +81,10 @@ public class RentByTimeService {
             throw new IllegalArgumentException("Player not found in active session");
         }
 
-        if (!gameRepo.findByCourtIdAndEndedDateIsNullAndGameStateNotStart(court.getCourtId(), GameState.NOT_START.getValue()).isPresent()) {
-            throw new IllegalArgumentException("Game has NOT available");
+        // Court availability is the court business's answer, built on the game core's read of
+        // the court's open game.
+        if (!Boolean.TRUE.equals(courtService.isCourtReadyForRent(court.getCourtId()))) {
+            throw notRentable(court);
         }
 
         getActiveRentByTimeForCourt(court.getCourtId())
@@ -88,73 +94,154 @@ public class RentByTimeService {
 
         Instant startTime = sessionService.getUTCPlus7Instant();
         BigDecimal numTime = BigDecimal.valueOf(request.getNumTime()).setScale(2, RoundingMode.HALF_UP);
-
         Instant endTime = startTime.plus(Duration.ofMinutes(numTime.multiply(BigDecimal.valueOf(60)).longValue()));
 
-        String shuttlesJson = buildShuttlesJson(request.getShuttleBalls());
-
-        RentByTime rental = new RentByTime(player, court, startTime, endTime, numTime, shuttlesJson,
-                RentState.STARTED.name());
+        RentByTime rental = new RentByTime(player, court, startTime, endTime, numTime,
+                buildShuttlesJson(request.getShuttleBalls()), RentState.STARTED.name());
         rentByTimeRepo.save(rental);
-        GameDTO gameDTO = buildGameDTO(request);
-        gameService.handleChangeGameState(gameDTO);
 
-        // Add service to player
-        BigDecimal hourlyRate = getHourlyRate();
-        BigDecimal cost = numTime.multiply(hourlyRate).setScale(0, RoundingMode.HALF_UP);
-        String serviceName = RENT_BY_TIME_PREFIX + court.getCourtName();
-        ServiceDTO serviceDTO = new ServiceDTO();
-        serviceDTO.setServiceName(serviceName);
-        serviceDTO.setCost(cost.floatValue());
-
-        // player.setServices(ServiceUtil.addServiceToJsonArray(player.getCurrentServices(),
-        // serviceDTO));
-        avaPlayerRepo.save(player);
-
+        // Start the RENT game through the Game business; its failure must roll this back.
+        Result<Boolean> gameResult = gameService.handleChangeGameState(buildGameDTO(request, GameState.START));
+        if (!gameResult.isSuccess()) {
+            throw new IllegalStateException("Cannot start rent game: " + gameResult.getErrorMessage());
+        }
         return toResponse(rental);
     }
 
-    private GameDTO buildGameDTO(RentByTimeRequest request) {
+    /**
+     * A rent needs an open game in "Not start", so a refusal reports the states the court
+     * actually carries. Without this the reason is only visible as "not available".
+     */
+    private IllegalArgumentException notRentable(Court court) {
+        List<String> openStates = gameService.findOpenGameStates(court.getCourtId());
+        log.warn("Rent refused on court {} ({}): open game states = {}",
+                court.getCourtId(), court.getCourtName(), openStates);
+        return new IllegalArgumentException(openStates.isEmpty()
+                ? "Court " + court.getCourtName()
+                        + " has no open game: put the renter on the court first."
+                : "Court " + court.getCourtName() + " is [" + String.join(", ", openStates)
+                        + "], but a rent needs [" + GameState.NOT_START.getValue() + "].");
+    }
+
+    private GameDTO buildGameDTO(RentRequest request, GameState gameState) {
         CourtDTO courtDTO = new CourtDTO();
         courtDTO.setCourtId(request.getCourtId());
-        return new GameDTO(request.getPlayerName(), courtDTO, request.getShuttleBalls(), "Rent", null, "Start");
+        return new GameDTO(request.getPlayerName(), courtDTO, request.getShuttleBalls(),
+                GameType.RENT.name(), null, gameState.getValue());
     }
 
     @Transactional
-    public RentByTimeResponse payRentByTime(int rentId, Float customFee) {
-        RentByTime rental = rentByTimeRepo.findById(rentId)
-                .orElseThrow(() -> new IllegalArgumentException("Rental not found"));
+    public RentByTimeResponse finishRentByTime(EndRentByTimeRequest request) {
+        RentByTime rental = coreRentByTimeService.updateRentByTime(
+                convertToRentByTimeDtoForFinish(request));
 
-        // Update player's service cost to include shuttle costs
-        AvailablePlayer player = rental.getAvailablePlayer();
-        String serviceName = RENT_BY_TIME_PREFIX + rental.getCourt().getCourtName();
-        BigDecimal courtFee = customFee != null
-                ? BigDecimal.valueOf(customFee).setScale(0, RoundingMode.HALF_UP)
-                : (rental.getNumTime() != null
-                ? rental.getNumTime().multiply(getHourlyRate()).setScale(0, RoundingMode.HALF_UP)
-                : BigDecimal.ZERO);
-        BigDecimal shuttleCost = calculateShuttleCost(rental.getShuttles());
-        BigDecimal totalCost = courtFee.add(shuttleCost);
-
-        List<ServiceDTO> services = ServiceUtil.convertStringToListService(player.getCurrentServices());
-        // for (ServiceDTO s : services) {
-        // if (s.getServiceName().equals(serviceName)) {
-        // s.setCost(totalCost.floatValue());
-        // break;
-        // }
-        // }
-        services.add(new ServiceDTO(serviceName, totalCost.floatValue()));
-        player.setServices(ServiceUtil.buildJsonArrayStr(services));
-        avaPlayerRepo.save(player);
-
-        rental.setState(RentState.FINISH.name());
-        Instant now = sessionService.getUTCPlus7Instant();
-        if (rental.getEndTime() == null || now.isAfter(rental.getEndTime())) {
-            rental.setEndTime(now);
+        // AvailablePlayer business owns the player's service lines: the settled fee (the
+        // client's override, or the fee the rental implies) is recorded as one line.
+        Result<Boolean> serviceResult = playerService
+                .updatePlayerService(buildRentServiceRequest(rental, resolveCourtFee(rental).floatValue()));
+        if (!serviceResult.isSuccess()) {
+            throw new IllegalStateException("Cannot record rent fee on player: " + serviceResult.getErrorMessage());
         }
-        rentByTimeRepo.save(rental);
-        updateRentGameState(rental.getCourt(), GameState.FINISH);
-        return toResponse(rental);
+
+        // Game business owns the game row.
+        Result<Boolean> gameResult = gameService.handleFinishGame(
+                buildGameDTO(request, GameState.FINISH));
+        if (!gameResult.isSuccess()) {
+            throw new IllegalStateException("Cannot finish rent game: " + gameResult.getErrorMessage());
+        }
+        return toFinishRentByTimeResponse(request.getCourtId(), request.getPlayerName());
+    }
+
+    private RentByTimeResponse toFinishRentByTimeResponse(String courtId, String playerName) {
+        RentByTimeResponse finishRentByTimeResponse = new RentByTimeResponse();
+        finishRentByTimeResponse.setCourtId(Integer.valueOf(courtId));
+        finishRentByTimeResponse.setPlayerName(playerName);
+        return finishRentByTimeResponse;
+    }
+
+    /**
+     * The client's moment wins; without one a rental still never ends in the future, and a
+     * value that is not a date/time at all is rejected instead of silently becoming "now".
+     */
+    private Instant resolveSettledAt(String endedTime, Instant bookedEndTime) {
+        if (StringUtils.isNotBlank(endedTime)) {
+            return TimeUtils.convertToInstant(endedTime);
+        }
+        Instant now = sessionService.getUTCPlus7Instant();
+        return bookedEndTime == null || now.isAfter(bookedEndTime) ? now : bookedEndTime;
+    }
+
+    /**
+     * Settle argument object: when the rental ended, how long it ran, the fee actually
+     * charged and the note explaining how it differs from the booked fee.
+     */
+    private RentByTimeDTO convertToRentByTimeDtoForFinish(EndRentByTimeRequest request) {
+        RentByTimeDTO dto = new RentByTimeDTO();
+        dto.setRentId(request.getRentId());
+        dto.setEndTime(TimeUtils.convertToInstant(
+                request.getEndedTime()));
+        dto.setNumTime(request.getNumTime());
+        dto.setActualFee(toActualFee(request.getActualFee()));
+        dto.setState(RentState.FINISH);
+        return dto;
+    }
+
+    private RentByTimeDTO convertToRentByTimeDtoForCancel(CancelRentByTimeRequest request) {
+        RentByTimeDTO dto = new RentByTimeDTO();
+        dto.setRentId(request.getRentId());
+        dto.setEndTime(TimeUtils.convertToInstant(
+                request.getEndedTime()));
+        dto.setState(RentState.CANCEL);
+        return dto;
+    }
+
+    /**
+     * System fee a rental implies: duration in hours * hourly rate.
+     */
+    private BigDecimal rentFee(BigDecimal numTime) {
+        if (numTime == null) {
+            return BigDecimal.ZERO;
+        }
+        return numTime.multiply(getRentByTimeServiceCost()).setScale(0, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * Fee to bill for the court: the override the client sent, otherwise the system fee.
+     */
+    private BigDecimal resolveCourtFee(RentByTime rental) {
+        return rental.getActualFee() != null ? rental.getActualFee() : rentFee(rental.getNumTime());
+    }
+
+    /**
+     * A positive client amount is an override; anything else means "bill the system fee".
+     */
+    private BigDecimal toActualFee(float actualFee) {
+        return actualFee > 0 ? BigDecimal.valueOf(actualFee).setScale(0, RoundingMode.HALF_UP) : null;
+    }
+
+    /**
+     * Note explaining a manual fee override. Returns null when the actual fee matches
+     * the fee the rental implies, so only genuine changes are documented.
+     */
+    private String buildFeeChangeNote(BigDecimal actualFee, BigDecimal systemFee) {
+        if (actualFee == null || actualFee.compareTo(systemFee) == 0) {
+            return null;
+        }
+        return String.format("Thu phí thực tế %1$sđ, khác phí hệ thống %2$sđ",
+                MoneyUtils.formatToVND(actualFee.doubleValue()),
+                MoneyUtils.formatToVND(systemFee.doubleValue()));
+    }
+
+    /**
+     * Player-service argument object for a rental that is already stored: the player and the
+     * service line name come from the row, so a settle, an update and a cancel all address
+     * the same line on the same player.
+     */
+    private UpdateAvaPlayerRentRequest buildRentServiceRequest(RentByTime rental, float cost) {
+        UpdateAvaPlayerRentRequest request = new UpdateAvaPlayerRentRequest();
+        request.setPlayer(rental.getAvailablePlayer().getPlayer().getPlayerName());
+        request.setUpdateServiceRequest(ServiceConverter.buildServiceRequest(ServiceConstants.RENT_BY_TIME, cost));
+        return request;
     }
 
     private BigDecimal calculateShuttleCost(String shuttlesJson) {
@@ -169,72 +256,50 @@ public class RentByTimeService {
     }
 
     @Transactional
-    public RentByTimeResponse cancelRentByTime(int rentId) {
-        RentByTime rental = rentByTimeRepo.findById(rentId)
-                .orElseThrow(() -> new IllegalArgumentException("Rental not found"));
-        rental.setState(RentState.CANCEL.name());
-        rental.setEndTime(sessionService.getUTCPlus7Instant());
-        rentByTimeRepo.save(rental);
-        updateRentGameState(rental.getCourt(), GameState.CANCEL);
+    public RentByTimeResponse cancelRentByTime(CancelRentByTimeRequest cancelRentByTimeRequest) {
+        // Cancelling the rental is a rent-row change like any other, so it goes through the core too.
+        RentByTime rental = coreRentByTimeService.updateRentByTime(convertToRentByTimeDtoForCancel(cancelRentByTimeRequest));
 
-        // Remove rentByTime service from player
-        AvailablePlayer player = rental.getAvailablePlayer();
-        String serviceName = RENT_BY_TIME_PREFIX + rental.getCourt().getCourtName();
-        List<ServiceDTO> services = ServiceUtil.convertStringToListService(player.getCurrentServices());
-        List<ServiceDTO> filtered = services.stream()
-                .filter(s -> !s.getServiceName().equals(serviceName))
-                .collect(Collectors.toList());
-        player.setServices(ServiceUtil.buildJsonArrayStr(filtered));
-        avaPlayerRepo.save(player);
+        // AvailablePlayer business owns the player's service lines: the cancelled rental
+        // leaves no fee behind.
+        Result<Boolean> serviceResult = playerService
+                .removePlayerService(buildRentServiceRequest(rental, 0f));
+        if (!serviceResult.isSuccess()) {
+            throw new IllegalStateException("Cannot remove rent fee from player: " + serviceResult.getErrorMessage());
+        }
 
+        // Game business owns the game row.
+        Result<Boolean> gameResult = gameService.terminateGame(
+                buildGameDTO(cancelRentByTimeRequest, GameState.CANCEL));
+        if (!gameResult.isSuccess()) {
+            throw new IllegalStateException("Cannot cancel rent game: " + gameResult.getErrorMessage());
+        }
         return toResponse(rental);
     }
 
     @Transactional
     public RentByTimeResponse updateRentByTime(int rentId, RentByTimeRequest request) {
-        RentByTime rental = rentByTimeRepo.findById(rentId)
-                .orElseThrow(() -> new IllegalArgumentException("Rental not found"));
-
-        // Apply startTime if provided
-        if (request.getStartTime() != null && !request.getStartTime().isBlank()) {
-            rental.setStartTime(Instant.parse(request.getStartTime()));
+        RentByTimeDTO updateRentByTimeDTO = new RentByTimeDTO();
+        updateRentByTimeDTO.setRentId(rentId);
+        if (StringUtils.isNotBlank(request.getEndTime())) {
+            updateRentByTimeDTO.setEndTime(TimeUtils.convertToInstant(request.getEndTime()));
         }
-
-        // Apply numTime if provided, and update player service cost
-        if (request.getNumTime() > 0) {
-            BigDecimal numTime = BigDecimal.valueOf(request.getNumTime()).setScale(2, RoundingMode.HALF_UP);
-            rental.setNumTime(numTime);
-
-            AvailablePlayer player = rental.getAvailablePlayer();
-            String serviceName = RENT_BY_TIME_PREFIX + rental.getCourt().getCourtName();
-            BigDecimal hourlyRate = getHourlyRate();
-            BigDecimal cost = numTime.multiply(hourlyRate).setScale(0, RoundingMode.HALF_UP);
-            List<ServiceDTO> services = ServiceUtil.convertStringToListService(player.getCurrentServices());
-            boolean updated = false;
-            for (ServiceDTO s : services) {
-                if (s.getServiceName().equals(serviceName)) {
-                    s.setCost(cost.floatValue());
-                    updated = true;
-                    break;
-                }
-            }
-            if (updated) {
-                player.setServices(ServiceUtil.buildJsonArrayStr(services));
-                avaPlayerRepo.save(player);
-            }
-        }
-
-        // Apply endTime if provided (frontend has already done cross-field correction)
-        if (request.getEndTime() != null && !request.getEndTime().isBlank()) {
-            rental.setEndTime(Instant.parse(request.getEndTime()));
-        }
-
-        // Apply shuttles if provided
+        updateRentByTimeDTO.setNumTime(request.getNumTime());
         if (request.getShuttleBalls() != null) {
-            rental.setShuttles(buildShuttlesJson(request.getShuttleBalls()));
+            updateRentByTimeDTO.setShuttles(buildShuttlesJson(request.getShuttleBalls()));
         }
 
-        rentByTimeRepo.save(rental);
+        RentByTime rental = coreRentByTimeService.updateRentByTime(updateRentByTimeDTO);
+
+        // While the rental is running, its player line carries the court fee alone; the
+        // shuttle cost is added when the rental is settled.
+        if (RentState.STARTED.name().equals(rental.getState())) {
+            Result<Boolean> serviceResult = playerService
+                    .updatePlayerService(buildRentServiceRequest(rental, resolveCourtFee(rental).floatValue()));
+            if (!serviceResult.isSuccess()) {
+                throw new IllegalStateException("Cannot update rent fee on player: " + serviceResult.getErrorMessage());
+            }
+        }
         return toResponse(rental);
     }
 
@@ -261,19 +326,9 @@ public class RentByTimeService {
         return sessionService.getUTCPlus7Instant();
     }
 
-    private void updateRentGameState(Court court, GameState targetState) {
-        gameRepo.findByCourtIdAndEndedDateIsNull(court.getCourtId())
-                .filter(g -> GameType.RENT.name().equals(g.getGtype()))
-                .ifPresent(game -> {
-                    game.setState(targetState.getValue());
-                    game.setEndedDate(sessionService.getUTCPlus7Instant());
-                    gameRepo.save(game);
-                });
-    }
-
     private String buildShuttlesJson(List<ShuttleBallDTO> shuttleBalls) {
-        if (shuttleBalls == null || shuttleBalls.isEmpty()) {
-            return null;
+        if (shuttleBalls == null) {
+            return ServiceUtil.convertShuttlesListToJson(List.of());
         }
         List<RentShuttleDTO> list = shuttleBalls.stream().map(dto -> {
             RentShuttleDTO r = new RentShuttleDTO();
@@ -294,9 +349,13 @@ public class RentByTimeService {
         res.setStartTime(rental.getStartTime());
         res.setEndTime(rental.getEndTime());
         res.setNumTime(rental.getNumTime() != null ? rental.getNumTime().floatValue() : 0f);
-        res.setFee(rental.getNumTime() != null
-                ? rental.getNumTime().multiply(getHourlyRate()).floatValue()
+        res.setFee(rental.getActualFee() != null
+                ? rental.getActualFee().floatValue()
+                : rental.getNumTime() != null
+                ? rental.getNumTime().multiply(getRentByTimeServiceCost()).floatValue()
                 : 0f);
+        res.setActualFee(rental.getActualFee() != null ? rental.getActualFee().floatValue() : null);
+        res.setNote(rental.getNote());
         res.setShuttleBalls(ServiceUtil.convertShuttlesJsonToList(rental.getShuttles()));
         res.setState(rental.getState());
 

@@ -7,6 +7,7 @@ import com.badminton.requestmodel.AvaPlayerDTO;
 import com.badminton.requestmodel.CourtDTO;
 import com.badminton.requestmodel.GameDTO;
 import com.badminton.requestmodel.ResponseDTO;
+import com.badminton.response.rentbytime.RentByTimeResponse;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;

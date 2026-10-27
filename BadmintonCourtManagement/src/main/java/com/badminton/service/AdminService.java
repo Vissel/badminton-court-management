@@ -8,7 +8,7 @@ import com.badminton.response.SetUpServiceResponse;
 
 public interface AdminService {
 
-    public SetUpServiceResponse getSetUpService();
+    public SetUpServiceResponse getSetUpService(boolean includeInactive);
 
     boolean setUpService(SetUpServiceDTO setupServiceDTO);
 

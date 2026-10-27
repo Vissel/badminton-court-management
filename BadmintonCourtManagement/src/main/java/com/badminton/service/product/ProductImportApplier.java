@@ -1,6 +1,7 @@
 package com.badminton.service.product;
 
 import com.badminton.constant.ApiConstant;
+import com.badminton.core.inventory.CoreCatalogSyncService;
 import com.badminton.entity.ShuttleBall;
 import com.badminton.enums.ProductImportMode;
 import com.badminton.enums.ProductSheet;
@@ -13,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Set;
 
@@ -30,6 +32,9 @@ public class ProductImportApplier {
 
     @Autowired
     private ServiceRepository serviceRepo;
+
+    @Autowired
+    private CoreCatalogSyncService catalogSync;
 
     /**
      * Pricing settings rows that must never be imported, exported or deleted.
@@ -81,13 +86,13 @@ public class ProductImportApplier {
             shuttleRepo.findById(ball.getShuttleId()).ifPresentOrElse(entity -> {
                 entity.setActive(true);
                 entity.setCost(row.getCost());
-                shuttleRepo.save(entity);
+                catalogSync.linkShuttleBall(shuttleRepo.save(entity), priceOf(row));
             }, () -> saveNew(row));
         } else if (row.getSheet() == ProductSheet.SERVICE && ref instanceof com.badminton.entity.Service service) {
             serviceRepo.findById(service.getSerId()).ifPresentOrElse(entity -> {
                 entity.setActive(true);
                 entity.setCost(row.getCost());
-                serviceRepo.save(entity);
+                catalogSync.linkService(serviceRepo.save(entity), priceOf(row));
             }, () -> saveNew(row));
         } else {
             saveNew(row);
@@ -101,6 +106,7 @@ public class ProductImportApplier {
                     .map(entity -> {
                         entity.setActive(false);
                         shuttleRepo.save(entity);
+                        catalogSync.deactivateCatalog(entity.getItem());
                         return true;
                     })
                     .orElse(false);
@@ -110,6 +116,7 @@ public class ProductImportApplier {
                     .map(entity -> {
                         entity.setActive(false);
                         serviceRepo.save(entity);
+                        catalogSync.deactivateCatalog(entity.getItem());
                         return true;
                     })
                     .orElse(false);
@@ -119,10 +126,17 @@ public class ProductImportApplier {
 
     private void saveNew(ProductImportRow row) {
         if (row.getSheet() == ProductSheet.SHUTTLE_BALL) {
-            shuttleRepo.save(new ShuttleBall(row.getName(), row.getCost()));
+            ShuttleBall saved = shuttleRepo.save(new ShuttleBall(row.getName(), row.getCost()));
+            catalogSync.linkShuttleBall(saved, priceOf(row));
         } else {
-            serviceRepo.save(new com.badminton.entity.Service(row.getName(), row.getCost()));
+            com.badminton.entity.Service saved = serviceRepo
+                    .save(new com.badminton.entity.Service(row.getName(), row.getCost()));
+            catalogSync.linkService(saved, priceOf(row));
         }
+    }
+
+    private BigDecimal priceOf(ProductImportRow row) {
+        return BigDecimal.valueOf(row.getCost());
     }
 
     private void deactivateMissingShuttleBalls(Set<String> importedNames) {
@@ -131,6 +145,7 @@ public class ProductImportApplier {
             if (!importedNames.contains(ProductExcelParser.normalize(ball.getShuttleName()))) {
                 ball.setActive(false);
                 shuttleRepo.save(ball);
+                catalogSync.deactivateCatalog(ball.getItem());
             }
         }
     }
@@ -144,6 +159,7 @@ public class ProductImportApplier {
             if (!importedNames.contains(ProductExcelParser.normalize(service.getSerName()))) {
                 service.setActive(false);
                 serviceRepo.save(service);
+                catalogSync.deactivateCatalog(service.getItem());
             }
         }
     }

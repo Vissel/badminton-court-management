@@ -50,6 +50,8 @@ public class CoreInventoryService {
     @Autowired
     private ServiceRepository serviceRepo;
     @Autowired
+    private ServiceItemLinker serviceItemLinker;
+    @Autowired
     private CoreGameService coreGameService;
 
     /**
@@ -72,6 +74,7 @@ public class CoreInventoryService {
             movement.setRefType(MovementReferenceType.PAYMENT);
             movement.setRefId(refId);
             stockMovementRepository.save(movement);
+            log.info("RETAIL_SALE recorded: item '{}' qty -{} (ref PAYMENT/{})", item.getItemName(), qty, refId);
             warnIfLowStock(item);
         }
         return Boolean.TRUE;
@@ -85,7 +88,8 @@ public class CoreInventoryService {
                 continue;
             }
             InventoryItemType itemType = consumedItem.getItemType() != null
-                    ? consumedItem.getItemType() : InventoryItemType.SHUTTLE_BALL;
+                    ? consumedItem.getItemType()
+                    : InventoryItemType.SHUTTLE_BALL;
             InventoryItem item = inventoryItemRepository
                     .findByItemNameIgnoreCaseAndItemType(consumedItem.getItemName(), itemType)
                     .orElse(null);
@@ -99,14 +103,17 @@ public class CoreInventoryService {
                 continue;
             }
             StockMovementType movementType = consumedItem.getConsumeType() != null
-                    ? consumedItem.getConsumeType() : StockMovementType.GAME_CONSUMPTION;
+                    ? consumedItem.getConsumeType()
+                    : StockMovementType.GAME_CONSUMPTION;
             int sign = consumedItem.getSign() != 0 ? consumedItem.getSign() : -1;
             String note = consumedItem.getNote() != null && !consumedItem.getNote().isBlank()
                     ? consumedItem.getNote()
-                    : (consumedItem.getReferenceId() != null ? "Game " + consumedItem.getReferenceId() : "Item consumption");
+                    : (consumedItem.getReferenceId() != null ? "Game " + consumedItem.getReferenceId()
+                            : "Item consumption");
             StockMovement movement = baseMovement(item, movementType, sign * qty, note);
             MovementReferenceType refType = consumedItem.getReferenceType() != null
-                    ? consumedItem.getReferenceType() : MovementReferenceType.GAME;
+                    ? consumedItem.getReferenceType()
+                    : MovementReferenceType.GAME;
             movement.setRefType(refType);
             movement.setRefId(consumedItem.getReferenceId());
             stockMovementList.add(movement);
@@ -118,13 +125,15 @@ public class CoreInventoryService {
     public boolean confirmMovementItemEndGame(GameEndConfirmDTO gameEndConfirmDTO) {
         try {
             Game game = coreGameService.findActiveGame(gameEndConfirmDTO.getCourtId());
-            List<StockMovement> movements = stockMovementRepository.findByRefIdAndRefType((long) game.getGameId(), MovementReferenceType.GAME);
+            List<StockMovement> movements = stockMovementRepository.findByRefIdAndRefType((long) game.getGameId(),
+                    MovementReferenceType.GAME);
             if (gameEndConfirmDTO.isFinish()) {
                 // Finish: validate that game shuttleMap matches stock movements
                 validateGameShuttleConsumption(game, movements);
                 return true;
             } else {
-                // Termination: calculate net consumption and return only what was actually consumed
+                // Termination: calculate net consumption and return only what was actually
+                // consumed
                 Map<String, Integer> netConsumption = new HashMap<>();
 
                 for (StockMovement movement : movements) {
@@ -161,21 +170,24 @@ public class CoreInventoryService {
                 }
             }
         } catch (BusinessException e) {
-            log.warn("Game in courtId [{}] not found for shuttle consumption validation", gameEndConfirmDTO.getCourtId());
+            log.warn("Game in courtId [{}] not found for shuttle consumption validation",
+                    gameEndConfirmDTO.getCourtId());
         }
         return true;
     }
 
     /**
      * Validates that the shuttle balls tracked in Game.shuttleMap match the
-     * GAME_CONSUMPTION stock movements for the game. Logs warnings for discrepancies.
+     * GAME_CONSUMPTION stock movements for the game. Logs warnings for
+     * discrepancies.
      */
     private void validateGameShuttleConsumption(Game game, List<StockMovement> movements) {
         List<GameShuttleMap> shuttleMap = game.getShuttleMap();
         if (shuttleMap == null || shuttleMap.isEmpty()) {
             // No shuttle balls in game - check if movements exist
             if (!movements.isEmpty()) {
-                log.warn("Game in courtId [{}] has no shuttleMap but has [{}] stock movements - data inconsistency", game.getCourt().getCourtId(), movements.size());
+                log.warn("Game in courtId [{}] has no shuttleMap but has [{}] stock movements - data inconsistency",
+                        game.getCourt().getCourtId(), movements.size());
             }
             return;
         }
@@ -185,19 +197,23 @@ public class CoreInventoryService {
         for (GameShuttleMap map : shuttleMap) {
             InventoryItem item = map.getShuttleBall().getItem();
             if (item != null) {
-                expectedConsumption.put(item.getItemId(), expectedConsumption.getOrDefault(item.getItemId(), 0) + map.getShuttleNumber());
+                expectedConsumption.put(item.getItemId(),
+                        expectedConsumption.getOrDefault(item.getItemId(), 0) + map.getShuttleNumber());
             } else {
-                log.warn("ShuttleBall {} has no linked InventoryItem - cannot validate stock movement", map.getShuttleBall().getShuttleName());
+                log.warn("ShuttleBall {} has no linked InventoryItem - cannot validate stock movement",
+                        map.getShuttleBall().getShuttleName());
             }
         }
 
-        // Sum actual GAME_CONSUMPTION movements (ignoring RETURN - those are for termination)
+        // Sum actual GAME_CONSUMPTION movements (ignoring RETURN - those are for
+        // termination)
         Map<Integer, Integer> actualConsumption = new HashMap<>();
         for (StockMovement movement : movements) {
             if (movement.getMovementType() == StockMovementType.GAME_CONSUMPTION) {
                 int itemId = movement.getItem().getItemId();
                 // GAME_CONSUMPTION has negative delta, sum absolute values
-                actualConsumption.put(itemId, actualConsumption.getOrDefault(itemId, 0) + Math.abs(movement.getQuantityDelta()));
+                actualConsumption.put(itemId,
+                        actualConsumption.getOrDefault(itemId, 0) + Math.abs(movement.getQuantityDelta()));
             }
         }
 
@@ -209,7 +225,8 @@ public class CoreInventoryService {
             if (expected != actual) {
                 InventoryItem item = inventoryItemRepository.findById(itemId).orElse(null);
                 String itemName = item != null ? item.getItemName() : "unknown";
-                log.warn("Game in courtId [{}] shuttle consumption mismatch for item '[{}]': expected [{}], actual [{}]",
+                log.warn(
+                        "Game in courtId [{}] shuttle consumption mismatch for item '[{}]': expected [{}], actual [{}]",
                         game.getCourt().getCourtId(), itemName, expected, actual);
             }
         }
@@ -248,11 +265,17 @@ public class CoreInventoryService {
             return null;
         }
         com.badminton.entity.Service service = serviceRepo.findBySerName(line.getServiceName()).orElse(null);
-        if (service != null && service.getItem() != null) {
-            return service.getItem();
+        if (service == null) {
+            log.warn("Retail/return service skipped: unknown service '{}'", line.getServiceName());
+            return null;
         }
-        log.warn("Retail/return service skipped: no stock item for '{}'", line.getServiceName());
-        return null;
+        // Services created from Setup / product import carry no item link; the linker
+        // heals it by name so this sale is deducted instead of silently dropped.
+        InventoryItem item = serviceItemLinker.resolve(service);
+        if (item == null) {
+            log.warn("Retail/return service skipped: no inventory item named '{}'", line.getServiceName());
+        }
+        return item;
     }
 
     /**
@@ -268,7 +291,7 @@ public class CoreInventoryService {
     }
 
     private StockMovement baseMovement(InventoryItem item, StockMovementType type,
-                                       int delta, String note) {
+            int delta, String note) {
         StockMovement movement = new StockMovement();
         movement.setItem(item);
         movement.setMovementType(type);

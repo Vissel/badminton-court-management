@@ -68,4 +68,25 @@ public class InventoryItem {
         this.itemType = itemType;
         this.isActive = true;
     }
+
+    /**
+     * Package breakdown for an arbitrary base-unit quantity, e.g. "5 ống + 3
+     * quả"; null when the item has no package config or holds less than one
+     * package.
+     */
+    public String packageBreakdown(long quantity) {
+        if (packageUnit == null || unitsPerPackage == null || unitsPerPackage <= 0
+                || quantity <= 0) {
+            return null;
+        }
+        long packages = quantity / unitsPerPackage;
+        if (packages == 0) {
+            return null;
+        }
+        long remainder = quantity % unitsPerPackage;
+        String baseUnit = unit != null ? unit : "";
+        return remainder == 0
+                ? packages + " " + packageUnit
+                : packages + " " + packageUnit + " + " + remainder + " " + baseUnit;
+    }
 }

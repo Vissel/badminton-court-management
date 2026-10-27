@@ -8,13 +8,7 @@ import com.badminton.model.debit.DebitHistoryItemModel;
 import com.badminton.model.debit.DebitHistoryModel;
 import com.badminton.model.debit.DebitHistorySummaryModel;
 import com.badminton.model.debit.RemainingDebitModel;
-import com.badminton.model.dto.AllocateDebitPaymentRequest;
-import com.badminton.model.dto.AllocateDebitPaymentResponse;
-import com.badminton.model.dto.CreateDebitDTO;
-import com.badminton.model.dto.DebitHistoryDTO;
-import com.badminton.model.dto.DebitPayDTO;
-import com.badminton.model.dto.RemainingDebitDTO;
-import com.badminton.model.dto.SessionDTO;
+import com.badminton.model.dto.*;
 import com.badminton.requestmodel.Pagination;
 import com.badminton.requestmodel.debit.DebitHistoryRequest;
 import com.badminton.requestmodel.debit.DebitRequest;
@@ -33,7 +27,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
 
 import java.math.BigDecimal;
@@ -55,7 +48,6 @@ public class DebitServiceImpl implements DebitService {
     @Autowired
     private SessionServiceImpl sessionService;
 
-    @Transactional
     @Override
     public Result<Boolean> createDebit(DebitRequest debitRequest) {
         return serviceTemplate.execute(new ProcessCallback<DebitRequest, Boolean>() {
@@ -301,8 +293,8 @@ public class DebitServiceImpl implements DebitService {
                         PageResponse<DebitHistoryItemResponse> pageResponse = new PageResponse<>();
                         pageResponse.setList(model.getItems() != null
                                 ? model.getItems().stream()
-                                        .map(item -> convertToDebitHistoryItemResponse(item, model.getPlayerName()))
-                                        .collect(Collectors.toList())
+                                .map(item -> convertToDebitHistoryItemResponse(item, model.getPlayerName()))
+                                .collect(Collectors.toList())
                                 : List.of());
                         pageResponse.setTotal(model.getTotal());
                         Pagination pagination = dto.getPagination();
@@ -388,11 +380,11 @@ public class DebitServiceImpl implements DebitService {
                 .note(request.getNote())
                 .listDebitPay(request.getListDebitPay() != null
                         ? request.getListDebitPay().stream()
-                                .map(debitPay -> DebitPayDTO.builder()
-                                        .dateTime(debitPay.getDateTime())
-                                        .payAmount(BigDecimal.valueOf(debitPay.getPayAmount()))
-                                        .build())
-                                .collect(Collectors.toList())
+                        .map(debitPay -> DebitPayDTO.builder()
+                                .dateTime(debitPay.getDateTime())
+                                .payAmount(BigDecimal.valueOf(debitPay.getPayAmount()))
+                                .build())
+                        .collect(Collectors.toList())
                         : null)
                 // standalone settlement issues its own DEBT_SETTLEMENT bill
                 .issueBill(Boolean.TRUE)
@@ -453,13 +445,13 @@ public class DebitServiceImpl implements DebitService {
 
         List<RemainingDebitsResponse> remainingDebits = remainingDebit.getDebitModels() != null
                 ? remainingDebit.getDebitModels().stream()
-                        .map(debitModel -> new RemainingDebitsResponse(
-                                debitModel.getDateTime() != null ? debitModel.getDateTime().toString() : null,
-                                new MoneyResponse(
-                                        debitModel.getMoney() != null ? debitModel.getMoney().floatValue() : 0f,
-                                        MoneyUtils.CURRENCY_VN),
-                                debitModel.getNote()))
-                        .collect(Collectors.toList())
+                .map(debitModel -> new RemainingDebitsResponse(
+                        debitModel.getDateTime() != null ? debitModel.getDateTime().toString() : null,
+                        new MoneyResponse(
+                                debitModel.getMoney() != null ? debitModel.getMoney().floatValue() : 0f,
+                                MoneyUtils.CURRENCY_VN),
+                        debitModel.getNote()))
+                .collect(Collectors.toList())
                 : null;
 
         return GetRemainingDebtResponse.builder()

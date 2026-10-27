@@ -1,4 +1,4 @@
-package com.badminton.response;
+package com.badminton.response.rentbytime;
 
 import com.badminton.model.dto.RentShuttleDTO;
 import lombok.Getter;
@@ -18,6 +18,10 @@ public class RentByTimeResponse {
     private Instant endTime;
     private float numTime;
     private float fee;
+    /** null when the rental was billed at its system fee */
+    private Float actualFee;
+    /** set only when actualFee differs from the system fee */
+    private String note;
     private List<RentShuttleDTO> shuttleBalls;
     private String state;
     private int remainingMinutes;
