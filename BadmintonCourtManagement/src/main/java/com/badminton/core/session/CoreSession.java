@@ -89,7 +89,8 @@ public class CoreSession {
      * Get all sessions for the date of the given date time (UTC+7 wall-clock),
      * ordered by fromTime desc.
      *
-     * @param dateTime Date time string in ISO-8601 format (e.g. "2026-09-05T10:00:00")
+     * @param dateTime Date time string in ISO-8601 format (e.g.
+     *                 "2026-09-05T10:00:00")
      * @return sessions for that day, or empty list if none
      */
     @Transactional(readOnly = true)
