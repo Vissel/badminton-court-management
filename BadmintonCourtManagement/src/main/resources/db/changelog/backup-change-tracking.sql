@@ -1,4 +1,4 @@
-CREATE TABLE `backup_deletion_log` (
+CREATE TABLE IF NOT EXISTS `backup_deletion_log` (
     `deletion_id` bigint NOT NULL AUTO_INCREMENT,
     `table_name` varchar(64) NOT NULL,
     `record_key` json NOT NULL,

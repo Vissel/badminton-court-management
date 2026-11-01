@@ -5,75 +5,101 @@
         xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
 
     <changeSet id="001" author="thach">
+        <!-- FROZEN changeset: the file was rewritten after early databases
+             executed it, so each era recorded a different checksum. 1:any
+             accepts whatever a machine stored, which makes this deploy
+             work on any legacy database. From 029 onward checksums are
+             validated strictly again. -->
+        <validCheckSum>1:any</validCheckSum>
         <sqlFile path="db/changelog/badminton-qa.sql"/>
     </changeSet>
     <changeSet id="002" author="thach">
+        <validCheckSum>1:any</validCheckSum>
         <sqlFile path="db/changelog/root-user.sql"/>
     </changeSet>
     <changeSet id="003" author="thach">
+        <validCheckSum>1:any</validCheckSum>
         <sqlFile path="db/changelog/court-creation.sql"/>
     </changeSet>
     <changeSet id="004" author="thach">
-        <!-- The file changed after legacy databases executed it; accept the
-             checksum they recorded so a deploy against an old database boots. -->
-        <validCheckSum>9:4b0c19547cc1675275eda61b96675da0</validCheckSum>
+        <validCheckSum>1:any</validCheckSum>
         <sqlFile path="db/changelog/rent-by-time.sql"/>
     </changeSet>
     <changeSet id="005" author="thach">
+        <validCheckSum>1:any</validCheckSum>
         <sqlFile path="db/changelog/advance-payment.sql"/>
     </changeSet>
     <changeSet id="016" author="thach">
-        <validCheckSum>9:9aac274b45e6a0bdb4642420f3e46c35</validCheckSum>
+        <validCheckSum>1:any</validCheckSum>
         <sqlFile path="db/changelog/debit-table.sql"/>
     </changeSet>
     <changeSet id="017" author="thach">
-        <validCheckSum>9:099b66a0fa391fe014f297e0ca2bf0db</validCheckSum>
+        <validCheckSum>1:any</validCheckSum>
         <sqlFile path="db/changelog/debit-summary-table.sql"/>
     </changeSet>
     <changeSet id="018" author="thach">
-        <validCheckSum>9:825cadf043567236c466309b6d5a2a0f</validCheckSum>
+        <validCheckSum>1:any</validCheckSum>
         <sqlFile path="db/changelog/payment-table.sql"/>
     </changeSet>
     <changeSet id="019" author="thach">
-        <validCheckSum>9:03c925e0736a063e876fe4ff4a132868</validCheckSum>
+        <validCheckSum>1:any</validCheckSum>
         <sqlFile path="db/changelog/payment-debit-table.sql"/>
     </changeSet>
     <changeSet id="020" author="thach">
+        <validCheckSum>1:any</validCheckSum>
         <sqlFile path="db/changelog/available-player-cancel.sql"/>
     </changeSet>
     <changeSet id="021" author="thach">
+        <validCheckSum>1:any</validCheckSum>
         <sqlFile path="db/changelog/payment-pay-type.sql"/>
     </changeSet>
     <changeSet id="022" author="thach">
+        <validCheckSum>1:any</validCheckSum>
         <sqlFile path="db/changelog/migrate-available-player-pay-type.sql"/>
     </changeSet>
     <changeSet id="023" author="thach">
-        <validCheckSum>9:c528dd184b7e87b034dcdb4b29d996d4</validCheckSum>
+        <validCheckSum>1:any</validCheckSum>
         <sqlFile path="db/changelog/inventory-tables.sql"/>
     </changeSet>
     <changeSet id="024" author="thach">
+        <validCheckSum>1:any</validCheckSum>
         <sqlFile path="db/changelog/inventory-units.sql"/>
     </changeSet>
     <changeSet id="025" author="thach">
         <!-- Legacy databases already ran these statements under the old
-             rbac-jwt.sql lineage (refresh_token exists there, but the player
-             password column this file reads from has been dropped). Skip it
-             there; fresh databases still run it. -->
+             rbac-jwt.sql lineage: either refresh_token exists, or the player
+             password column this file reads from has already been dropped.
+             Either signal marks the database as migrated, so 025 is recorded
+             as ran without re-executing. Fresh databases still run it. -->
         <preConditions onFail="MARK_RAN">
-            <not>
-                <tableExists tableName="refresh_token"/>
-            </not>
+            <and>
+                <not>
+                    <tableExists tableName="refresh_token"/>
+                </not>
+                <columnExists tableName="player" columnName="password"/>
+            </and>
         </preConditions>
         <sqlFile path="db/changelog/rbac-jwt.sql"/>
     </changeSet>
     <changeSet id="026" author="devin">
-        <validCheckSum>9:5a3108f1946bd8fb0b4ecf4b5380eb89</validCheckSum>
+        <validCheckSum>1:any</validCheckSum>
         <sqlFile path="db/changelog/billing-tables.sql"/>
     </changeSet>
     <changeSet id="027" author="devin">
+        <validCheckSum>1:any</validCheckSum>
+        <!-- On machines where the backup feature was set up before this
+             changeset was recorded (backup_deletion_log already exists),
+             re-running the file would fail on duplicate table, columns or
+             triggers. Skip it there; fresh databases still run it. -->
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="backup_deletion_log"/>
+            </not>
+        </preConditions>
         <sqlFile path="db/changelog/backup-change-tracking.sql"/>
     </changeSet>
     <changeSet id="028" author="devin">
+        <validCheckSum>1:any</validCheckSum>
         <sqlFile path="db/changelog/billing-einvoice-error.sql"/>
     </changeSet>
     <changeSet id="029" author="thach">

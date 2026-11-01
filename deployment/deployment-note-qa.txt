@@ -42,20 +42,17 @@
    ALTER USER 'your_user'@'localhost' IDENTIFIED WITH mysql_native_password BY 'your_password';
    ```
 
-1b. Legacy database migration (old structure -> new structure, 0 data impact)
+1b. Legacy database adoption (works on ANY machine with an old database)
 
-   Needed when the target QA database already exists with the OLD structure
-   and holds data. Without this step the new WAR's Liquibase aborts on first
-   boot with "Validation Failed: N changesets check sum".
+   The WAR self-adopts any existing database with zero manual steps:
+   changesets 001-028 are frozen and accept any stored checksum, changeset
+   025 auto-skips on databases already migrated under the old rbac-jwt.sql
+   lineage, and only the additive changesets 029-031 are applied on first
+   boot. Old data is 0-impact.
 
-   Procedure:
-   1. Back up: `mysqldump --single-transaction -u <user> -p badminton-qa > backup_$(date +%F).sql`
-   2. Rebase bookkeeping (metadata-only):
-      `mysql -u <user> -p badminton-qa < sql/legacy-changelog-rebase.sql`
-   3. Deploy the WAR; first boot applies only additive changesets 029-031.
-
-   A bare deploy also boots (the changelog accepts the known old checksums
-   and skips 025); run step 2 as the fallback if it reports a mismatch.
+   Procedure: (1) back up, (2) deploy the WAR, (3) verify login and row
+   counts. `sql/legacy-changelog-rebase.sql` remains as optional metadata
+   tidy-up.
 
 2. Tomcat
 

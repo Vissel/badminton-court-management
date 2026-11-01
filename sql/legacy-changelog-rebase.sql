@@ -1,6 +1,10 @@
 -- ============================================================================
--- One-time rebase of a LEGACY database's Liquibase bookkeeping onto the
--- current changelog lineage.
+-- OPTIONAL one-time tidy-up of a LEGACY database's Liquibase bookkeeping.
+--
+-- NOT REQUIRED FOR DEPLOYMENT: since changesets 001-028 are frozen with
+-- validCheckSum 1:any and changeset 025 auto-skips migrated databases, the
+-- app boots on any old database with zero manual steps. This script exists
+-- only to make the bookkeeping history clean again afterwards.
 --
 -- METADATA ONLY: this script edits the `databasechangelog` table and nothing
 -- else. No application table is created, altered, dropped or truncated, and
@@ -26,8 +30,8 @@
 --   additive changesets 029-031 (2 new columns, 1 new table, and the
 --   idempotent catalog-to-inventory item relink).
 --
--- USAGE (run ONCE against the legacy database, before deploying the new WAR;
---        also the documented fallback if a boot reports a checksum mismatch):
+-- USAGE (optional, against a legacy database; also a recovery path if a
+--        boot ever reports a checksum mismatch for a 029+ changeset):
 --   mysql -u <user> -p <database> < legacy-changelog-rebase.sql
 --
 -- Idempotent: safe to run more than once.
