@@ -85,6 +85,39 @@
    - Backend API path: `https://<your-host>/bad-court-management`
    - Database example: `bad-court-management-db`
 
+2b. Legacy database migration (old structure -> new structure, 0 data impact)
+
+   Needed when the target database already exists with the OLD structure
+   (e.g. `bad-court-management-db`) and holds real data. Without this step,
+   the new WAR's Liquibase aborts on first boot with
+   "Validation Failed: N changesets check sum" (changelog files 004/016/017/
+   018/019/023/026 were edited after the old database executed them, and
+   changeset 025 was already applied under the old rbac-jwt.sql lineage).
+
+   Recommended procedure (script first):
+   1. Back up the database:
+      ```bash
+      mysqldump --single-transaction -u <user> -p bad-court-management-db > backup_$(date +%F).sql
+      ```
+   2. Rebase the Liquibase bookkeeping — metadata-only, no business table or
+      row is touched (script: `sql/legacy-changelog-rebase.sql`):
+      ```bash
+      mysql -u <user> -p bad-court-management-db < sql/legacy-changelog-rebase.sql
+      ```
+   3. Deploy the new WAR (copy into Tomcat `webapps/`). On first boot
+      Liquibase applies only the additive changesets 029-031:
+      - `rent_by_time.actual_fee`, `rent_by_time.note` (new columns)
+      - `app_user.app_id` (new column)
+      - `app_user_manager_link` (new table)
+      - idempotent catalog-to-inventory relink (fills only NULL item links)
+   4. Verify: the app boots and users can log in; row counts of the main
+      tables are unchanged.
+
+   Fallback: the changelog itself accepts the known old checksums and skips
+   changeset 025 on already-migrated databases, so a bare WAR deploy also
+   boots. If it still reports a checksum mismatch (the database recorded yet
+   other values), run step 2 and restart Tomcat.
+
 3. Tomcat
 
    Package: `apache-tomcat-11.0.18.zip`

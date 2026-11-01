@@ -14,21 +14,28 @@
         <sqlFile path="db/changelog/court-creation.sql"/>
     </changeSet>
     <changeSet id="004" author="thach">
+        <!-- The file changed after legacy databases executed it; accept the
+             checksum they recorded so a deploy against an old database boots. -->
+        <validCheckSum>9:4b0c19547cc1675275eda61b96675da0</validCheckSum>
         <sqlFile path="db/changelog/rent-by-time.sql"/>
     </changeSet>
     <changeSet id="005" author="thach">
         <sqlFile path="db/changelog/advance-payment.sql"/>
     </changeSet>
     <changeSet id="016" author="thach">
+        <validCheckSum>9:9aac274b45e6a0bdb4642420f3e46c35</validCheckSum>
         <sqlFile path="db/changelog/debit-table.sql"/>
     </changeSet>
     <changeSet id="017" author="thach">
+        <validCheckSum>9:099b66a0fa391fe014f297e0ca2bf0db</validCheckSum>
         <sqlFile path="db/changelog/debit-summary-table.sql"/>
     </changeSet>
     <changeSet id="018" author="thach">
+        <validCheckSum>9:825cadf043567236c466309b6d5a2a0f</validCheckSum>
         <sqlFile path="db/changelog/payment-table.sql"/>
     </changeSet>
     <changeSet id="019" author="thach">
+        <validCheckSum>9:03c925e0736a063e876fe4ff4a132868</validCheckSum>
         <sqlFile path="db/changelog/payment-debit-table.sql"/>
     </changeSet>
     <changeSet id="020" author="thach">
@@ -41,15 +48,26 @@
         <sqlFile path="db/changelog/migrate-available-player-pay-type.sql"/>
     </changeSet>
     <changeSet id="023" author="thach">
+        <validCheckSum>9:c528dd184b7e87b034dcdb4b29d996d4</validCheckSum>
         <sqlFile path="db/changelog/inventory-tables.sql"/>
     </changeSet>
     <changeSet id="024" author="thach">
         <sqlFile path="db/changelog/inventory-units.sql"/>
     </changeSet>
     <changeSet id="025" author="thach">
+        <!-- Legacy databases already ran these statements under the old
+             rbac-jwt.sql lineage (refresh_token exists there, but the player
+             password column this file reads from has been dropped). Skip it
+             there; fresh databases still run it. -->
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="refresh_token"/>
+            </not>
+        </preConditions>
         <sqlFile path="db/changelog/rbac-jwt.sql"/>
     </changeSet>
     <changeSet id="026" author="devin">
+        <validCheckSum>9:5a3108f1946bd8fb0b4ecf4b5380eb89</validCheckSum>
         <sqlFile path="db/changelog/billing-tables.sql"/>
     </changeSet>
     <changeSet id="027" author="devin">
