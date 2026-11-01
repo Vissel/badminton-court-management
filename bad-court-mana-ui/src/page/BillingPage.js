@@ -78,7 +78,7 @@ const plusOneDay = (yyyyMMdd) => {
 
 export default function BillingPage() {
   const { hasRole } = useContext(AuthContext);
-  const canVoid = hasRole("ROOT", "ADMINISTRATOR");
+  const canVoid = hasRole("Root", "Administrator");
 
   const [keyword, setKeyword] = useState("");
   const [status, setStatus] = useState("");

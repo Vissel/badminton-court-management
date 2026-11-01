@@ -20,8 +20,6 @@ import Snackbar from "@mui/material/Snackbar";
 import Alert from "@mui/material/Alert";
 import CircularProgress from "@mui/material/CircularProgress";
 import Tooltip from "@mui/material/Tooltip";
-import Checkbox from "@mui/material/Checkbox";
-import FormControlLabel from "@mui/material/FormControlLabel";
 import DownloadIcon from "@mui/icons-material/Download";
 import UploadIcon from "@mui/icons-material/Upload";
 import AddShoppingCartIcon from "@mui/icons-material/AddShoppingCart";
@@ -57,7 +55,6 @@ export default function InventoryPage() {
   const [priceEditId, setPriceEditId] = useState(null);
   const [priceDraft, setPriceDraft] = useState("");
   const [savingPrice, setSavingPrice] = useState(false);
-  const [missingPriceOnly, setMissingPriceOnly] = useState(false);
 
   const showToast = useCallback((message, severity = "success") => {
     setToast({ message, severity });
@@ -111,10 +108,8 @@ export default function InventoryPage() {
 
   const items = itemsByType[activeType] || [];
   const searchQuery = searchByTab[activeType] || "";
-  const visibleItems = items.filter(
-    (i) =>
-      (!missingPriceOnly || i.retailPrice == null) &&
-      normalizeSearchText(i.itemName).includes(normalizeSearchText(searchQuery))
+  const visibleItems = items.filter((i) =>
+    normalizeSearchText(i.itemName).includes(normalizeSearchText(searchQuery))
   );
   const isAllMode = activeType === "ALL";
 

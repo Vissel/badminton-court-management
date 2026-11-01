@@ -58,6 +58,17 @@ const rowActionTitle = (row) =>
 const rowActionColor = (row) =>
   row.isDeleted || isRowInactive(row) ? "primary" : "error";
 
+// Stock state of a Setup row. An empty row is "out", never "low": the two
+// statuses are mutually exclusive and out-of-stock wins when both flags arrive.
+const STOCK_STATES = { OUT: "out", LOW: "low", OK: "ok", UNLINKED: "unlinked" };
+
+const stockState = (row) => {
+  if (row.stockOnHand == null) return STOCK_STATES.UNLINKED;
+  if (row.outOfStock === true || row.stockOnHand <= 0) return STOCK_STATES.OUT;
+  if (row.lowStock === true) return STOCK_STATES.LOW;
+  return STOCK_STATES.OK;
+};
+
 const StockCell = ({ row }) => {
   if (row.stockOnHand == null) {
     return (
@@ -68,13 +79,18 @@ const StockCell = ({ row }) => {
       </TableCell>
     );
   }
+  const state = stockState(row);
   const color =
-    row.stockOnHand <= 0 ? "error.main" : row.lowStock ? "warning.main" : "text.primary";
+    state === STOCK_STATES.OUT
+      ? "error.main"
+      : state === STOCK_STATES.LOW
+        ? "warning.main"
+        : "text.primary";
   return (
     <TableCell align="right">
       <Tooltip title={row.stockBreakdown || "Số lượng còn lại trong Quản lý kho"}>
         <Typography variant="body2" fontWeight={600} sx={{ color }}>
-          {row.stockOnHand} {row.unit || ""}
+          {row.stockOnHand}
         </Typography>
       </Tooltip>
     </TableCell>
@@ -95,6 +111,11 @@ const PriceCell = ({ row }) => (
   </TableCell>
 );
 
+/**
+ * One status per row. The stock state owns the column as soon as the row is
+ * sellable, so "Hết hàng" / "Sắp hết" are read here instead of next to the
+ * quantity.
+ */
 const RowStatusChip = ({ row }) => {
   if (row.isDeleted || isRowInactive(row)) {
     return (
@@ -103,6 +124,21 @@ const RowStatusChip = ({ row }) => {
   }
   if (row.itemId == null) {
     return <Chip size="small" color="info" variant="outlined" label="Chưa liên kết kho" />;
+  }
+  const state = stockState(row);
+  if (state === STOCK_STATES.OUT) {
+    return (
+      <Tooltip title="Đã hết hàng trong Quản lý kho. Vẫn bán được, tồn kho sẽ âm cho tới khi nhập thêm.">
+        <Chip size="small" color="error" label="Hết hàng" />
+      </Tooltip>
+    );
+  }
+  if (state === STOCK_STATES.LOW) {
+    return (
+      <Tooltip title="Sắp hết: số lượng còn lại đang ở mức thấp. Nên nhập thêm hàng.">
+        <Chip size="small" color="warning" label="Sắp hết" />
+      </Tooltip>
+    );
   }
   return <Chip size="small" color="success" variant="outlined" label="Đang bán" />;
 };
@@ -508,11 +544,15 @@ function SetupPage() {
     };
   }, []);
 
-  const rowSx = (deleted, selected, inactive) => ({
+  // Row tint mirrors Quản lý kho: red for an empty product, amber for one that
+  // is running out. A non-sellable row keeps the muted style instead.
+  const rowSx = (deleted, selected, inactive, state) => ({
     cursor: deleted ? "not-allowed" : "pointer",
     textDecoration: deleted ? "line-through" : "none",
     opacity: deleted ? 0.5 : 1,
     transition: "all 0.2s ease",
+    ...(state === STOCK_STATES.OUT && !deleted && !inactive ? { bgcolor: "error.50" } : {}),
+    ...(state === STOCK_STATES.LOW && !deleted && !inactive ? { bgcolor: "warning.50" } : {}),
     ...(inactive && !deleted ? { color: "text.secondary" } : {}),
     ...(selected ? { bgcolor: "action.selected" } : {}),
   });
@@ -688,10 +728,10 @@ function SetupPage() {
                 <TableHead>
                   <TableRow>
                     <TableCell>Loại cầu</TableCell>
-                    <TableCell sx={{ width: 90 }}>Đơn vị</TableCell>
                     <TableCell sx={{ width: 120 }} align="right">
                       Còn lại
                     </TableCell>
+                    <TableCell sx={{ width: 90 }}>Đơn vị</TableCell>
                     <TableCell sx={{ width: 140 }} align="right">
                       Giá bán
                     </TableCell>
@@ -706,11 +746,16 @@ function SetupPage() {
                       hover={!isRowPendingDelete(ball)}
                       selected={selectedBall === idx}
                       onClick={() => !isRowPendingDelete(ball) && handleBallClick(idx)}
-                      sx={rowSx(isRowPendingDelete(ball), selectedBall === idx, isRowInactive(ball))}
+                      sx={rowSx(
+                        isRowPendingDelete(ball),
+                        selectedBall === idx,
+                        isRowInactive(ball),
+                        stockState(ball)
+                      )}
                     >
                       <TableCell>{ball.shuttleName}</TableCell>
-                      <TableCell>{ball.unit || "—"}</TableCell>
                       <StockCell row={ball} />
+                      <TableCell>{ball.unit || "—"}</TableCell>
                       <PriceCell row={ball} />
                       <TableCell>
                         <RowStatusChip row={ball} />
@@ -800,10 +845,10 @@ function SetupPage() {
                 <TableHead>
                   <TableRow>
                     <TableCell>Dịch vụ</TableCell>
-                    <TableCell sx={{ width: 90 }}>Đơn vị</TableCell>
                     <TableCell sx={{ width: 120 }} align="right">
                       Còn lại
                     </TableCell>
+                    <TableCell sx={{ width: 90 }}>Đơn vị</TableCell>
                     <TableCell sx={{ width: 140 }} align="right">
                       Giá bán
                     </TableCell>
@@ -818,11 +863,16 @@ function SetupPage() {
                       hover={!isRowPendingDelete(ser)}
                       selected={selectedRow === index}
                       onClick={() => !isRowPendingDelete(ser) && handleRowClick(index)}
-                      sx={rowSx(isRowPendingDelete(ser), selectedRow === index, isRowInactive(ser))}
+                      sx={rowSx(
+                        isRowPendingDelete(ser),
+                        selectedRow === index,
+                        isRowInactive(ser),
+                        stockState(ser)
+                      )}
                     >
                       <TableCell>{ser.serviceName}</TableCell>
-                      <TableCell>{ser.unit || "—"}</TableCell>
                       <StockCell row={ser} />
+                      <TableCell>{ser.unit || "—"}</TableCell>
                       <PriceCell row={ser} />
                       <TableCell>
                         <RowStatusChip row={ser} />

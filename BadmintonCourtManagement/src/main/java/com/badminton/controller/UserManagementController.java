@@ -34,15 +34,25 @@ public class UserManagementController {
 
     @PutMapping("/{userId}/role")
     public ResponseEntity<Result<AppUserResponse>> updateUserRole(@PathVariable Long userId,
-                                                                  @RequestBody UpdateUserRequest request) {
+            @RequestBody UpdateUserRequest request) {
         return ResponseConvertor.convert(userService.updateUserRole(userId, request.getRole()));
     }
 
     @PutMapping("/{userId}/status")
     public ResponseEntity<Result<AppUserResponse>> updateUserStatus(@PathVariable Long userId,
-                                                                    @RequestBody UpdateUserRequest request) {
-        if (request.getActive() == null) return badRequest("active is required.");
+            @RequestBody UpdateUserRequest request) {
+        if (request.getActive() == null)
+            return badRequest("active is required.");
         return ResponseConvertor.convert(userService.updateUserStatus(userId, request.getActive()));
+    }
+
+    /**
+     * ROOT-only: maps a coordinator to an administrator (null clears the mapping).
+     */
+    @PutMapping("/{userId}/manager")
+    public ResponseEntity<Result<AppUserResponse>> updateUserManager(@PathVariable Long userId,
+            @RequestBody UpdateUserRequest request) {
+        return ResponseConvertor.convert(userService.assignManager(userId, request.getManagerUserId()));
     }
 
     @GetMapping("/forgot-password")

@@ -24,8 +24,8 @@ import { getUsername } from "../api/tokenStore";
 const RESET_TOKEN_TTL = 3 * 60 * 1000;
 
 function SuperAdminPage() {
-  const { hasRole } = useContext(AuthContext);
-  const isRoot = hasRole("ROOT");
+  const { hasRole, vnRoleMapping } = useContext(AuthContext);
+  const isRoot = hasRole("Root");
   const myUsername = getUsername();
 
   const [users, setUsers] = useState([]);
@@ -33,7 +33,7 @@ function SuperAdminPage() {
     userName: "",
     password: "",
     repeatPassword: "",
-    role: isRoot ? "ADMINISTRATOR" : "COORDINATOR",
+    role: isRoot ? "Administrator" : "Coordinator",
   });
   const [forgot, setForgot] = useState({ userName: "" });
   const [resetToken, setResetToken] = useState(null);
@@ -44,14 +44,21 @@ function SuperAdminPage() {
   const timerRef = useRef(null);
   const expireRef = useRef(null);
 
+  // Root is provisioned outside the app and is never offered as a choice.
   const roleOptions = isRoot
-    ? ["ADMINISTRATOR", "COORDINATOR", "ROOT"]
-    : ["COORDINATOR"];
+    ? ["Administrator", "Coordinator"]
+    : ["Coordinator"];
 
-  const primaryRole = (user) => user.roles?.[0] || "COORDINATOR";
+  const primaryRole = (user) => user.roles?.[0] || "Coordinator";
+
+  // Administrators available as managers when root assigns a coordinator.
+  const administrators = users.filter((user) => (user.roles || []).includes("Administrator"));
 
   const canManage = (user) =>
-    isRoot || (user.roles || []).every((role) => role === "COORDINATOR");
+    isRoot || (user.roles || []).every((role) => role === "Coordinator");
+
+  // Vietnamese label for a role key; falls back to the raw key when missing.
+  const vnLabel = (role) => vnRoleMapping?.[role] ?? role;
 
   const loadUsers = useCallback(async () => {
     try {
@@ -120,6 +127,29 @@ function SuperAdminPage() {
         loadUsers();
       } else {
         emitApiError(res?.data?.errorMessage || "Không thể cập nhật vai trò.");
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Root-only: assign a coordinator to an administrator (empty = unlink).
+  const handleManagerChange = async (user, managerUserId) => {
+    try {
+      const res = await api.put(`/api/v1/users/${user.userId}/manager`, {
+        managerUserId: managerUserId === "" ? null : Number(managerUserId),
+      });
+      if (res?.data?.success) {
+        setSnackbar({
+          open: true,
+          message:
+            managerUserId === ""
+              ? `Đã bỏ gán người quản lý cho ${user.username}.`
+              : `Đã gán ${user.username} cho ${res.data.data?.managerUsername || "quản trị viên"}.`,
+        });
+        loadUsers();
+      } else {
+        emitApiError(res?.data?.errorMessage || "Không thể cập nhật người quản lý.");
       }
     } catch (err) {
       console.error(err);
@@ -217,11 +247,12 @@ function SuperAdminPage() {
           <Typography variant="h5" gutterBottom>
             User management
           </Typography>
-          <Table size="small" sx={{ maxWidth: 720 }}>
+          <Table size="small" sx={{ maxWidth: isRoot ? 900 : 720 }}>
             <TableHead>
               <TableRow>
                 <TableCell>Tên đăng nhập</TableCell>
                 <TableCell>Vai trò</TableCell>
+                {isRoot && <TableCell>Quản lý</TableCell>}
                 <TableCell>Trạng thái</TableCell>
                 <TableCell align="right">Hành động</TableCell>
               </TableRow>
@@ -243,14 +274,40 @@ function SuperAdminPage() {
                       >
                         {roleOptions.map((role) => (
                           <MenuItem key={role} value={role}>
-                            {role}
+                            {vnLabel(role)}
                           </MenuItem>
                         ))}
-                        {!manageable && !roleOptions.includes(primaryRole(user)) && (
-                          <MenuItem value={primaryRole(user)}>{primaryRole(user)}</MenuItem>
+                        {/* Existing root accounts keep their label visible but the
+                            option itself is disabled, so Root can be removed only. */}
+                        {!roleOptions.includes(primaryRole(user)) && (
+                          <MenuItem value={primaryRole(user)} disabled>
+                            {vnLabel(primaryRole(user))}
+                          </MenuItem>
                         )}
                       </TextField>
                     </TableCell>
+                    {isRoot && (
+                      <TableCell>
+                        {primaryRole(user) === "Coordinator" ? (
+                          <TextField
+                            select
+                            size="small"
+                            value={user.managerUserId ?? ""}
+                            onChange={(e) => handleManagerChange(user, e.target.value)}
+                            sx={{ minWidth: 170 }}
+                          >
+                            <MenuItem value="">— Chưa gán —</MenuItem>
+                            {administrators.map((admin) => (
+                              <MenuItem key={admin.userId} value={admin.userId}>
+                                {admin.username}
+                              </MenuItem>
+                            ))}
+                          </TextField>
+                        ) : (
+                          "—"
+                        )}
+                      </TableCell>
+                    )}
                     <TableCell>
                       <Chip
                         size="small"
@@ -262,7 +319,7 @@ function SuperAdminPage() {
                       <Button
                         size="small"
                         variant="outlined"
-                        color={user.active ? "warning" : "success"}
+                        color={user.active ? "dark" : "success"}
                         disabled={!manageable}
                         onClick={() => handleStatusChange(user)}
                       >
@@ -319,7 +376,7 @@ function SuperAdminPage() {
             >
               {roleOptions.map((role) => (
                 <MenuItem key={role} value={role}>
-                  {role}
+                  {vnLabel(role)}
                 </MenuItem>
               ))}
             </TextField>

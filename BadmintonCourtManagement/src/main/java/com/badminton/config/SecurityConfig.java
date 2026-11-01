@@ -13,17 +13,21 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
-import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.stereotype.Component;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
 
 @Component
 @EnableWebSecurity
@@ -45,6 +49,11 @@ public class SecurityConfig {
             throws Exception {
         http.csrf(csrf -> csrf.disable())
                 .cors(configurer -> configurer.configurationSource(cors))
+                // Logout belongs to AuthenController so the refresh token is actually
+                // revoked. Spring Security's default LogoutFilter would swallow
+                // POST /logout and answer 302 -> /login?logout, and the browser then
+                // GETs the POST-only /login endpoint, which renders a 405 error page.
+                .logout(logout -> logout.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/login", "/auth/refresh", "/logout", "/index", "/error",
@@ -69,11 +78,23 @@ public class SecurityConfig {
 
     @Bean
     JwtAuthenticationConverter jwtAuthenticationConverter() {
-        JwtGrantedAuthoritiesConverter authorities = new JwtGrantedAuthoritiesConverter();
-        authorities.setAuthoritiesClaimName("roles");
-        authorities.setAuthorityPrefix("ROLE_");
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-        converter.setJwtGrantedAuthoritiesConverter(authorities);
+        // The "roles" claim carries PascalCase names (Root, Administrator, ...) for
+        // the API/UI, while the security rules use canonical ROLE_ROOT /
+        // ROLE_ADMINISTRATOR authorities (same as CustomUserDetailsService), so
+        // normalize to upper case here.
+        converter.setJwtGrantedAuthoritiesConverter(jwt -> {
+            List<String> roles = jwt.getClaimAsStringList("roles");
+            if (roles == null) {
+                return List.of();
+            }
+            Collection<GrantedAuthority> authorities = roles.stream()
+                    .filter(Objects::nonNull)
+                    .map(role -> (GrantedAuthority) new SimpleGrantedAuthority(
+                            "ROLE_" + role.trim().toUpperCase(Locale.ROOT)))
+                    .toList();
+            return authorities;
+        });
         return converter;
     }
 

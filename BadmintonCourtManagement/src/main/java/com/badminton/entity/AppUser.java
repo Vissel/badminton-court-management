@@ -27,6 +27,10 @@ public class AppUser {
 
     private String displayName;
 
+    /** External application identifier, reserved for future use. */
+    @Column(name = "app_id", length = 50)
+    private String appId;
+
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
 

@@ -2,6 +2,7 @@ package com.badminton.service;
 
 import com.badminton.entity.AppUser;
 import com.badminton.entity.RefreshToken;
+import com.badminton.enums.RoleName;
 import com.badminton.repository.RefreshTokenRepository;
 import com.badminton.requestmodel.AuthenDTO;
 import org.springframework.beans.factory.annotation.Value;
@@ -18,7 +19,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class JwtService {
@@ -27,6 +30,25 @@ public class JwtService {
     private final SecureRandom secureRandom = new SecureRandom();
     private final Duration accessTtl;
     private final Duration refreshTtl;
+
+    /** Vietnamese display label for each PascalCase role key. */
+    private static final Map<String, String> VN_ROLE_LABELS = buildVnRoleLabels();
+
+    private static Map<String, String> buildVnRoleLabels() {
+        Map<String, String> m = new LinkedHashMap<>();
+        m.put("Root", "Quản trị gốc");
+        m.put("Administrator", "Quản trị viên");
+        m.put("Coordinator", "Điều phối viên");
+        m.put("Player", "Người chơi");
+        return m;
+    }
+
+    private static String toPascalCase(RoleName role) {
+        if (role == null)
+            return null;
+        String name = role.name().toLowerCase();
+        return Character.toUpperCase(name.charAt(0)) + name.substring(1);
+    }
 
     public JwtService(JwtEncoder jwtEncoder, RefreshTokenRepository refreshTokenRepository,
             @Value("${jwt.access-token-ttl:PT30M}") Duration accessTtl,
@@ -73,7 +95,10 @@ public class JwtService {
     }
 
     private AuthenDTO response(AppUser user, String refreshToken) {
-        List<String> roles = user.getRoles().stream().map(role -> role.getRoleName().name()).sorted().toList();
+        List<String> roles = user.getRoles().stream()
+                .map(role -> toPascalCase(role.getRoleName()))
+                .sorted()
+                .toList();
         Instant now = Instant.now();
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .issuer("badminton-court-management")
@@ -89,6 +114,7 @@ public class JwtService {
         response.setAccessToken(accessToken);
         response.setRefreshToken(refreshToken);
         response.setRoles(roles);
+        response.setVnRoleMapping(VN_ROLE_LABELS);
         response.setExpiresInSeconds(accessTtl.toSeconds());
         response.setValid(true);
         return response;

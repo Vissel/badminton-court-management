@@ -64,4 +64,7 @@
     <changeSet id="030" author="thach">
         <sqlFile path="db/changelog/service-item-relink.sql"/>
     </changeSet>
+    <changeSet id="031" author="thach">
+        <sqlFile path="db/changelog/user-manager-link.sql"/>
+    </changeSet>
 </databaseChangeLog>

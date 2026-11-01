@@ -23,6 +23,8 @@ import com.badminton.service.ServiceTemplate;
 import com.badminton.service.SessionServiceImpl;
 import com.badminton.util.MoneyUtils;
 import com.badminton.util.TimeUtils;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -293,8 +295,8 @@ public class DebitServiceImpl implements DebitService {
                         PageResponse<DebitHistoryItemResponse> pageResponse = new PageResponse<>();
                         pageResponse.setList(model.getItems() != null
                                 ? model.getItems().stream()
-                                .map(item -> convertToDebitHistoryItemResponse(item, model.getPlayerName()))
-                                .collect(Collectors.toList())
+                                        .map(item -> convertToDebitHistoryItemResponse(item, model.getPlayerName()))
+                                        .collect(Collectors.toList())
                                 : List.of());
                         pageResponse.setTotal(model.getTotal());
                         Pagination pagination = dto.getPagination();
@@ -380,11 +382,11 @@ public class DebitServiceImpl implements DebitService {
                 .note(request.getNote())
                 .listDebitPay(request.getListDebitPay() != null
                         ? request.getListDebitPay().stream()
-                        .map(debitPay -> DebitPayDTO.builder()
-                                .dateTime(debitPay.getDateTime())
-                                .payAmount(BigDecimal.valueOf(debitPay.getPayAmount()))
-                                .build())
-                        .collect(Collectors.toList())
+                                .map(debitPay -> DebitPayDTO.builder()
+                                        .dateTime(debitPay.getDateTime())
+                                        .payAmount(BigDecimal.valueOf(debitPay.getPayAmount()))
+                                        .build())
+                                .collect(Collectors.toList())
                         : null)
                 // standalone settlement issues its own DEBT_SETTLEMENT bill
                 .issueBill(Boolean.TRUE)
@@ -445,13 +447,13 @@ public class DebitServiceImpl implements DebitService {
 
         List<RemainingDebitsResponse> remainingDebits = remainingDebit.getDebitModels() != null
                 ? remainingDebit.getDebitModels().stream()
-                .map(debitModel -> new RemainingDebitsResponse(
-                        debitModel.getDateTime() != null ? debitModel.getDateTime().toString() : null,
-                        new MoneyResponse(
-                                debitModel.getMoney() != null ? debitModel.getMoney().floatValue() : 0f,
-                                MoneyUtils.CURRENCY_VN),
-                        debitModel.getNote()))
-                .collect(Collectors.toList())
+                        .map(debitModel -> new RemainingDebitsResponse(
+                                debitModel.getDateTime() != null ? debitModel.getDateTime().toString() : null,
+                                new MoneyResponse(
+                                        debitModel.getMoney() != null ? debitModel.getMoney().floatValue() : 0f,
+                                        MoneyUtils.CURRENCY_VN),
+                                parseDebitNote(debitModel.getNote())))
+                        .collect(Collectors.toList())
                 : null;
 
         return GetRemainingDebtResponse.builder()
@@ -459,6 +461,52 @@ public class DebitServiceImpl implements DebitService {
                 .debitSummary(debitSummary)
                 .remainingDebits(remainingDebits)
                 .build();
+    }
+
+    /**
+     * Normalise a debit note for display.
+     * <ul>
+     * <li>If the note is a JSON string (array or object) containing
+     * {@code serviceName}, return the service name(s) as a plain string.</li>
+     * <li>Otherwise return the raw note unchanged.</li>
+     * </ul>
+     * Covers both the session-close flow (note = currentServices JSON) and
+     * the manual-record flow (note = plain string like "Ghi nợ").
+     */
+    private static final ObjectMapper DEBIT_NOTE_MAPPER = new ObjectMapper();
+
+    private static String parseDebitNote(String note) {
+        if (note == null || note.isBlank()) {
+            return note;
+        }
+        String trimmed = note.trim();
+        if (!trimmed.startsWith("[") && !trimmed.startsWith("{")) {
+            return note;
+        }
+        try {
+            JsonNode root = DEBIT_NOTE_MAPPER.readTree(trimmed);
+            if (root.isArray()) {
+                StringBuilder sb = new StringBuilder();
+                for (JsonNode element : root) {
+                    JsonNode nameNode = element.get("serviceName");
+                    if (nameNode != null && nameNode.isTextual()) {
+                        if (sb.length() > 0)
+                            sb.append(", ");
+                        sb.append(nameNode.asText());
+                    }
+                }
+                return sb.length() > 0 ? sb.toString() : note;
+            }
+            if (root.isObject()) {
+                JsonNode nameNode = root.get("serviceName");
+                if (nameNode != null && nameNode.isTextual()) {
+                    return nameNode.asText();
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Note is not valid JSON, keeping as-is: {}", note);
+        }
+        return note;
     }
 
 }

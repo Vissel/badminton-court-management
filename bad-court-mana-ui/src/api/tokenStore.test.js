@@ -4,6 +4,7 @@ import {
   getRefreshToken,
   getRoles,
   getUsername,
+  getVnRoleMapping,
   isAccessTokenValid,
   storeAuth,
 } from "./tokenStore";
@@ -21,17 +22,25 @@ describe("tokenStore", () => {
       accessToken: "access",
       refreshToken: "refresh",
       username: "admin",
-      roles: ["ADMINISTRATOR"],
+      roles: ["Administrator"],
+      vnRoleMapping: { Administrator: "Quản trị viên" },
     });
 
     expect(getAccessToken()).toBe("access");
     expect(getRefreshToken()).toBe("refresh");
     expect(getUsername()).toBe("admin");
-    expect(getRoles()).toEqual(["ADMINISTRATOR"]);
+    expect(getRoles()).toEqual(["Administrator"]);
+    expect(getVnRoleMapping()).toEqual({ Administrator: "Quản trị viên" });
 
     clearAuth();
     expect(getAccessToken()).toBeNull();
     expect(getRoles()).toEqual([]);
+    expect(getVnRoleMapping()).toEqual({});
+  });
+
+  test("normalizes legacy role casing to PascalCase", () => {
+    sessionStorage.setItem("roles", JSON.stringify(["ROOT", "administrator", "Coordinator"]));
+    expect(getRoles()).toEqual(["Root", "Administrator", "Coordinator"]);
   });
 
   test("checks JWT expiry", () => {

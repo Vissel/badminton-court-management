@@ -49,7 +49,7 @@ function App() {
               <Route
                 path="/home"
                 element={
-                  <ProtectedRoute roles={["ROOT", "ADMINISTRATOR", "COORDINATOR"]}>
+                  <ProtectedRoute roles={["Root", "Administrator", "Coordinator"]}>
                     <HomePage />
                   </ProtectedRoute>
                 }
@@ -57,7 +57,7 @@ function App() {
               <Route
                 path="/setup"
                 element={
-                  <ProtectedRoute roles={["ROOT", "ADMINISTRATOR"]}>
+                  <ProtectedRoute roles={["Root", "Administrator"]}>
                     <SetupPage />
                   </ProtectedRoute>
                 }
@@ -65,7 +65,7 @@ function App() {
               <Route
                 path="/report"
                 element={
-                  <ProtectedRoute roles={["ROOT", "ADMINISTRATOR"]}>
+                  <ProtectedRoute roles={["Root", "Administrator"]}>
                     <ReportPage />
                   </ProtectedRoute>
                 }
@@ -73,7 +73,7 @@ function App() {
               <Route
                 path="/debtManagement"
                 element={
-                  <ProtectedRoute roles={["ROOT", "ADMINISTRATOR"]}>
+                  <ProtectedRoute roles={["Root", "Administrator"]}>
                     <DebtManagementPage />
                   </ProtectedRoute>
                 }
@@ -81,7 +81,7 @@ function App() {
               <Route
                 path="/bills"
                 element={
-                  <ProtectedRoute roles={["ROOT", "ADMINISTRATOR", "COORDINATOR"]}>
+                  <ProtectedRoute roles={["Root", "Administrator", "Coordinator"]}>
                     <BillingPage />
                   </ProtectedRoute>
                 }
@@ -89,7 +89,7 @@ function App() {
               <Route
                 path="/user-management"
                 element={
-                  <ProtectedRoute roles={["ROOT", "ADMINISTRATOR"]}>
+                  <ProtectedRoute roles={["Root", "Administrator"]}>
                     <SuperAdminPage />
                   </ProtectedRoute>
                 }
@@ -97,7 +97,7 @@ function App() {
               <Route
                 path="/products"
                 element={
-                  <ProtectedRoute roles={["ROOT", "ADMINISTRATOR"]}>
+                  <ProtectedRoute roles={["Root", "Administrator"]}>
                     <ProductPage />
                   </ProtectedRoute>
                 }
@@ -105,7 +105,7 @@ function App() {
               <Route
                 path="/inventory"
                 element={
-                  <ProtectedRoute roles={["ROOT", "ADMINISTRATOR"]}>
+                  <ProtectedRoute roles={["Root", "Administrator"]}>
                     <InventoryPage />
                   </ProtectedRoute>
                 }

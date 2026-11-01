@@ -10,4 +10,6 @@ import lombok.Setter;
 public class UpdateUserRequest {
     private String role;
     private Boolean active;
+    /** ROOT-only manager assignment: administrator userId, or null to unlink. */
+    private Long managerUserId;
 }

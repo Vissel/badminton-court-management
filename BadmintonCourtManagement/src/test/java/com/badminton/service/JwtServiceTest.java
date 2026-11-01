@@ -21,7 +21,8 @@ import static org.mockito.Mockito.*;
 class JwtServiceTest {
     private final JwtEncoder encoder = mock(JwtEncoder.class);
     private final RefreshTokenRepository repository = mock(RefreshTokenRepository.class);
-    private final JwtService service = new JwtService(encoder, repository, Duration.ofMinutes(30), Duration.ofHours(12));
+    private final JwtService service = new JwtService(encoder, repository, Duration.ofMinutes(30),
+            Duration.ofHours(12));
 
     @Test
     void createTokenPairIncludesUserRolesAndPersistsHashedRefreshToken() {
@@ -32,7 +33,7 @@ class JwtServiceTest {
 
         assertEquals("access-token", response.getAccessToken());
         assertEquals("coordinator", response.getUsername());
-        assertEquals(java.util.List.of("COORDINATOR"), response.getRoles());
+        assertEquals(java.util.List.of("Coordinator"), response.getRoles());
         assertNotNull(response.getRefreshToken());
         verify(repository).save(argThat(token -> token.getTokenHash().length() == 64
                 && !token.getTokenHash().equals(response.getRefreshToken())));

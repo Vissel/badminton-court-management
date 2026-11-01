@@ -59,6 +59,25 @@ const normalizeVN = (s) =>
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/đ/g, "d");
 
+// Backend may send a plain string ("Ghi nợ") or a JSON string produced by
+// the session-close flow (e.g. '[{"serviceName":"Tiền sân","cost":15000}]').
+// Extract the serviceName value(s) for a clean display; fall back to raw.
+const parseNote = (note) => {
+  if (!note || typeof note !== "string") return note || "";
+  const trimmed = note.trim();
+  if (!trimmed.startsWith("[") && !trimmed.startsWith("{")) return note;
+  try {
+    const parsed = JSON.parse(trimmed);
+    const arr = Array.isArray(parsed) ? parsed : [parsed];
+    const names = arr
+      .filter((e) => e && typeof e === "object" && e.serviceName)
+      .map((e) => e.serviceName);
+    return names.length > 0 ? names.join(", ") : note;
+  } catch {
+    return note;
+  }
+};
+
 const DebitListDialog = ({ show, playerName, onClose, onPaid, preselectedDebits, onAddToPayment, readOnly = false, historyMode = false }) => {
   const isReadOnly = readOnly || historyMode;
   const [debtData, setDebtData] = useState({
@@ -572,6 +591,7 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid, preselectedDebits,
                   <List dense disablePadding>
                     {histData.list.map((it, idx) => {
                       const meta = STATUS_META[it.status] || { label: it.status || "—", color: "default" };
+                      const displayNote = parseNote(it.note);
                       return (
                         <ListItem
                           key={idx}
@@ -602,18 +622,13 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid, preselectedDebits,
                                   alignItems: "center",
                                 }}
                               >
-                                <Typography variant="body2">{it.note || "Nợ"}</Typography>
-                                <Typography
-                                  variant="body2"
-                                  fontWeight={600}
-                                  sx={{ color: "warning.dark" }}
-                                >
+                                <Typography variant="body2" fontWeight={600} sx={{ color: "warning.dark" }}>
                                   {formatVND(it.debtAmount)} {it.currency || VN_CURRENCY}
                                 </Typography>
                               </Box>
                             }
                             secondary={
-                              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                              <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 0.25, flexWrap: "wrap" }}>
                                 <Typography variant="caption" color="text.secondary">
                                   {formatVNDateTime(it.debtDateTime)}
                                 </Typography>
@@ -623,6 +638,11 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid, preselectedDebits,
                                   size="small"
                                   variant="outlined"
                                 />
+                                {displayNote && (
+                                  <Typography variant="caption" color="text.secondary">
+                                    Ghi chú: {displayNote}
+                                  </Typography>
+                                )}
                               </Box>
                             }
                           />
@@ -731,63 +751,68 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid, preselectedDebits,
               <Divider sx={{ mb: 1 }} />
 
               <List dense disablePadding>
-                {remainingDebits.map((debt, idx) => (
-                  <ListItem
-                    key={idx}
-                    disableGutters
-                    disablePadding
-                    sx={{
-                      py: 0.75,
-                      borderBottom: 1,
-                      borderColor: "divider",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 1,
-                    }}
-                  >
-                    {!isReadOnly && (
-                      <Checkbox
-                        checked={selected.has(idx)}
-                        indeterminate={partialSelected.has(idx)}
-                        onChange={() => toggleSelected(idx)}
-                        size="small"
-                        sx={{ p: 0.5 }}
-                      />
-                    )}
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ minWidth: 22, textAlign: "center" }}
+                {remainingDebits.map((debt, idx) => {
+                  const displayNote = parseNote(debt.note);
+                  return (
+                    <ListItem
+                      key={idx}
+                      disableGutters
+                      disablePadding
+                      sx={{
+                        py: 0.75,
+                        borderBottom: 1,
+                        borderColor: "divider",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 1,
+                      }}
                     >
-                      {idx + 1}
-                    </Typography>
-                    <ListItemText
-                      primary={
-                        <Box
-                          sx={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                          }}
-                        >
-                          <Typography variant="body2">{debt.note || "Nợ"}</Typography>
-                          <Typography
-                            variant="body2"
-                            fontWeight={600}
-                            sx={{ color: "warning.dark" }}
+                      {!isReadOnly && (
+                        <Checkbox
+                          checked={selected.has(idx)}
+                          indeterminate={partialSelected.has(idx)}
+                          onChange={() => toggleSelected(idx)}
+                          size="small"
+                          sx={{ p: 0.5 }}
+                        />
+                      )}
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ minWidth: 22, textAlign: "center" }}
+                      >
+                        {idx + 1}
+                      </Typography>
+                      <ListItemText
+                        primary={
+                          <Box
+                            sx={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                            }}
                           >
-                            {formatVND(debt.money?.amount)} {debt.money?.currency || VN_CURRENCY}
-                          </Typography>
-                        </Box>
-                      }
-                      secondary={
-                        <Typography variant="caption" color="text.secondary">
-                          {formatVNDateTime(debt.dateTime)}
-                        </Typography>
-                      }
-                    />
-                  </ListItem>
-                ))}
+                            <Typography variant="body2" fontWeight={600} sx={{ color: "warning.dark" }}>
+                              {formatVND(debt.money?.amount)} {debt.money?.currency || VN_CURRENCY}
+                            </Typography>
+                          </Box>
+                        }
+                        secondary={
+                          <Box sx={{ display: "flex", flexDirection: "column", gap: 0.25, mt: 0.25 }}>
+                            <Typography variant="caption" color="text.secondary">
+                              {formatVNDateTime(debt.dateTime)}
+                            </Typography>
+                            {displayNote && (
+                              <Typography variant="caption" color="text.secondary">
+                                Ghi chú: {displayNote}
+                              </Typography>
+                            )}
+                          </Box>
+                        }
+                      />
+                    </ListItem>
+                  );
+                })}
               </List>
             </>
           )}

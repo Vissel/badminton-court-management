@@ -18,6 +18,11 @@ public interface UserService {
 
     Result<AppUserResponse> updateUserStatus(Long userId, boolean active);
 
+    /**
+     * ROOT-only: assigns a coordinator to an administrator (null clears the link).
+     */
+    Result<AppUserResponse> assignManager(Long userId, Long managerUserId);
+
     boolean savePlayer(RegisterUserDTO userDTO);
 
     ResponseEntity<String> generateResetPassToken(String userName);

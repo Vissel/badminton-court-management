@@ -2,10 +2,12 @@ package com.badminton.service;
 
 import com.badminton.config.cache.AppCache;
 import com.badminton.entity.AppUser;
+import com.badminton.entity.AppUserManagerLink;
 import com.badminton.entity.Player;
 import com.badminton.entity.Role;
 import com.badminton.enums.RoleName;
 import com.badminton.model.CacheObject;
+import com.badminton.repository.AppUserManagerLinkRepository;
 import com.badminton.repository.AppUserRepository;
 import com.badminton.repository.RoleRepository;
 import com.badminton.repository.UserRepository;
@@ -25,7 +27,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class UserServiceImpl implements UserService {
@@ -38,17 +42,20 @@ public class UserServiceImpl implements UserService {
     private final PasswordEncoder encoder;
     private final UserRepository playerRepository;
     private final AppUserRepository appUserRepository;
+    private final AppUserManagerLinkRepository appUserManagerLinkRepository;
     private final RoleRepository roleRepository;
     private final AppCache appCache;
     private final RsaKeyService rsaKeyService;
     private final JwtService jwtService;
 
     public UserServiceImpl(PasswordEncoder encoder, UserRepository playerRepository,
-            AppUserRepository appUserRepository, RoleRepository roleRepository,
+            AppUserRepository appUserRepository, AppUserManagerLinkRepository appUserManagerLinkRepository,
+            RoleRepository roleRepository,
             AppCache appCache, RsaKeyService rsaKeyService, JwtService jwtService) {
         this.encoder = encoder;
         this.playerRepository = playerRepository;
         this.appUserRepository = appUserRepository;
+        this.appUserManagerLinkRepository = appUserManagerLinkRepository;
         this.roleRepository = roleRepository;
         this.appCache = appCache;
         this.rsaKeyService = rsaKeyService;
@@ -56,6 +63,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional
     public boolean saveAdminUser(RegisterUserDTO userDTO) {
         if (userDTO.getUserId() != null || appUserRepository.existsByUsername(userDTO.getUserName()))
             return false;
@@ -63,13 +71,18 @@ public class UserServiceImpl implements UserService {
             RoleName roleName = userDTO.getRole() == null || userDTO.getRole().isBlank()
                     ? RoleName.ADMINISTRATOR
                     : RoleName.valueOf(userDTO.getRole().trim().toUpperCase());
-            if (roleName == RoleName.PLAYER || !canManageRank(rankOf(roleName)))
+            // The Root role is provisioned outside of user management: it can never
+            // be granted here, not even by another root account.
+            if (roleName == RoleName.PLAYER || roleName == RoleName.ROOT
+                    || !canManageRank(rankOf(roleName)))
                 return false;
             Role role = roleRepository.findByRoleName(roleName)
                     .orElseThrow(() -> new IllegalArgumentException("Role is not configured"));
             String rawPassword = rsaKeyService.decrypt(userDTO.getPassword());
-            return appUserRepository.save(new AppUser(userDTO.getUserName(), encoder.encode(rawPassword), role))
-                    .getUserId() != null;
+            AppUser created = appUserRepository
+                    .save(new AppUser(userDTO.getUserName(), encoder.encode(rawPassword), role));
+            linkToCurrentManager(created, roleName);
+            return created.getUserId() != null;
         } catch (IllegalArgumentException e) {
             return false;
         }
@@ -122,14 +135,48 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Result<List<AppUserResponse>> listUsers() {
+        // Backend-side scoping based on the current logged-in user:
+        // ROOT sees every account; ADMINISTRATOR only sees the coordinators
+        // linked to them; COORDINATOR has no access to this feature.
+        int actorRank = actorRank();
+        if (actorRank < ADMIN_RANK)
+            return forbidden();
+        List<AppUser> users = actorRank == ROOT_RANK
+                ? appUserRepository.findAll()
+                : linkedCoordinatorsOf(actor());
+        Map<Long, AppUser> managersByManagedId = appUserManagerLinkRepository.findAll().stream()
+                .collect(Collectors.toMap(link -> link.getManagedUser().getUserId(), AppUserManagerLink::getManager));
         Result<List<AppUserResponse>> result = new Result<>();
         result.setSuccess(true);
-        result.setData(appUserRepository.findAll().stream().map(AppUserResponse::from).toList());
+        result.setData(users.stream().map(user -> {
+            AppUserResponse response = AppUserResponse.from(user);
+            AppUser manager = managersByManagedId.get(user.getUserId());
+            if (manager != null) {
+                response.setManagerUserId(manager.getUserId());
+                response.setManagerUsername(manager.getUsername());
+            }
+            return response;
+        }).toList());
         return result;
     }
 
+    /**
+     * Coordinators currently linked to the given manager via the manager-link
+     * table.
+     */
+    private List<AppUser> linkedCoordinatorsOf(AppUser manager) {
+        if (manager == null)
+            return List.of();
+        return appUserManagerLinkRepository.findByManager_UserId(manager.getUserId()).stream()
+                .map(AppUserManagerLink::getManagedUser)
+                .filter(user -> rankOf(user) == COORDINATOR_RANK)
+                .toList();
+    }
+
     @Override
+    @Transactional
     public Result<AppUserResponse> updateUserRole(Long userId, String roleName) {
         AppUser user = findManageableUser(userId);
         if (user == null)
@@ -142,15 +189,59 @@ public class UserServiceImpl implements UserService {
         } catch (IllegalArgumentException | NullPointerException e) {
             return badRequest("Invalid role: " + roleName);
         }
+        // Root is never assignable: it is reserved for the provisioned account.
+        if (targetRole == RoleName.ROOT)
+            return badRequest("The Root role cannot be assigned.");
         if (targetRole == RoleName.PLAYER || !canManageRank(rankOf(targetRole)))
             return forbidden();
         user.getRoles().clear();
         user.getRoles().add(roleRepository.findByRoleName(targetRole)
                 .orElseThrow(() -> new IllegalStateException("Role is not configured")));
+        syncManagerLink(user, targetRole);
         Result<AppUserResponse> result = new Result<>();
         result.setSuccess(true);
         result.setData(AppUserResponse.from(appUserRepository.save(user)));
         return result;
+    }
+
+    /**
+     * Keeps the manager-link table in sync with a user's new role: the link is
+     * dropped whenever the user leaves COORDINATOR, and set when an
+     * ADMINISTRATOR promotes or demotes an account to COORDINATOR.
+     */
+    private void syncManagerLink(AppUser user, RoleName newRole) {
+        AppUser manager = actor();
+        if (newRole != RoleName.COORDINATOR || manager == null || actorRank() != ADMIN_RANK) {
+            appUserManagerLinkRepository.deleteByManagedUser_UserId(user.getUserId());
+            return;
+        }
+        linkManager(user, manager);
+    }
+
+    /** Links a newly created coordinator to the current administrator actor. */
+    private void linkToCurrentManager(AppUser created, RoleName roleName) {
+        if (roleName != RoleName.COORDINATOR || actorRank() != ADMIN_RANK)
+            return;
+        AppUser manager = actor();
+        if (manager == null)
+            return;
+        linkManager(created, manager);
+    }
+
+    /**
+     * Points the unique manager link of the given user at the given manager,
+     * creating the row only when it is missing. The row is updated in place
+     * rather than deleted and re-inserted: Hibernate flushes inserts before
+     * deletes inside one transaction, so a delete followed by an insert trips
+     * the uk_link_managed_user unique key.
+     */
+    private void linkManager(AppUser managedUser, AppUser manager) {
+        AppUserManagerLink link = appUserManagerLinkRepository
+                .findByManagedUser_UserId(managedUser.getUserId())
+                .orElseGet(AppUserManagerLink::new);
+        link.setManager(manager);
+        link.setManagedUser(managedUser);
+        appUserManagerLinkRepository.save(link);
     }
 
     @Override
@@ -169,6 +260,48 @@ public class UserServiceImpl implements UserService {
         result.setSuccess(true);
         result.setData(AppUserResponse.from(appUserRepository.save(user)));
         return result;
+    }
+
+    /**
+     * ROOT-only mapping between an administrator and one of their coordinators.
+     * A null managerUserId clears the link; otherwise the coordinator is
+     * (re)assigned to the given administrator.
+     */
+    @Override
+    @Transactional
+    public Result<AppUserResponse> assignManager(Long userId, Long managerUserId) {
+        if (actorRank() != ROOT_RANK)
+            return forbidden();
+        AppUser user = appUserRepository.findById(userId).orElse(null);
+        if (user == null)
+            return badRequest("User is not present.");
+        if (rankOf(user) != COORDINATOR_RANK)
+            return badRequest("Only coordinators can be assigned to an administrator.");
+        if (managerUserId == null) {
+            appUserManagerLinkRepository.deleteByManagedUser_UserId(userId);
+            return okUser(user, null);
+        }
+        AppUser manager = appUserRepository.findById(managerUserId).orElse(null);
+        if (manager == null || !hasRole(manager, RoleName.ADMINISTRATOR))
+            return badRequest("Manager must be an administrator.");
+        linkManager(user, manager);
+        return okUser(user, manager);
+    }
+
+    private Result<AppUserResponse> okUser(AppUser user, AppUser manager) {
+        AppUserResponse response = AppUserResponse.from(user);
+        if (manager != null) {
+            response.setManagerUserId(manager.getUserId());
+            response.setManagerUsername(manager.getUsername());
+        }
+        Result<AppUserResponse> result = new Result<>();
+        result.setSuccess(true);
+        result.setData(response);
+        return result;
+    }
+
+    private boolean hasRole(AppUser user, RoleName role) {
+        return user.getRoles().stream().anyMatch(r -> r.getRoleName() == role);
     }
 
     @Override
@@ -222,6 +355,12 @@ public class UserServiceImpl implements UserService {
     private String actorName() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         return authentication == null ? "" : authentication.getName();
+    }
+
+    /** The logged-in user entity, resolved from the security context. */
+    private AppUser actor() {
+        String name = actorName();
+        return name.isBlank() ? null : appUserRepository.findByUsername(name).orElse(null);
     }
 
     private boolean hasAuthority(Authentication authentication, String authority) {

@@ -481,8 +481,9 @@ public class AdminServiceImpl implements AdminService {
         if (item != null) {
             long stock = catalogSync.stockOnHand(item);
             row.setStockOnHand(stock);
-            row.setLowStock(stock <= LOW_STOCK_THRESHOLD);
             row.setOutOfStock(stock <= 0);
+            // mutually exclusive: an empty row is "Hết hàng", not also "Sắp hết"
+            row.setLowStock(stock > 0 && stock <= LOW_STOCK_THRESHOLD);
             row.setStockBreakdown(item.packageBreakdown(stock));
         }
         return row;
@@ -494,8 +495,8 @@ public class AdminServiceImpl implements AdminService {
         if (item != null) {
             long stock = catalogSync.stockOnHand(item);
             row.setStockOnHand(stock);
-            row.setLowStock(stock <= LOW_STOCK_THRESHOLD);
             row.setOutOfStock(stock <= 0);
+            row.setLowStock(stock > 0 && stock <= LOW_STOCK_THRESHOLD);
             row.setStockBreakdown(item.packageBreakdown(stock));
         }
         return row;

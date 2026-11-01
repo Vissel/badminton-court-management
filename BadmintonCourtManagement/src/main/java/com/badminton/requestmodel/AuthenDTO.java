@@ -3,6 +3,7 @@ package com.badminton.requestmodel;
 import com.google.gson.Gson;
 
 import java.util.List;
+import java.util.Map;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -20,6 +21,7 @@ public class AuthenDTO {
 	public String accessToken;
 	public String refreshToken;
 	public List<String> roles;
+	public Map<String, String> vnRoleMapping;
 	public boolean valid;
 	public long expiresInSeconds;
 

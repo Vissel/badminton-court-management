@@ -26,7 +26,12 @@ const ProtectedRoute = ({ children, roles: allowedRoles = [] }) => {
     );
   }
   if (!authenticated) return <Navigate to="/login" replace />;
-  if (allowedRoles.length > 0 && !roles.some((role) => allowedRoles.includes(role))) {
+  // Compare case-insensitively so legacy casing in stored roles never locks a route.
+  const allowed = allowedRoles.map((role) => String(role).toLowerCase());
+  if (
+    allowed.length > 0 &&
+    !roles.some((role) => allowed.includes(String(role).toLowerCase()))
+  ) {
     return <Navigate to="/home" replace />;
   }
   return children ? children : <Outlet />;
