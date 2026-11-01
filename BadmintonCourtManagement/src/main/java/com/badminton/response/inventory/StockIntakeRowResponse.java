@@ -31,6 +31,11 @@ public class StockIntakeRowResponse {
      */
     private Integer baseQuantity;
 
+    /**
+     * Base unit (Đơn vị lẻ) the base quantity is counted in, e.g. quả.
+     */
+    private String baseUnit;
+
     private BigDecimal unitCost;
 
     private LocalDate purchaseDate;

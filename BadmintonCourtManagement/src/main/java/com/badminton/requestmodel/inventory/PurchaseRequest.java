@@ -42,6 +42,22 @@ public class PurchaseRequest {
      */
     private BigDecimal retailPrice;
 
+    /**
+     * Optional Đơn vị lẻ (base unit) applied to the item, e.g. quả.
+     */
+    private String baseUnit;
+
+    /**
+     * Optional Đơn vị sỉ (wholesale unit) applied to the item, e.g. ống.
+     * Blank clears the package config of an existing item.
+     */
+    private String packageUnit;
+
+    /**
+     * Optional Quy đổi sỉ sang lẻ: base units per Đơn vị sỉ (e.g. 12).
+     */
+    private Integer unitsPerPackage;
+
     private String supplier;
 
     private String note;

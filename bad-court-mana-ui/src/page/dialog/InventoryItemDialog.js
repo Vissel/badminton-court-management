@@ -13,6 +13,7 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import InputAdornment from "@mui/material/InputAdornment";
 import { VN_CURRENCY, formatVND, rawNumber } from "../MoneyUtils";
+import DraggableResizablePaper, { DIALOG_DRAG_HANDLE } from "./DraggableResizablePaper";
 import { createInventoryItem, updateInventoryItem } from "../../api/inventoryApi";
 
 export const ITEM_TYPES = {
@@ -85,8 +86,16 @@ const InventoryItemDialog = ({ open, item, onClose, onSaved }) => {
   };
 
   return (
-    <Dialog open={open} onClose={saving ? undefined : onClose} maxWidth="xs" fullWidth>
-      <DialogTitle>{isEdit ? "Sửa mặt hàng" : "Thêm mặt hàng"}</DialogTitle>
+    <Dialog
+      open={open}
+      onClose={saving ? undefined : onClose}
+      maxWidth="sm"
+      fullWidth
+      PaperComponent={DraggableResizablePaper}
+    >
+      <DialogTitle className={DIALOG_DRAG_HANDLE} sx={{ cursor: "move" }}>
+        {isEdit ? "Sửa mặt hàng" : "Thêm mặt hàng"}
+      </DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2} sx={{ pt: 0.5 }}>
           <TextField
@@ -109,23 +118,24 @@ const InventoryItemDialog = ({ open, item, onClose, onSaved }) => {
             </Select>
           </FormControl>
           <TextField
-            label="Đơn vị (đếm kho)"
+            label="Đơn vị lẻ"
             value={unit}
             onChange={(e) => setUnit(e.target.value)}
             placeholder="quả, chai..."
+            helperText="Đơn vị nhỏ nhất để đếm kho và bán lẻ"
             fullWidth
           />
           <Stack direction="row" spacing={1}>
             <TextField
-              label="Đơn vị nhập sỉ"
+              label="Đơn vị sỉ"
               value={packageUnit}
               onChange={(e) => setPackageUnit(e.target.value)}
               placeholder="ống, thùng..."
-              helperText="Bỏ trống nếu chỉ nhập theo đơn vị lẻ"
+              helperText="Đơn vị mua sỉ. Bỏ trống nếu chỉ nhập theo đơn vị lẻ"
               fullWidth
             />
             <TextField
-              label="Quy đổi"
+              label="Quy đổi sỉ sang lẻ"
               value={unitsPerPackage}
               onChange={(e) =>
                 setUnitsPerPackage(
@@ -135,25 +145,28 @@ const InventoryItemDialog = ({ open, item, onClose, onSaved }) => {
               disabled={!packageUnit.trim()}
               helperText={
                 packageUnit.trim()
-                  ? `1 ${packageUnit.trim()} = ? ${unit.trim() || "đơn vị"}`
+                  ? `1 ${packageUnit.trim()} = ? ${unit.trim() || "đơn vị lẻ"}`
                   : " "
               }
               fullWidth
             />
           </Stack>
           <TextField
-            label="Giá bán"
+            label="Giá bán lẻ"
             value={retailPrice}
             onChange={(e) =>
               setRetailPrice(
                 e.target.value === "" ? "" : formatVND(rawNumber(e.target.value))
               )
             }
+            helperText={`Tính theo 1 ${unit.trim() || "đơn vị lẻ"}`}
             fullWidth
             slotProps={{
               input: {
                 endAdornment: (
-                  <InputAdornment position="end">{VN_CURRENCY}</InputAdornment>
+                  <InputAdornment position="end">
+                    {VN_CURRENCY}/{unit.trim() || "đơn vị lẻ"}
+                  </InputAdornment>
                 ),
               },
             }}

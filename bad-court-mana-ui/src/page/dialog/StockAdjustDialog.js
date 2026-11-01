@@ -10,6 +10,7 @@ import Typography from "@mui/material/Typography";
 import ToggleButton from "@mui/material/ToggleButton";
 import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import { rawNumber } from "../MoneyUtils";
+import DraggableResizablePaper, { DIALOG_DRAG_HANDLE } from "./DraggableResizablePaper";
 import { adjustStock } from "../../api/inventoryApi";
 
 /**
@@ -61,8 +62,16 @@ const StockAdjustDialog = ({ open, item, onClose, onSaved }) => {
   };
 
   return (
-    <Dialog open={open} onClose={saving ? undefined : onClose} maxWidth="xs" fullWidth>
-      <DialogTitle>Kiểm kê — {item?.itemName}</DialogTitle>
+    <Dialog
+      open={open}
+      onClose={saving ? undefined : onClose}
+      maxWidth="sm"
+      fullWidth
+      PaperComponent={DraggableResizablePaper}
+    >
+      <DialogTitle className={DIALOG_DRAG_HANDLE} sx={{ cursor: "move" }}>
+        {`Kiểm kê — ${item?.itemName ?? ""}`}
+      </DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2} sx={{ pt: 0.5 }}>
           <Typography variant="body2" color="text.secondary">

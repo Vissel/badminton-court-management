@@ -45,6 +45,7 @@ import {
 } from "../api/debtApi";
 import { emitApiError } from "../api/errorBus";
 import DebitListDialog from "./dialog/DebitListDialog";
+import DateInput, { isoToDisplay } from "./DateInput";
 import { VN_CURRENCY, formatVND } from "./MoneyUtils";
 import { formatVNDateTime } from "./DateTimeUtils";
 
@@ -1232,22 +1233,18 @@ export default function DebtManagementPage() {
         </ToggleButtonGroup>
         {isHistory && (
           <>
-            <TextField
-              type="date"
+            <DateInput
               size="small"
               label="Từ ngày"
               value={dateInput.from}
-              onChange={(e) => setDateInput((d) => ({ ...d, from: e.target.value }))}
-              slotProps={{ inputLabel: { shrink: true } }}
+              onChange={(from) => setDateInput((d) => ({ ...d, from }))}
               sx={{ width: { xs: "100%", md: 150 } }}
             />
-            <TextField
-              type="date"
+            <DateInput
               size="small"
               label="Đến ngày"
               value={dateInput.to}
-              onChange={(e) => setDateInput((d) => ({ ...d, to: e.target.value }))}
-              slotProps={{ inputLabel: { shrink: true } }}
+              onChange={(to) => setDateInput((d) => ({ ...d, to }))}
               sx={{ width: { xs: "100%", md: 150 } }}
             />
             <Button
@@ -1275,7 +1272,7 @@ export default function DebtManagementPage() {
             size="small"
             color="primary"
             variant="outlined"
-            label={`Lọc: ${activeFilter.from} → ${String(activeFilter.to).slice(0, 10)}`}
+            label={`Lọc: ${isoToDisplay(String(activeFilter.from).slice(0, 10))} → ${isoToDisplay(String(activeFilter.to).slice(0, 10))}`}
             sx={{ alignSelf: "center" }}
           />
         )}

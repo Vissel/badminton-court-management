@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import Box from "@mui/material/Box";
 import Grid from "@mui/material/Grid";
+import Stack from "@mui/material/Stack";
 import Button from "@mui/material/Button";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
@@ -21,10 +22,12 @@ import Tooltip from "@mui/material/Tooltip";
 import Alert from "@mui/material/Alert";
 import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
 import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
+import SearchIcon from "@mui/icons-material/Search";
 import api from "../api/index";
 import { getBillConfig, updateBillConfig, testPrinter } from "../api/billApi";
 import { emitApiError } from "../api/errorBus";
 import { VN_CURRENCY, formatVND } from "./MoneyUtils";
+import { normalizeSearchText } from "./TextUtils";
 
 const EMPTY_BILL_CONFIG = {
   businessName: "",
@@ -61,6 +64,12 @@ const rowActionColor = (row) =>
 // Stock state of a Setup row. An empty row is "out", never "low": the two
 // statuses are mutually exclusive and out-of-stock wins when both flags arrive.
 const STOCK_STATES = { OUT: "out", LOW: "low", OK: "ok", UNLINKED: "unlinked" };
+
+// Catalog tables: ten fixed-height rows under the sticky header (32px) plus the
+// outlined border. The pinned row height keeps exactly ten rows visible even
+// though a selected row grows once its delete button appears.
+const TABLE_ROW_HEIGHT = 42;
+const TABLE_MAX_HEIGHT = 32 + 10 * TABLE_ROW_HEIGHT + 2;
 
 const stockState = (row) => {
   if (row.stockOnHand == null) return STOCK_STATES.UNLINKED;
@@ -104,8 +113,8 @@ const PriceCell = ({ row }) => (
         {row.retailPriceFormat || formatVND(row.retailPrice)}
       </Typography>
     ) : (
-      <Tooltip title="Nhập Giá bán trong Quản lý kho để đồng bộ về đây">
-        <Chip size="small" color="warning" variant="outlined" label="Thiếu giá bán" />
+      <Tooltip title="Nhập Giá bán lẻ trong Quản lý kho để đồng bộ về đây">
+        <Chip size="small" color="warning" variant="outlined" label="Thiếu giá bán lẻ" />
       </Tooltip>
     )}
   </TableCell>
@@ -162,6 +171,8 @@ function SetupPage() {
   const [services, setServices] = useState([]);
   const [tableShuttleBalls, setTableShuttleBalls] = useState([]);
   const [tableServices, setTableServices] = useState([]);
+  const [ballSearch, setBallSearch] = useState("");
+  const [serviceSearch, setServiceSearch] = useState("");
   const tableRef = useRef(null);
   const tableBallRef = useRef(null);
 
@@ -547,6 +558,7 @@ function SetupPage() {
   // Row tint mirrors Quản lý kho: red for an empty product, amber for one that
   // is running out. A non-sellable row keeps the muted style instead.
   const rowSx = (deleted, selected, inactive, state) => ({
+    height: TABLE_ROW_HEIGHT,
     cursor: deleted ? "not-allowed" : "pointer",
     textDecoration: deleted ? "line-through" : "none",
     opacity: deleted ? 0.5 : 1,
@@ -556,6 +568,17 @@ function SetupPage() {
     ...(inactive && !deleted ? { color: "text.secondary" } : {}),
     ...(selected ? { bgcolor: "action.selected" } : {}),
   });
+
+  // Free-text search keeps each row's original index, so row selection and the
+  // delete/restore toggle still address the row they belong to.
+  const filterRows = (rows, keyword, nameOf) => {
+    const term = normalizeSearchText(keyword);
+    return rows
+      .map((row, idx) => ({ row, idx }))
+      .filter(({ row }) => !term || normalizeSearchText(nameOf(row)).includes(term));
+  };
+  const visibleShuttleBalls = filterRows(tableShuttleBalls, ballSearch, (ball) => ball.shuttleName);
+  const visibleServices = filterRows(tableServices, serviceSearch, (service) => service.serviceName);
 
   return (
     <Box sx={{ maxWidth: 1100, mx: "auto", p: { xs: 1, sm: 2 } }}>
@@ -717,14 +740,42 @@ function SetupPage() {
 
         {tableShuttleBalls.length !== 0 && (
           <Grid size={{ xs: 12 }} md={8}>
-            <Typography variant="h6" gutterBottom>
-              Danh sách Loại cầu
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              Số lượng, giá bán và trạng thái lấy từ Quản lý kho.
-            </Typography>
-            <TableContainer component={Paper} variant="outlined" ref={tableBallRef}>
-              <Table size="small">
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={1.5}
+              alignItems={{ xs: "stretch", sm: "center" }}
+              sx={{ mb: 1 }}
+            >
+              <Box>
+                <Typography variant="h6">Danh sách Loại cầu</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Số lượng, giá bán và trạng thái lấy từ Quản lý kho.
+                </Typography>
+              </Box>
+              <TextField
+                size="small"
+                placeholder="Tìm loại cầu…"
+                value={ballSearch}
+                onChange={(e) => setBallSearch(e.target.value)}
+                sx={{ ml: { sm: "auto" }, minWidth: 220 }}
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon fontSize="small" />
+                      </InputAdornment>
+                    ),
+                  },
+                }}
+              />
+            </Stack>
+            <TableContainer
+              component={Paper}
+              variant="outlined"
+              ref={tableBallRef}
+              sx={{ maxHeight: TABLE_MAX_HEIGHT }}
+            >
+              <Table size="small" stickyHeader>
                 <TableHead>
                   <TableRow>
                     <TableCell>Loại cầu</TableCell>
@@ -733,14 +784,14 @@ function SetupPage() {
                     </TableCell>
                     <TableCell sx={{ width: 90 }}>Đơn vị</TableCell>
                     <TableCell sx={{ width: 140 }} align="right">
-                      Giá bán
+                      Giá bán lẻ
                     </TableCell>
                     <TableCell sx={{ width: 160 }}>Trạng thái</TableCell>
                     <TableCell sx={{ width: 72 }}>Xoá</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {tableShuttleBalls.map((ball, idx) => (
+                  {visibleShuttleBalls.map(({ row: ball, idx }) => (
                     <TableRow
                       key={idx}
                       hover={!isRowPendingDelete(ball)}
@@ -778,6 +829,17 @@ function SetupPage() {
                       </TableCell>
                     </TableRow>
                   ))}
+                  {visibleShuttleBalls.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                        <Typography color="text.secondary">
+                          {ballSearch
+                            ? `Không tìm thấy "${ballSearch}".`
+                            : "Chưa có loại cầu nào."}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </TableContainer>
@@ -834,14 +896,42 @@ function SetupPage() {
 
         {tableServices.length !== 0 && (
           <Grid size={{ xs: 12 }} md={8}>
-            <Typography variant="h6" gutterBottom>
-              Danh sách Dịch vụ
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              Số lượng, giá bán và trạng thái lấy từ Quản lý kho.
-            </Typography>
-            <TableContainer component={Paper} variant="outlined" ref={tableRef}>
-              <Table size="small">
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={1.5}
+              alignItems={{ xs: "stretch", sm: "center" }}
+              sx={{ mb: 1 }}
+            >
+              <Box>
+                <Typography variant="h6">Danh sách Dịch vụ</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Số lượng, giá bán và trạng thái lấy từ Quản lý kho.
+                </Typography>
+              </Box>
+              <TextField
+                size="small"
+                placeholder="Tìm dịch vụ…"
+                value={serviceSearch}
+                onChange={(e) => setServiceSearch(e.target.value)}
+                sx={{ ml: { sm: "auto" }, minWidth: 220 }}
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon fontSize="small" />
+                      </InputAdornment>
+                    ),
+                  },
+                }}
+              />
+            </Stack>
+            <TableContainer
+              component={Paper}
+              variant="outlined"
+              ref={tableRef}
+              sx={{ maxHeight: TABLE_MAX_HEIGHT }}
+            >
+              <Table size="small" stickyHeader>
                 <TableHead>
                   <TableRow>
                     <TableCell>Dịch vụ</TableCell>
@@ -850,14 +940,14 @@ function SetupPage() {
                     </TableCell>
                     <TableCell sx={{ width: 90 }}>Đơn vị</TableCell>
                     <TableCell sx={{ width: 140 }} align="right">
-                      Giá bán
+                      Giá bán lẻ
                     </TableCell>
                     <TableCell sx={{ width: 160 }}>Trạng thái</TableCell>
                     <TableCell sx={{ width: 72 }}>Xoá</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {tableServices.map((ser, index) => (
+                  {visibleServices.map(({ row: ser, idx: index }) => (
                     <TableRow
                       key={index}
                       hover={!isRowPendingDelete(ser)}
@@ -895,6 +985,17 @@ function SetupPage() {
                       </TableCell>
                     </TableRow>
                   ))}
+                  {visibleServices.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                        <Typography color="text.secondary">
+                          {serviceSearch
+                            ? `Không tìm thấy "${serviceSearch}".`
+                            : "Chưa có dịch vụ nào."}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </TableContainer>

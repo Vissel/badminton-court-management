@@ -1,141 +1,391 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import Button from "@mui/material/Button";
-import Typography from "@mui/material/Typography";
-import Box from "@mui/material/Box";
+import TextField from "@mui/material/TextField";
+import MenuItem from "@mui/material/MenuItem";
+import Select from "@mui/material/Select";
+import FormControl from "@mui/material/FormControl";
+import InputLabel from "@mui/material/InputLabel";
 import Stack from "@mui/material/Stack";
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableContainer from "@mui/material/TableContainer";
-import TableHead from "@mui/material/TableHead";
-import TableRow from "@mui/material/TableRow";
+import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
-import Chip from "@mui/material/Chip";
-import CircularProgress from "@mui/material/CircularProgress";
-import CloudUploadIcon from "@mui/icons-material/CloudUpload";
-import { VN_CURRENCY, formatVND } from "../MoneyUtils";
+import Typography from "@mui/material/Typography";
+import InputAdornment from "@mui/material/InputAdornment";
+import ToggleButton from "@mui/material/ToggleButton";
+import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
+import DateInput from "../DateInput";
+import { VN_CURRENCY, formatVND, rawNumber } from "../MoneyUtils";
+import DraggableResizablePaper, { DIALOG_DRAG_HANDLE } from "./DraggableResizablePaper";
 import { ITEM_TYPES } from "./InventoryItemDialog";
-import { previewStockIntake, commitStockIntake } from "../../api/inventoryApi";
+import { recordPurchase } from "../../api/inventoryApi";
 
-const ACTION_LABELS = {
-  ADD: "Thêm mới",
-  UPDATE: "Nhập thêm",
-  SKIP: "Bỏ qua",
-  ERROR: "Lỗi",
-};
+/** Default unit config applied by the BE when creating a new SHUTTLE_BALL. */
+const NEW_BALL_DEFAULTS = { packageUnit: "ống", unitsPerPackage: 12, unit: "quả" };
 
-const ACTION_COLORS = {
-  ADD: "success",
-  UPDATE: "info",
-  SKIP: "default",
-  ERROR: "error",
+const todayStr = () => {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
 /**
- * Bulk stock intake from a StockIntake .xlsx sheet
- * (columns: Tên | Số lượng | Giá nhập | Ngày nhập | Đơn vị - optional,
- * e.g. ống/quả; blank defaults to the item's package unit). Preview → commit.
+ * Manual wholesale intake (Nhập sỉ): pick an existing item (autocomplete over
+ * `items`) or type a new name + type, define the item's Đơn vị lẻ / Đơn vị sỉ /
+ * Quy đổi sỉ sang lẻ, then buy by Đơn vị sỉ or Đơn vị lẻ at the corresponding
+ * buy price and optionally set Giá bán lẻ. Posts POST /api/inventory/purchases.
  */
-const StockIntakeDialog = ({ open, onClose, onSuccess }) => {
-  const [file, setFile] = useState(null);
-  const [preview, setPreview] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [committing, setCommitting] = useState(false);
+const StockIntakeDialog = ({ open, items, onClose, onSaved }) => {
+  const [name, setName] = useState("");
+  const [itemType, setItemType] = useState("GOODS");
+  const [baseUnit, setBaseUnit] = useState("");
+  const [packageUnit, setPackageUnit] = useState("");
+  const [unitsPerPackage, setUnitsPerPackage] = useState("");
+  const [unit, setUnit] = useState("PACKAGE");
+  const [quantity, setQuantity] = useState("");
+  const [unitCost, setUnitCost] = useState("");
+  const [retailPrice, setRetailPrice] = useState("");
+  const [purchaseDate, setPurchaseDate] = useState(todayStr());
+  const [supplier, setSupplier] = useState("");
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
-  const fileInputRef = useRef(null);
 
-  const handleClose = () => {
-    setFile(null);
-    setPreview(null);
-    setError(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-    onClose();
-  };
+  useEffect(() => {
+    if (open) {
+      setName("");
+      setItemType("GOODS");
+      setBaseUnit("");
+      setPackageUnit("");
+      setUnitsPerPackage("");
+      setUnit("PACKAGE");
+      setQuantity("");
+      setUnitCost("");
+      setRetailPrice("");
+      setPurchaseDate(todayStr());
+      setSupplier("");
+      setNote("");
+      setError(null);
+    }
+  }, [open]);
 
-  const handleFileChange = async (e) => {
-    const selected = e.target.files?.[0];
-    if (!selected) return;
+  const matchedItem = useMemo(
+    () =>
+      (items || []).find(
+        (i) => i.itemName.trim().toLowerCase() === name.trim().toLowerCase()
+      ),
+    [items, name]
+  );
 
-    setFile(selected);
-    setPreview(null);
-    setError(null);
-    setLoading(true);
+  // Prefill the unit section from the matched item so the sỉ/lẻ mapping the
+  // intake will use is exactly what is saved.
+  useEffect(() => {
+    if (matchedItem) {
+      setItemType(matchedItem.itemType);
+      setBaseUnit(matchedItem.unit || "");
+      setPackageUnit(matchedItem.packageUnit || "");
+      setUnitsPerPackage(
+        matchedItem.unitsPerPackage != null ? String(matchedItem.unitsPerPackage) : ""
+      );
+    }
+  }, [matchedItem]);
 
-    try {
-      const res = await previewStockIntake(selected);
-      const body = res?.data;
-      if (body?.success && body?.data) {
-        setPreview(body.data);
-      } else {
-        setError(body?.errorMessage || "Không đọc được file. Vui lòng thử lại.");
-      }
-    } catch (err) {
-      console.error("Preview intake failed", err);
-      setError("Có lỗi khi đọc file. Kiểm tra định dạng .xlsx.");
-    } finally {
-      setLoading(false);
+  const baseUnitVal = baseUnit.trim();
+  const packageUnitVal = packageUnit.trim();
+  const perPackage = rawNumber(unitsPerPackage || "0");
+  const hasPackage = Boolean(packageUnitVal && perPackage > 0);
+  const effectiveUnit = hasPackage ? unit : "BASE";
+
+  const filteredOptions = useMemo(() => {
+    const q = name.trim().toLowerCase();
+    if (!q) return [];
+    return (items || []).filter((i) =>
+      i.itemName.toLowerCase().includes(q)
+    );
+  }, [items, name]);
+
+  const qtyNum = rawNumber(quantity || "0");
+  const baseQty =
+    hasPackage && effectiveUnit === "PACKAGE" ? qtyNum * perPackage : qtyNum;
+  const canSave =
+    name.trim() && qtyNum > 0 && unitCost !== "" && purchaseDate;
+
+  // Unit the two prices are expressed in, driven by the sỉ/lẻ selection.
+  const intakeUnit = hasPackage
+    ? effectiveUnit === "PACKAGE"
+      ? packageUnitVal
+      : baseUnitVal || null
+    : baseUnitVal || null;
+  const buyPriceLabel =
+    hasPackage && effectiveUnit === "PACKAGE" ? "Giá sỉ" : "Giá nhập lẻ";
+  const quantityLabel = intakeUnit
+    ? `${hasPackage && effectiveUnit === "PACKAGE" ? "Số lượng sỉ" : "Số lượng lẻ"} (${intakeUnit})`
+    : "Số lượng";
+  const retailUnitLabel = baseUnitVal || "đơn vị lẻ";
+
+  const handleTypeChange = (value) => {
+    setItemType(value);
+    // New shuttle ball: prefill the standard ống/quả config so the sỉ/lẻ
+    // mapping is visible before saving.
+    if (value === "SHUTTLE_BALL" && !matchedItem && !baseUnit.trim() && !packageUnit.trim()) {
+      setBaseUnit(NEW_BALL_DEFAULTS.unit);
+      setPackageUnit(NEW_BALL_DEFAULTS.packageUnit);
+      setUnitsPerPackage(String(NEW_BALL_DEFAULTS.unitsPerPackage));
     }
   };
 
-  const handleCommit = async () => {
-    if (!preview?.importToken) return;
-    setCommitting(true);
+  const handleSave = async () => {
+    if (!canSave) return;
+    setSaving(true);
     setError(null);
+    const payload = {
+      ...(matchedItem
+        ? { itemId: matchedItem.itemId }
+        : { itemName: name.trim(), itemType }),
+      // item units: the same section as "Sửa mặt hàng", applied on intake
+      ...(baseUnitVal ? { baseUnit: baseUnitVal } : {}),
+      packageUnit: packageUnitVal,
+      ...(packageUnitVal ? { unitsPerPackage: perPackage } : {}),
+      purchaseDate,
+      unit: effectiveUnit,
+      quantity: qtyNum,
+      unitCost: rawNumber(unitCost),
+      ...(retailPrice !== "" ? { retailPrice: rawNumber(retailPrice) } : {}),
+      ...(supplier.trim() ? { supplier: supplier.trim() } : {}),
+      ...(note.trim() ? { note: note.trim() } : {}),
+    };
     try {
-      const res = await commitStockIntake(preview.importToken);
+      const res = await recordPurchase(payload);
       if (res?.data?.success) {
-        onSuccess?.();
-        handleClose();
+        onSaved?.();
+        onClose();
       } else {
-        setError(res?.data?.errorMessage || "Nhập kho thất bại.");
+        setError(res?.data?.errorMessage || "Nhập sỉ thất bại.");
       }
     } catch (err) {
-      console.error("Commit intake failed", err);
-      setError("Có lỗi khi áp dụng file nhập.");
+      console.error("Record purchase failed", err);
+      setError("Có lỗi khi nhập sỉ.");
     } finally {
-      setCommitting(false);
+      setSaving(false);
     }
   };
-
-  const rows = preview?.rows || [];
-  const validRows = rows.filter((r) => r.action !== "ERROR");
-  const counts = preview?.counts || {};
-  const canCommit = validRows.length > 0 && !loading && !committing;
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
-      <DialogTitle>Nhập kho từ file Excel</DialogTitle>
+    <Dialog
+      open={open}
+      onClose={saving ? undefined : onClose}
+      maxWidth="sm"
+      fullWidth
+      PaperComponent={DraggableResizablePaper}
+    >
+      <DialogTitle className={DIALOG_DRAG_HANDLE} sx={{ cursor: "move" }}>
+        Nhập sỉ
+      </DialogTitle>
       <DialogContent dividers>
-        <Stack spacing={2}>
-          <Button
-            variant="outlined"
-            component="label"
-            startIcon={<CloudUploadIcon />}
-            disabled={loading || committing}
-            fullWidth
-            sx={{ py: 1.5 }}
-          >
-            {file ? file.name : "Chọn file .xlsx (sheet StockIntake)"}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-              hidden
-              onChange={handleFileChange}
+        <Stack spacing={2} sx={{ pt: 0.5 }}>
+          <Box sx={{ position: "relative" }}>
+            <TextField
+              label="Mặt hàng"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              fullWidth
+              autoFocus
             />
-          </Button>
+            {filteredOptions.length > 0 && name !== matchedItem?.itemName && (
+              <Paper
+                sx={{
+                  position: "absolute",
+                  top: "100%",
+                  left: 0,
+                  right: 0,
+                  zIndex: 20,
+                  maxHeight: 180,
+                  overflow: "auto",
+                  mt: 0.25,
+                }}
+              >
+                {filteredOptions.map((opt) => (
+                  <Box
+                    key={opt.itemId}
+                    onClick={() => {
+                      setName(opt.itemName);
+                      setItemType(opt.itemType);
+                      setBaseUnit(opt.unit || "");
+                      setPackageUnit(opt.packageUnit || "");
+                      setUnitsPerPackage(
+                        opt.unitsPerPackage != null ? String(opt.unitsPerPackage) : ""
+                      );
+                      if (opt.retailPrice != null) {
+                        setRetailPrice(formatVND(opt.retailPrice));
+                      }
+                    }}
+                    sx={{
+                      px: 1.5,
+                      py: 0.75,
+                      cursor: "pointer",
+                      fontSize: "0.85rem",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      "&:hover": { bgcolor: "action.hover" },
+                    }}
+                  >
+                    <span>{opt.itemName}</span>
+                    <span>
+                      tồn {opt.stockOnHand} {opt.unit}
+                      {opt.packageBreakdown ? ` (${opt.packageBreakdown})` : ""}
+                    </span>
+                  </Box>
+                ))}
+              </Paper>
+            )}
+          </Box>
 
-          {loading && (
-            <Box sx={{ textAlign: "center", py: 2 }}>
-              <CircularProgress size={24} sx={{ mr: 1 }} />
-              <Typography variant="body2" color="text.secondary" component="span">
-                Đang đọc file...
-              </Typography>
-            </Box>
+          <FormControl fullWidth>
+            <InputLabel id="intake-item-type-label">Loại</InputLabel>
+            <Select
+              labelId="intake-item-type-label"
+              label="Loại"
+              value={itemType}
+              onChange={(e) => handleTypeChange(e.target.value)}
+            >
+              <MenuItem value="SHUTTLE_BALL">{ITEM_TYPES.SHUTTLE_BALL}</MenuItem>
+              <MenuItem value="GOODS">{ITEM_TYPES.GOODS}</MenuItem>
+            </Select>
+          </FormControl>
+
+          <TextField
+            label="Đơn vị lẻ"
+            value={baseUnit}
+            onChange={(e) => setBaseUnit(e.target.value)}
+            placeholder="quả, chai..."
+            helperText="Đơn vị nhỏ nhất để đếm kho và bán lẻ"
+            fullWidth
+          />
+          <Stack direction="row" spacing={1}>
+            <TextField
+              label="Đơn vị sỉ"
+              value={packageUnit}
+              onChange={(e) => setPackageUnit(e.target.value)}
+              placeholder="ống, thùng..."
+              helperText="Bỏ trống nếu chỉ nhập theo đơn vị lẻ"
+              fullWidth
+            />
+            <TextField
+              label="Quy đổi sỉ sang lẻ"
+              value={unitsPerPackage}
+              onChange={(e) =>
+                setUnitsPerPackage(
+                  e.target.value === "" ? "" : String(rawNumber(e.target.value))
+                )
+              }
+              disabled={!packageUnitVal}
+              helperText={
+                packageUnitVal
+                  ? `1 ${packageUnitVal} = ? ${baseUnitVal || "đơn vị lẻ"}`
+                  : " "
+              }
+              fullWidth
+            />
+          </Stack>
+
+          {hasPackage && (
+            <ToggleButtonGroup
+              exclusive
+              value={unit}
+              onChange={(_, v) => v && setUnit(v)}
+              fullWidth
+            >
+              <ToggleButton value="PACKAGE">
+                Đơn vị sỉ: {packageUnitVal} (1 {packageUnitVal} = {perPackage}{" "}
+                {baseUnitVal || "đơn vị lẻ"})
+              </ToggleButton>
+              <ToggleButton value="BASE">
+                Đơn vị lẻ: {baseUnitVal || "đơn vị lẻ"}
+              </ToggleButton>
+            </ToggleButtonGroup>
+          )}
+
+          <Stack direction="row" spacing={1}>
+            <TextField
+              label={quantityLabel}
+              value={quantity}
+              onChange={(e) =>
+                setQuantity(
+                  e.target.value === "" ? "" : String(rawNumber(e.target.value))
+                )
+              }
+              fullWidth
+            />
+            <TextField
+              label={buyPriceLabel}
+              value={unitCost}
+              onChange={(e) =>
+                setUnitCost(
+                  e.target.value === "" ? "" : formatVND(rawNumber(e.target.value))
+                )
+              }
+              fullWidth
+              slotProps={{
+                input: {
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      {intakeUnit ? `${VN_CURRENCY}/${intakeUnit}` : VN_CURRENCY}
+                    </InputAdornment>
+                  ),
+                },
+              }}
+            />
+          </Stack>
+
+          <TextField
+            label="Giá bán lẻ"
+            value={retailPrice}
+            onChange={(e) =>
+              setRetailPrice(
+                e.target.value === "" ? "" : formatVND(rawNumber(e.target.value))
+              )
+            }
+            helperText={`Tính theo 1 ${retailUnitLabel}`}
+            fullWidth
+            slotProps={{
+              input: {
+                endAdornment: (
+                  <InputAdornment position="end">
+                    {VN_CURRENCY}/{retailUnitLabel}
+                  </InputAdornment>
+                ),
+              },
+            }}
+          />
+
+          <DateInput
+            label="Ngày nhập"
+            value={purchaseDate}
+            onChange={setPurchaseDate}
+            fullWidth
+          />
+
+          <TextField
+            label="Nhà cung cấp"
+            value={supplier}
+            onChange={(e) => setSupplier(e.target.value)}
+            fullWidth
+          />
+
+          <TextField
+            label="Ghi chú"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            fullWidth
+          />
+
+          {hasPackage && effectiveUnit === "PACKAGE" && qtyNum > 0 && (
+            <Typography variant="body2" color="text.secondary">
+              Quy đổi sỉ sang lẻ: {qtyNum} {packageUnitVal} = {baseQty}{" "}
+              {baseUnitVal || "đơn vị lẻ"}
+            </Typography>
           )}
 
           {error && (
@@ -143,94 +393,14 @@ const StockIntakeDialog = ({ open, onClose, onSuccess }) => {
               {error}
             </Typography>
           )}
-
-          {preview && (
-            <>
-              <Stack direction="row" spacing={1} flexWrap="wrap">
-                {counts.added > 0 && (
-                  <Chip size="small" color="success" label={`Thêm: ${counts.added}`} />
-                )}
-                {counts.updated > 0 && (
-                  <Chip size="small" color="info" label={`Nhập thêm: ${counts.updated}`} />
-                )}
-                {counts.skipped > 0 && (
-                  <Chip size="small" label={`Bỏ qua: ${counts.skipped}`} />
-                )}
-                {counts.errors > 0 && (
-                  <Chip size="small" color="error" label={`Lỗi: ${counts.errors}`} />
-                )}
-              </Stack>
-
-              <TableContainer component={Paper} variant="outlined">
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Dòng</TableCell>
-                      <TableCell>Tên</TableCell>
-                      <TableCell>Loại</TableCell>
-                      <TableCell>Số lượng</TableCell>
-                      <TableCell>Giá nhập ({VN_CURRENCY})</TableCell>
-                      <TableCell>Ngày nhập</TableCell>
-                      <TableCell>Hành động</TableCell>
-                      <TableCell>Ghi chú</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {rows.map((row, idx) => (
-                      <TableRow
-                        key={idx}
-                        sx={
-                          row.action === "ERROR"
-                            ? { bgcolor: "error.50" }
-                            : undefined
-                        }
-                      >
-                        <TableCell>{row.rowNumber}</TableCell>
-                        <TableCell>{row.name || "-"}</TableCell>
-                        <TableCell>
-                          {ITEM_TYPES[row.itemType] || row.itemType || "-"}
-                        </TableCell>
-                        <TableCell>
-                          {row.quantity ?? "-"}
-                          {row.unit ? ` ${row.unit}` : ""}
-                          {row.baseQuantity != null &&
-                            row.baseQuantity !== row.quantity &&
-                            ` (= ${row.baseQuantity})`}
-                        </TableCell>
-                        <TableCell>
-                          {row.unitCost != null ? formatVND(row.unitCost) : "-"}
-                        </TableCell>
-                        <TableCell>{row.purchaseDate || "-"}</TableCell>
-                        <TableCell>
-                          <Chip
-                            size="small"
-                            color={ACTION_COLORS[row.action] || "default"}
-                            label={ACTION_LABELS[row.action] || row.action}
-                          />
-                        </TableCell>
-                        <TableCell sx={row.action === "ERROR" ? { color: "error.main" } : undefined}>
-                          {row.message || "-"}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </>
-          )}
         </Stack>
       </DialogContent>
       <DialogActions sx={{ px: 3, py: 2, gap: 1 }}>
-        <Button onClick={handleClose} disabled={committing}>
-          Đóng
+        <Button onClick={onClose} disabled={saving}>
+          Huỷ
         </Button>
-        <Button
-          variant="contained"
-          onClick={handleCommit}
-          disabled={!canCommit}
-          loading={committing}
-        >
-          {committing ? "Đang áp dụng..." : `Áp dụng ${validRows.length} dòng hợp lệ`}
+        <Button variant="contained" onClick={handleSave} disabled={!canSave || saving}>
+          {saving ? "Đang lưu..." : "Nhập sỉ"}
         </Button>
       </DialogActions>
     </Dialog>

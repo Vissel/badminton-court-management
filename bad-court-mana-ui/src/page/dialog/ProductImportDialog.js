@@ -18,6 +18,7 @@ import Chip from "@mui/material/Chip";
 import CircularProgress from "@mui/material/CircularProgress";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import { VN_CURRENCY, formatVND } from "../MoneyUtils";
+import DraggableResizablePaper, { DIALOG_DRAG_HANDLE } from "./DraggableResizablePaper";
 import {
   previewImportProducts,
   commitImportProducts,
@@ -112,8 +113,16 @@ const ProductImportDialog = ({ open, onClose, onSuccess }) => {
   const canCommit = validRows.length > 0 && !loading && !committing;
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
-      <DialogTitle>Nhập hàng từ file Excel</DialogTitle>
+    <Dialog
+      open={open}
+      onClose={handleClose}
+      maxWidth="sm"
+      fullWidth
+      PaperComponent={DraggableResizablePaper}
+    >
+      <DialogTitle className={DIALOG_DRAG_HANDLE} sx={{ cursor: "move" }}>
+        Nhập hàng từ file Excel
+      </DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2}>
           <Button

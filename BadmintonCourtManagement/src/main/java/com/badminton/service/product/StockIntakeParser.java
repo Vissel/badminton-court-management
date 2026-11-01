@@ -24,10 +24,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Parses the {@code StockIntake} sheet used for bulk wholesale intake.
- * Columns: Tên | Số lượng | Giá nhập | Ngày nhập | Đơn vị (both trailing
+ * Parses the {@code StockIntake} sheet used for bulk wholesale intake (nhập
+ * sỉ).
+ * Columns: Tên | Số lượng sỉ | Giá sỉ | Ngày nhập | Đơn vị sỉ (both trailing
  * columns optional - blank date defaults to today, blank unit defaults to the
- * item's package unit).
+ * item's Đơn vị sỉ).
  * Invalid rows are returned with action {@link ImportAction#ERROR};
  * item resolution is left to the service layer.
  */
@@ -71,7 +72,7 @@ public class StockIntakeParser {
     }
 
     private void parseSheet(Sheet sheet, FormulaEvaluator evaluator,
-                            DataFormatter formatter, List<StockIntakeRow> rows) {
+            DataFormatter formatter, List<StockIntakeRow> rows) {
         int dataRowCount = 0;
         for (int i = HEADER_ROW_INDEX + 1; i <= sheet.getLastRowNum(); i++) {
             Row row = sheet.getRow(i);
@@ -112,7 +113,7 @@ public class StockIntakeParser {
             }
             BigDecimal unitCost = readUnitCost(row.getCell(2), evaluator);
             if (unitCost == null || unitCost.signum() < 0) {
-                rows.add(errorRow(rowNumber, name, "Giá nhập không hợp lệ"));
+                rows.add(errorRow(rowNumber, name, "Giá sỉ không hợp lệ"));
                 continue;
             }
 

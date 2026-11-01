@@ -29,8 +29,8 @@ import EditIcon from "@mui/icons-material/Edit";
 import SearchIcon from "@mui/icons-material/Search";
 import FastfoodIcon from "@mui/icons-material/Fastfood";
 import InventoryItemDialog, { ITEM_TYPES } from "./dialog/InventoryItemDialog";
-import PurchaseDialog from "./dialog/PurchaseDialog";
 import StockIntakeDialog from "./dialog/StockIntakeDialog";
+import StockFileIntakeDialog from "./dialog/StockFileIntakeDialog";
 import StockLedgerDialog from "./dialog/StockLedgerDialog";
 import StockAdjustDialog from "./dialog/StockAdjustDialog";
 import { listInventoryItems, exportInventory, updateInventoryItem } from "../api/inventoryApi";
@@ -112,6 +112,12 @@ export default function InventoryPage() {
     normalizeSearchText(i.itemName).includes(normalizeSearchText(searchQuery))
   );
   const isAllMode = activeType === "ALL";
+  // Hàng hoá can carry a Đơn vị sỉ too (e.g. thùng): when any item in the tab
+  // has a sỉ/lẻ conversion, the sỉ intake column is shown exactly like
+  // SHUTTLE_BALL.
+  const hasWholesaleItems = items.some(
+    (i) => Boolean(i.packageUnit && i.unitsPerPackage > 0)
+  );
 
   const startPriceEdit = (item) => {
     setPriceEditId(item.itemId);
@@ -181,7 +187,7 @@ export default function InventoryPage() {
           onClick={() => setDialog({ type: "purchase" })}
           disabled={loading}
         >
-          Nhập kho
+          Nhập sỉ
         </Button>
         <Button
           variant="outlined"
@@ -189,7 +195,7 @@ export default function InventoryPage() {
           onClick={() => setDialog({ type: "intake" })}
           disabled={loading}
         >
-          Nhập file
+          Nhập sỉ từ file
         </Button>
         <Button
           variant="outlined"
@@ -281,16 +287,16 @@ export default function InventoryPage() {
                 <TableCell>Tên mặt hàng</TableCell>
                 {isAllMode && <TableCell>Loại</TableCell>}
                 <TableCell>Thời gian nhập hàng</TableCell>
-                {activeType === "SHUTTLE_BALL" ? (
+                {hasWholesaleItems ? (
                   <>
-                    <TableCell align="right">Nhập (ống)</TableCell>
-                    <TableCell align="right">#</TableCell>
+                    <TableCell align="right">Đã nhập (sỉ)</TableCell>
+                    <TableCell align="right">Tổng nhập (lẻ)</TableCell>
                   </>
                 ) : (
-                  <TableCell align="right">Nhập</TableCell>
+                  <TableCell align="right">Tổng nhập</TableCell>
                 )}
                 <TableCell align="right">Còn lại</TableCell>
-                <TableCell align="right">Giá bán</TableCell>
+                <TableCell align="right">Giá bán lẻ</TableCell>
                 <TableCell sx={{ width: 130 }}></TableCell>
               </TableRow>
             </TableHead>
@@ -348,7 +354,7 @@ export default function InventoryPage() {
                         ? item.lastPurchaseDate.split("-").reverse().join("/")
                         : "-"}
                     </TableCell>
-                    {activeType === "SHUTTLE_BALL" && (
+                    {hasWholesaleItems && (
                       <TableCell align="right" sx={{ color: "text.secondary" }}>
                         {item.purchasedBreakdown || "-"}
                       </TableCell>
@@ -390,7 +396,7 @@ export default function InventoryPage() {
                           sx={{ width: 150 }}
                         />
                       ) : (
-                        <Tooltip title="Nhấn để sửa Giá bán (dùng cho trang Cài đặt)">
+                        <Tooltip title="Nhấn để sửa Giá bán lẻ (dùng cho trang Cài đặt)">
                           <Stack
                             direction="row"
                             spacing={0.5}
@@ -408,7 +414,7 @@ export default function InventoryPage() {
                                 size="small"
                                 color="warning"
                                 variant="outlined"
-                                label="Thiếu giá bán"
+                                label="Thiếu giá bán lẻ"
                               />
                             )}
                           </Stack>
@@ -450,7 +456,7 @@ export default function InventoryPage() {
               {visibleItems.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={isAllMode || activeType === "SHUTTLE_BALL" ? 8 : 7}
+                    colSpan={7 + (isAllMode ? 1 : 0) + (hasWholesaleItems ? 1 : 0)}
                     align="center"
                     sx={{ py: 4 }}
                   >
@@ -458,8 +464,8 @@ export default function InventoryPage() {
                       {searchQuery
                         ? `Không tìm thấy "${searchQuery}".`
                         : isAllMode
-                          ? `Chưa có mặt hàng nào. Nhấn "Nhập kho" hoặc "Nhập file" để bắt đầu.`
-                          : `Chưa có ${TAB_TYPES[activeType].label.toLowerCase()} nào. Nhấn "Nhập kho" hoặc "Nhập file" để bắt đầu.`}
+                          ? `Chưa có mặt hàng nào. Nhấn "Nhập sỉ" hoặc "Nhập sỉ từ file" để bắt đầu.`
+                          : `Chưa có ${TAB_TYPES[activeType].label.toLowerCase()} nào. Nhấn "Nhập sỉ" hoặc "Nhập sỉ từ file" để bắt đầu.`}
                     </Typography>
                   </TableCell>
                 </TableRow>
@@ -475,13 +481,13 @@ export default function InventoryPage() {
         onClose={closeDialog}
         onSaved={onSaved}
       />
-      <PurchaseDialog
+      <StockIntakeDialog
         open={dialog.type === "purchase"}
         items={items}
         onClose={closeDialog}
         onSaved={onSaved}
       />
-      <StockIntakeDialog
+      <StockFileIntakeDialog
         open={dialog.type === "intake"}
         onClose={closeDialog}
         onSuccess={onSaved}

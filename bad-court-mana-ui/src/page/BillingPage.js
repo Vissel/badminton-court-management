@@ -45,6 +45,7 @@ import {
 import { emitApiError } from "../api/errorBus";
 import { AuthContext } from "../context/AuthContext";
 import ReceiptPrintDialog from "./dialog/ReceiptPrintDialog";
+import DateInput from "./DateInput";
 import { downloadExport } from "./DebtManagementPage";
 import { VN_CURRENCY, formatVND } from "./MoneyUtils";
 
@@ -261,21 +262,17 @@ export default function BillingPage() {
           onKeyDown={(e) => e.key === "Enter" && applyFilters()}
           sx={{ minWidth: 220 }}
         />
-        <TextField
+        <DateInput
           size="small"
-          type="date"
           label="Từ ngày"
           value={fromDate}
-          onChange={(e) => setFromDate(e.target.value)}
-          slotProps={{ inputLabel: { shrink: true } }}
+          onChange={setFromDate}
         />
-        <TextField
+        <DateInput
           size="small"
-          type="date"
           label="Đến ngày"
           value={toDate}
-          onChange={(e) => setToDate(e.target.value)}
-          slotProps={{ inputLabel: { shrink: true } }}
+          onChange={setToDate}
         />
         <FormControl size="small" sx={{ minWidth: 150 }}>
           <InputLabel>Trạng thái</InputLabel>

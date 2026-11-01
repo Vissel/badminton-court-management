@@ -10,16 +10,21 @@ import Snackbar from "@mui/material/Snackbar";
 import Alert from "@mui/material/Alert";
 import MenuItem from "@mui/material/MenuItem";
 import Chip from "@mui/material/Chip";
+import InputAdornment from "@mui/material/InputAdornment";
+import Paper from "@mui/material/Paper";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
+import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
+import SearchIcon from "@mui/icons-material/Search";
 import api from "../api/index";
 import { emitApiError } from "../api/errorBus";
 import { encryptPassword, withKeyRetry } from "../api/rsaCrypto";
 import { AuthContext } from "../context/AuthContext";
 import { getUsername } from "../api/tokenStore";
+import { normalizeSearchText } from "./TextUtils";
 
 const RESET_TOKEN_TTL = 3 * 60 * 1000;
 
@@ -29,6 +34,7 @@ function SuperAdminPage() {
   const myUsername = getUsername();
 
   const [users, setUsers] = useState([]);
+  const [userSearch, setUserSearch] = useState("");
   const [reg, setReg] = useState({
     userName: "",
     password: "",
@@ -59,6 +65,21 @@ function SuperAdminPage() {
 
   // Vietnamese label for a role key; falls back to the raw key when missing.
   const vnLabel = (role) => vnRoleMapping?.[role] ?? role;
+
+  // Free-text search over both the login name and the role, whether the user
+  // types the raw key ("Administrator") or its Vietnamese label ("Quản trị viên").
+  const searchTerm = normalizeSearchText(userSearch);
+  const visibleUsers = searchTerm
+    ? users.filter((user) => {
+      const nameMatches = normalizeSearchText(user.username).includes(searchTerm);
+      const roleMatches = (user.roles || []).some(
+        (role) =>
+          normalizeSearchText(role).includes(searchTerm) ||
+          normalizeSearchText(vnLabel(role)).includes(searchTerm)
+      );
+      return nameMatches || roleMatches;
+    })
+    : users;
 
   const loadUsers = useCallback(async () => {
     try {
@@ -247,90 +268,137 @@ function SuperAdminPage() {
           <Typography variant="h5" gutterBottom>
             User management
           </Typography>
-          <Table size="small" sx={{ maxWidth: isRoot ? 900 : 720 }}>
-            <TableHead>
-              <TableRow>
-                <TableCell>Tên đăng nhập</TableCell>
-                <TableCell>Vai trò</TableCell>
-                {isRoot && <TableCell>Quản lý</TableCell>}
-                <TableCell>Trạng thái</TableCell>
-                <TableCell align="right">Hành động</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {users.map((user) => {
-                const manageable = canManage(user) && user.username !== myUsername;
-                return (
-                  <TableRow key={user.userId}>
-                    <TableCell>{user.username}</TableCell>
-                    <TableCell>
-                      <TextField
-                        select
-                        size="small"
-                        value={primaryRole(user)}
-                        disabled={!manageable}
-                        onChange={(e) => handleRoleChange(user, e.target.value)}
-                        sx={{ minWidth: 150 }}
-                      >
-                        {roleOptions.map((role) => (
-                          <MenuItem key={role} value={role}>
-                            {vnLabel(role)}
-                          </MenuItem>
-                        ))}
-                        {/* Existing root accounts keep their label visible but the
-                            option itself is disabled, so Root can be removed only. */}
-                        {!roleOptions.includes(primaryRole(user)) && (
-                          <MenuItem value={primaryRole(user)} disabled>
-                            {vnLabel(primaryRole(user))}
-                          </MenuItem>
-                        )}
-                      </TextField>
-                    </TableCell>
-                    {isRoot && (
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={2}
+            alignItems={{ xs: "stretch", sm: "center" }}
+            sx={{ mb: 1.5, maxWidth: isRoot ? 900 : 720 }}
+          >
+            <TextField
+              size="small"
+              label="Tìm kiếm"
+              placeholder="Tên đăng nhập hoặc vai trò…"
+              value={userSearch}
+              onChange={(e) => setUserSearch(e.target.value)}
+              sx={{ minWidth: 260 }}
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" />
+                    </InputAdornment>
+                  ),
+                },
+              }}
+            />
+            <Typography variant="body2" color="text.secondary" sx={{ ml: "auto" }}>
+              {visibleUsers.length}/{users.length} người dùng
+            </Typography>
+          </Stack>
+          <TableContainer
+            component={Paper}
+            variant="outlined"
+            // Ten small rows (10 × 52px) under the sticky header (32px) plus the
+            // outlined border: the body scrolls instead of the table growing past
+            // ten visible rows.
+            sx={{ maxWidth: isRoot ? 900 : 720, maxHeight: 554 }}
+          >
+            <Table size="small" stickyHeader>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Tên đăng nhập</TableCell>
+                  <TableCell>Vai trò</TableCell>
+                  {isRoot && <TableCell>Quản lý</TableCell>}
+                  <TableCell>Trạng thái</TableCell>
+                  <TableCell align="right">Hành động</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {visibleUsers.map((user) => {
+                  const manageable = canManage(user) && user.username !== myUsername;
+                  return (
+                    <TableRow key={user.userId}>
+                      <TableCell>{user.username}</TableCell>
                       <TableCell>
-                        {primaryRole(user) === "Coordinator" ? (
-                          <TextField
-                            select
-                            size="small"
-                            value={user.managerUserId ?? ""}
-                            onChange={(e) => handleManagerChange(user, e.target.value)}
-                            sx={{ minWidth: 170 }}
-                          >
-                            <MenuItem value="">— Chưa gán —</MenuItem>
-                            {administrators.map((admin) => (
-                              <MenuItem key={admin.userId} value={admin.userId}>
-                                {admin.username}
-                              </MenuItem>
-                            ))}
-                          </TextField>
-                        ) : (
-                          "—"
-                        )}
+                        <TextField
+                          select
+                          size="small"
+                          value={primaryRole(user)}
+                          disabled={!manageable}
+                          onChange={(e) => handleRoleChange(user, e.target.value)}
+                          sx={{ minWidth: 150 }}
+                        >
+                          {roleOptions.map((role) => (
+                            <MenuItem key={role} value={role}>
+                              {vnLabel(role)}
+                            </MenuItem>
+                          ))}
+                          {/* Existing root accounts keep their label visible but the
+                              option itself is disabled, so Root can be removed only. */}
+                          {!roleOptions.includes(primaryRole(user)) && (
+                            <MenuItem value={primaryRole(user)} disabled>
+                              {vnLabel(primaryRole(user))}
+                            </MenuItem>
+                          )}
+                        </TextField>
                       </TableCell>
-                    )}
-                    <TableCell>
-                      <Chip
-                        size="small"
-                        color={user.active ? "success" : "default"}
-                        label={user.active ? "Hoạt động" : "Vô hiệu"}
-                      />
-                    </TableCell>
-                    <TableCell align="right">
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        color={user.active ? "dark" : "success"}
-                        disabled={!manageable}
-                        onClick={() => handleStatusChange(user)}
-                      >
-                        {user.active ? "Vô hiệu" : "Kích hoạt"}
-                      </Button>
+                      {isRoot && (
+                        <TableCell>
+                          {primaryRole(user) === "Coordinator" ? (
+                            <TextField
+                              select
+                              size="small"
+                              value={user.managerUserId ?? ""}
+                              onChange={(e) => handleManagerChange(user, e.target.value)}
+                              sx={{ minWidth: 170 }}
+                            >
+                              <MenuItem value="">— Chưa gán —</MenuItem>
+                              {administrators.map((admin) => (
+                                <MenuItem key={admin.userId} value={admin.userId}>
+                                  {admin.username}
+                                </MenuItem>
+                              ))}
+                            </TextField>
+                          ) : (
+                            "—"
+                          )}
+                        </TableCell>
+                      )}
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          color={user.active ? "success" : "default"}
+                          label={user.active ? "Hoạt động" : "Vô hiệu"}
+                        />
+                      </TableCell>
+                      <TableCell align="right">
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color={user.active ? "dark" : "success"}
+                          disabled={!manageable}
+                          onClick={() => handleStatusChange(user)}
+                        >
+                          {user.active ? "Vô hiệu" : "Kích hoạt"}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+                {visibleUsers.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={isRoot ? 6 : 5} align="center" sx={{ py: 4 }}>
+                      <Typography color="text.secondary">
+                        {userSearch
+                          ? `Không tìm thấy "${userSearch}".`
+                          : "Chưa có người dùng nào."}
+                      </Typography>
                     </TableCell>
                   </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
         </Grid>
 
         <Grid size={{ xs: 12 }}>

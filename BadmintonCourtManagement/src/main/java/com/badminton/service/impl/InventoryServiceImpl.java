@@ -249,11 +249,13 @@ public class InventoryServiceImpl implements InventoryService {
             InventoryItem item = resolveOrCreateItem(request);
             if (request.getRetailPrice() != null) {
                 if (request.getRetailPrice().signum() < 0) {
-                    throw new IllegalArgumentException("Giá bán không được âm");
+                    throw new IllegalArgumentException("Giá bán lẻ không được âm");
                 }
                 item.setRetailPrice(request.getRetailPrice());
                 itemRepo.save(item);
             }
+            // Nhập sỉ can also define the item's units (Đơn vị lẻ / sỉ / quy đổi)
+            applyIntakeUnitConfig(item, request);
             UnitSelection selection = resolveUnitSelection(item, request.getUnit());
             int baseQty = request.getQuantity() * selection.multiplier();
 
@@ -286,7 +288,7 @@ public class InventoryServiceImpl implements InventoryService {
             log.error("Failed to record purchase", e);
             result.setSuccess(false);
             result.setErrorCode(500);
-            result.setErrorMessage("Nhập kho thất bại, toàn bộ thay đổi đã được hủy");
+            result.setErrorMessage("Nhập sỉ thất bại, toàn bộ thay đổi đã được hủy");
         }
         return result;
     }
@@ -440,7 +442,7 @@ public class InventoryServiceImpl implements InventoryService {
             log.error("Stock intake commit failed", e);
             result.setSuccess(false);
             result.setErrorCode(500);
-            result.setErrorMessage("Nhập kho thất bại, toàn bộ thay đổi đã được hủy");
+            result.setErrorMessage("Nhập sỉ thất bại, toàn bộ thay đổi đã được hủy");
         }
         return result;
     }
@@ -469,16 +471,16 @@ public class InventoryServiceImpl implements InventoryService {
                     .anyMatch(ShuttleBall::isActive);
             row.setItemType(isBall ? InventoryItemType.SHUTTLE_BALL : InventoryItemType.GOODS);
             row.setAction(ImportAction.ADD);
-            row.setMessage("Tạo mới sản phẩm + nhập kho");
+            row.setMessage("Tạo mới sản phẩm + nhập sỉ");
         } else {
             row.setItemType(item.getItemType());
             row.setItemRef(item);
             if (item.isActive()) {
                 row.setAction(ImportAction.UPDATE);
-                row.setMessage("Nhập thêm vào sản phẩm hiện có");
+                row.setMessage("Nhập sỉ thêm vào sản phẩm hiện có");
             } else {
                 row.setAction(ImportAction.REACTIVATE);
-                row.setMessage("Kích hoạt lại + nhập kho");
+                row.setMessage("Kích hoạt lại + nhập sỉ");
             }
         }
         applyUnitResolution(row, item);
@@ -490,11 +492,11 @@ public class InventoryServiceImpl implements InventoryService {
      */
     private void applyUnitResolution(StockIntakeRow row, InventoryItem item) {
         try {
-            UnitSelection selection = resolveUnitSelection(
-                    item != null ? item : newItemWithUnitDefaults(row.getItemType()),
-                    row.getUnit());
+            InventoryItem unitSource = item != null ? item : newItemWithUnitDefaults(row.getItemType());
+            UnitSelection selection = resolveUnitSelection(unitSource, row.getUnit());
             row.setUnit(selection.label());
             row.setBaseQuantity(row.getQuantity() * selection.multiplier());
+            row.setBaseUnit(unitSource.getUnit());
         } catch (IllegalArgumentException e) {
             row.setAction(ImportAction.ERROR);
             row.setMessage(e.getMessage());
@@ -1048,6 +1050,42 @@ public class InventoryServiceImpl implements InventoryService {
         }
     }
 
+    /**
+     * Nhập sỉ can also define the item's units: Đơn vị lẻ (base), Đơn vị sỉ
+     * (package) and the Quy đổi sỉ sang lẻ. A blank Đơn vị sỉ clears the
+     * package config; fields left out of the request leave the item untouched.
+     */
+    private void applyIntakeUnitConfig(InventoryItem item, PurchaseRequest request) {
+        boolean changed = false;
+        if (request.getBaseUnit() != null && !request.getBaseUnit().isBlank()
+                && !request.getBaseUnit().trim().equals(item.getUnit())) {
+            item.setUnit(request.getBaseUnit().trim());
+            changed = true;
+        }
+        if (request.getPackageUnit() != null) {
+            String pkg = request.getPackageUnit().trim();
+            if (pkg.isEmpty()) {
+                if (item.getPackageUnit() != null) {
+                    item.setPackageUnit(null);
+                    item.setUnitsPerPackage(null);
+                    changed = true;
+                }
+            } else if (!pkg.equals(item.getPackageUnit())) {
+                item.setPackageUnit(pkg);
+                changed = true;
+            }
+        }
+        if (request.getUnitsPerPackage() != null
+                && !request.getUnitsPerPackage().equals(item.getUnitsPerPackage())) {
+            item.setUnitsPerPackage(request.getUnitsPerPackage());
+            changed = true;
+        }
+        if (changed) {
+            validatePackageConfig(item);
+            itemRepo.save(item);
+        }
+    }
+
     private void validatePackageConfig(InventoryItem item) {
         if (item.getPackageUnit() != null
                 && (item.getUnitsPerPackage() == null || item.getUnitsPerPackage() <= 0)) {
@@ -1122,7 +1160,7 @@ public class InventoryServiceImpl implements InventoryService {
             throw new IllegalArgumentException("Số lượng phải lớn hơn 0");
         }
         if (request.getUnitCost() == null || request.getUnitCost().signum() < 0) {
-            throw new IllegalArgumentException("Giá nhập không hợp lệ");
+            throw new IllegalArgumentException("Giá sỉ không hợp lệ");
         }
     }
 
@@ -1159,7 +1197,7 @@ public class InventoryServiceImpl implements InventoryService {
         List<StockIntakeRowResponse> responses = new ArrayList<>(rows.size());
         for (StockIntakeRow row : rows) {
             responses.add(new StockIntakeRowResponse(row.getRowNumber(), row.getName(),
-                    row.getQuantity(), row.getUnit(), row.getBaseQuantity(),
+                    row.getQuantity(), row.getUnit(), row.getBaseQuantity(), row.getBaseUnit(),
                     row.getUnitCost(), row.getPurchaseDate(),
                     row.getItemType() != null ? row.getItemType().name() : null,
                     row.getAction() == null ? null : row.getAction().name(),

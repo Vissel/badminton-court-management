@@ -7,7 +7,6 @@ import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Typography from "@mui/material/Typography";
 import Stack from "@mui/material/Stack";
-import TextField from "@mui/material/TextField";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
@@ -18,10 +17,12 @@ import Paper from "@mui/material/Paper";
 import Chip from "@mui/material/Chip";
 import CircularProgress from "@mui/material/CircularProgress";
 import { VN_CURRENCY, formatVND } from "../MoneyUtils";
+import DateInput from "../DateInput";
+import DraggableResizablePaper, { DIALOG_DRAG_HANDLE } from "./DraggableResizablePaper";
 import { listStockMovements } from "../../api/inventoryApi";
 
 const MOVEMENT_LABELS = {
-  PURCHASE_IN: "Nhập kho",
+  PURCHASE_IN: "Nhập sỉ",
   GAME_CONSUMPTION: "Sử dụng (trận)",
   RETAIL_SALE: "Bán lẻ",
   ADJUSTMENT: "Kiểm kê",
@@ -37,7 +38,7 @@ const MOVEMENT_COLORS = {
 };
 
 const REF_LABELS = {
-  PURCHASE_LOT: "Nhập hàng",
+  PURCHASE_LOT: "Nhập sỉ",
   GAME: "Trận đấu",
   PAYMENT: "Thanh toán",
 };
@@ -97,8 +98,14 @@ const StockLedgerDialog = ({ open, item, onClose }) => {
         : "success";
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle sx={{ pb: 1 }}>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="sm"
+      fullWidth
+      PaperComponent={DraggableResizablePaper}
+    >
+      <DialogTitle className={DIALOG_DRAG_HANDLE} sx={{ pb: 1, cursor: "move" }}>
         <Stack direction="row" alignItems="center" spacing={1.5}>
           <Box sx={{ flexGrow: 1, minWidth: 0 }}>
             <Typography variant="h6" component="div" noWrap>
@@ -119,21 +126,17 @@ const StockLedgerDialog = ({ open, item, onClose }) => {
       <DialogContent dividers>
         <Stack spacing={2}>
           <Stack direction="row" spacing={1} alignItems="center">
-            <TextField
+            <DateInput
               label="Từ ngày"
-              type="date"
               size="small"
               value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              slotProps={{ inputLabel: { shrink: true } }}
+              onChange={setFrom}
             />
-            <TextField
+            <DateInput
               label="Đến ngày"
-              type="date"
               size="small"
               value={to}
-              onChange={(e) => setTo(e.target.value)}
-              slotProps={{ inputLabel: { shrink: true } }}
+              onChange={setTo}
             />
             <Button variant="outlined" size="small" onClick={fetchMovements} disabled={loading}>
               Lọc
@@ -168,7 +171,7 @@ const StockLedgerDialog = ({ open, item, onClose }) => {
                     <TableCell>Thời gian</TableCell>
                     <TableCell>Loại</TableCell>
                     <TableCell align="right">Số lượng</TableCell>
-                    <TableCell align="right">Đơn giá ({VN_CURRENCY})</TableCell>
+                    <TableCell align="right">Đơn giá lẻ ({VN_CURRENCY})</TableCell>
                     <TableCell>Tham chiếu</TableCell>
                     <TableCell>Ghi chú</TableCell>
                   </TableRow>
@@ -203,7 +206,7 @@ const StockLedgerDialog = ({ open, item, onClose }) => {
                         {m.quantityDelta} {item?.unit}
                       </TableCell>
                       <TableCell align="right" sx={{ fontVariantNumeric: "tabular-nums" }}>
-                        {m.unitCost != null ? formatVND(m.unitCost) : "-"}
+                        {m.unitCost != null ? `${formatVND(m.unitCost)}/${item?.unit || "đơn vị lẻ"}` : "-"}
                       </TableCell>
                       <TableCell sx={{ color: "text.secondary" }}>
                         {m.refType

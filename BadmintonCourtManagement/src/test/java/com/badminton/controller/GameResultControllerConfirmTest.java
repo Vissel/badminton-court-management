@@ -3,6 +3,7 @@ package com.badminton.controller;
 import com.badminton.constant.GameState;
 import com.badminton.constant.GameType;
 import com.badminton.core.game.CoreGameService;
+import com.badminton.dao.DaoGame;
 import com.badminton.entity.AvailablePlayer;
 import com.badminton.entity.Court;
 import com.badminton.entity.Game;
@@ -15,6 +16,7 @@ import com.badminton.requestmodel.CourtAreaDTO;
 import com.badminton.requestmodel.CourtDTO;
 import com.badminton.requestmodel.GameDTO;
 import com.badminton.response.result.Result;
+import com.badminton.service.InventoryService;
 import com.badminton.service.ServiceTemplate;
 import com.badminton.service.impl.GameServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,14 +33,17 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
- * Covers every flow and branch of {@link GameServiceImpl#handleFinishGame(GameDTO)}
- * through the REST entry point {@link GameResultController#confirmGameResult(GameDTO)}.
+ * Covers every flow and branch of
+ * {@link GameServiceImpl#handleFinishGame(GameDTO)}
+ * through the REST entry point
+ * {@link GameResultController#confirmGameResult(GameDTO)}.
  */
 @ExtendWith(MockitoExtension.class)
 class GameResultControllerConfirmTest {
@@ -48,6 +53,10 @@ class GameResultControllerConfirmTest {
 
     @Mock
     private GameRepository gameRepository;
+    @Mock
+    private DaoGame daoGame;
+    @Mock
+    private InventoryService inventoryService;
 
     private GameResultController controller;
 
@@ -55,10 +64,12 @@ class GameResultControllerConfirmTest {
     void setUp() {
         CoreGameService coreGameService = new CoreGameService();
         ReflectionTestUtils.setField(coreGameService, "gameRepository", gameRepository);
+        ReflectionTestUtils.setField(coreGameService, "daoGame", daoGame);
         GameServiceImpl gameService = new GameServiceImpl();
         ReflectionTestUtils.setField(gameService, "gameRepository", gameRepository);
         ReflectionTestUtils.setField(gameService, "coreGameService", coreGameService);
         ReflectionTestUtils.setField(gameService, "serviceTemple", new ServiceTemplate());
+        ReflectionTestUtils.setField(gameService, "inventoryService", inventoryService);
         controller = new GameResultController();
         controller.gameService = gameService;
     }
@@ -155,9 +166,9 @@ class GameResultControllerConfirmTest {
         areas.add(area(GameState.Player.PLAYER_A, "P1", 50f, true));
         areas.add(area(GameState.Player.PLAYER_B, "P2", 50f, false));
         areas.add(area(GameState.Player.PLAYER_C, "P3", 0f, false));
-        areas.add(null);                                                          // null element ignored
-        areas.add(area(GameState.Player.PLAYER_D, null, 0f, false));              // no player in area
-        areas.add(area("Z", " ", 0f, false));                                     // blank player name, unknown area
+        areas.add(null); // null element ignored
+        areas.add(area(GameState.Player.PLAYER_D, null, 0f, false)); // no player in area
+        areas.add(area("Z", " ", 0f, false)); // blank player name, unknown area
         GameDTO request = baseRequest();
         request.getCourt().setCourtAreas(areas);
 
@@ -186,7 +197,7 @@ class GameResultControllerConfirmTest {
     @Test
     @DisplayName("returns GAME_NOT_FOUND when no active game on the court")
     void gameNotFound() {
-        when(gameRepository.findByCourtIdAndEndedDateIsNull(anyInt())).thenReturn(Optional.empty());
+        when(daoGame.findActiveGameByCourtId(anyString())).thenReturn(Optional.empty());
 
         ResponseEntity<Result<Boolean>> res = controller.confirmGameResult(baseRequest());
 
@@ -194,7 +205,7 @@ class GameResultControllerConfirmTest {
         assertThat(res.getBody().isSuccess()).isFalse();
         assertThat(res.getBody().getErrorCode()).isEqualTo(100); // GAME_NOT_FOUND
         assertThat(res.getStatusCode().value()).isEqualTo(400);
-        verify(gameRepository, org.mockito.Mockito.never()).save(org.mockito.ArgumentMatchers.any());
+        verify(gameRepository, org.mockito.Mockito.never()).save(any());
     }
 
     // ------------------------------------------------------------------
@@ -205,13 +216,13 @@ class GameResultControllerConfirmTest {
     @DisplayName("singles SHARE game: winner expense 0, unknown/null areas ignored")
     void finishShareSingles() {
         Game game = game("A-player", null, "C-player", null);
-        when(gameRepository.findByCourtIdAndEndedDateIsNull(anyInt())).thenReturn(Optional.of(game));
+        stubActiveGameAndInventory(game);
 
         List<CourtAreaDTO> areas = new ArrayList<>();
         areas.add(area(GameState.Player.PLAYER_C, "C-player", 100f, false)); // loser first
-        areas.add(area(GameState.Player.PLAYER_A, "A-player", 0f, true));    // winner expense 0 -> SHARE
-        areas.add(null);                                                     // null element filtered out
-        areas.add(area("X", "Ghost", 0f, false));                            // unknown area -> switch default
+        areas.add(area(GameState.Player.PLAYER_A, "A-player", 0f, true)); // winner expense 0 -> SHARE
+        areas.add(null); // null element filtered out
+        areas.add(area("X", "Ghost", 0f, false)); // unknown area -> switch default
         GameDTO request = baseRequest();
         request.getCourt().setCourtAreas(areas);
 
@@ -239,7 +250,7 @@ class GameResultControllerConfirmTest {
     @DisplayName("doubles NEGO game: all four areas filled, winners carry expense")
     void finishNegoDoubles() {
         Game game = game("A-player", "B-player", "C-player", "D-player");
-        when(gameRepository.findByCourtIdAndEndedDateIsNull(anyInt())).thenReturn(Optional.of(game));
+        stubActiveGameAndInventory(game);
 
         GameDTO request = baseRequest();
         request.setShuttleBalls(List.of(ball(100f, 1)));
@@ -275,7 +286,7 @@ class GameResultControllerConfirmTest {
     void finishWithMissingPlayerZeroExpense() {
         // entity teamOne.playerTwo is null even though the request fills area B
         Game game = game("A-player", null, "C-player", "D-player");
-        when(gameRepository.findByCourtIdAndEndedDateIsNull(anyInt())).thenReturn(Optional.of(game));
+        stubActiveGameAndInventory(game);
 
         GameDTO request = baseRequest();
         request.getCourt().setCourtAreas(List.of(
@@ -299,7 +310,8 @@ class GameResultControllerConfirmTest {
     void finishWithMissingPlayerNonZeroExpense() {
         // entity teamTwo.playerOne is null but request bills area C
         Game game = game("A-player", null, null, null);
-        when(gameRepository.findByCourtIdAndEndedDateIsNull(anyInt())).thenReturn(Optional.of(game));
+        when(daoGame.findActiveGameByCourtId(anyString())).thenReturn(Optional.of(game));
+        when(daoGame.findActiveGameByCourtIdForUpdate(anyString())).thenReturn(Optional.of(game));
 
         GameDTO request = baseRequest();
         request.getCourt().setCourtAreas(List.of(
@@ -318,6 +330,20 @@ class GameResultControllerConfirmTest {
     // helpers
     // ------------------------------------------------------------------
 
+    /**
+     * Stubs the active-game lookups the finish flow performs (snapshot, then
+     * update in CoreGameService) and the downstream inventory confirmation,
+     * so a well-formed request finishes successfully in the unit test.
+     */
+    private void stubActiveGameAndInventory(Game game) {
+        when(daoGame.findActiveGameByCourtId(anyString())).thenReturn(Optional.of(game));
+        when(daoGame.findActiveGameByCourtIdForUpdate(anyString())).thenReturn(Optional.of(game));
+        Result<Boolean> confirmed = new Result<>();
+        confirmed.setSuccess(true);
+        confirmed.setData(true);
+        when(inventoryService.confirmMovementItemEndGame(any())).thenReturn(confirmed);
+    }
+
     private void assertBadRequest(ResponseEntity<Result<Boolean>> res, String message) {
         assertThat(res.getStatusCode().value()).isEqualTo(400);
         assertThat(res.getBody()).isNotNull();
@@ -327,7 +353,9 @@ class GameResultControllerConfirmTest {
         verifyNoInteractions(gameRepository);
     }
 
-    /** Balanced singles request: A wins, C loses, expenses match 2 x 50 ball cost. */
+    /**
+     * Balanced singles request: A wins, C loses, expenses match 2 x 50 ball cost.
+     */
     private GameDTO baseRequest() {
         CourtDTO court = new CourtDTO();
         court.setCourtId(COURT_ID);
@@ -364,7 +392,10 @@ class GameResultControllerConfirmTest {
         return ball;
     }
 
-    /** Builds a game whose four area slots may each be available (name) or unavailable (null). */
+    /**
+     * Builds a game whose four area slots may each be available (name) or
+     * unavailable (null).
+     */
     private Game game(String playerA, String playerB, String playerC, String playerD) {
         Team teamOne = new Team();
         teamOne.setPlayerOne(availablePlayer(playerA));

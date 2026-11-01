@@ -24,6 +24,7 @@ import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import api from "../../api/index";
 import { emitApiError } from "../../api/errorBus";
 import { listDebitHistory, exportDebtReport, REMAINING_DEBTS_FILTER } from "../../api/debtApi";
+import DateInput from "../DateInput";
 import { downloadExport } from "../DebtManagementPage";
 import { VN_CURRENCY, formatVND } from "../MoneyUtils";
 import { formatVNDateTime, parseServerDateTime, toServerDateTimeString } from "../DateTimeUtils";
@@ -502,22 +503,18 @@ const DebitListDialog = ({ show, playerName, onClose, onPaid, preselectedDebits,
           {historyMode ? (
             <>
               <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 1.5 }}>
-                <TextField
-                  type="date"
+                <DateInput
                   size="small"
                   label="Từ ngày"
                   value={filterInput.from}
-                  onChange={(e) => setFilterInput((f) => ({ ...f, from: e.target.value }))}
-                  slotProps={{ inputLabel: { shrink: true } }}
+                  onChange={(from) => setFilterInput((f) => ({ ...f, from }))}
                   sx={{ flex: "1 1 140px" }}
                 />
-                <TextField
-                  type="date"
+                <DateInput
                   size="small"
                   label="Đến ngày"
                   value={filterInput.to}
-                  onChange={(e) => setFilterInput((f) => ({ ...f, to: e.target.value }))}
-                  slotProps={{ inputLabel: { shrink: true } }}
+                  onChange={(to) => setFilterInput((f) => ({ ...f, to }))}
                   sx={{ flex: "1 1 140px" }}
                 />
                 <TextField

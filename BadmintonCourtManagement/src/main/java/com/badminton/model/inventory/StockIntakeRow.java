@@ -11,8 +11,10 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 /**
- * One parsed row of the StockIntake sheet (Tên | Số lượng | Giá nhập | Ngày nhập).
- * {@link #itemRef} holds the resolved {@link com.badminton.entity.InventoryItem}
+ * One parsed row of the StockIntake sheet
+ * (Tên | Số lượng sỉ | Giá sỉ | Ngày nhập | Đơn vị sỉ).
+ * {@link #itemRef} holds the resolved
+ * {@link com.badminton.entity.InventoryItem}
  * for UPDATE rows; null for ADD (new item) and ERROR.
  */
 @Data
@@ -40,6 +42,12 @@ public class StockIntakeRow {
      * {@code quantity} converted to base units (set during classification).
      */
     private Integer baseQuantity;
+
+    /**
+     * Base unit (Đơn vị lẻ) the intake converts to, e.g. quả. Null while the
+     * item's base unit is still unknown (new GOODS adopting the raw unit text).
+     */
+    private String baseUnit;
 
     /**
      * Cost per purchased unit.
