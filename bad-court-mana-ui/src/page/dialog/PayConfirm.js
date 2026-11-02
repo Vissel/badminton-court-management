@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Dialog from "@mui/material/Dialog";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
@@ -24,11 +24,13 @@ import CloseIcon from "@mui/icons-material/Close";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import Collapse from "@mui/material/Collapse";
 import TextField from "@mui/material/TextField";
+import Autocomplete from "@mui/material/Autocomplete";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { TYPE, ADVANCE_SERVICE_NAME } from "../HomePage";
 import { VN_CURRENCY, formatVND } from "../MoneyUtils";
 import PlayerDebtSection from "./PlayerDebtSection";
 import DraggableResizablePaper, { DIALOG_DRAG_HANDLE } from "./DraggableResizablePaper";
+import { searchCustomers } from "../../api/customerApi";
 
 const EMPTY_DEBT_STATE = {
   debtList: [],
@@ -46,6 +48,14 @@ const EMPTY_BUYER = {
   email: "",
 };
 
+// Idempotency key of this checkout attempt (G-7). A retried POST carrying the
+// same value returns the bill issued by the first attempt instead of a second
+// one. crypto.randomUUID needs a secure context, hence the fallback.
+const newClientTxnId = () =>
+  typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `txn-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+
 const PayConfirm = ({ show, data, onConfirm, onExit }) => {
   // Debt flow (summary / list / record / pay) lives in PlayerDebtSection;
   // it reports recorded debts up so the payable amounts stay in sync.
@@ -58,6 +68,13 @@ const PayConfirm = ({ show, data, onConfirm, onExit }) => {
   // leave it empty — the bill then carries the player name only.
   const [buyerOpen, setBuyerOpen] = useState(false);
   const [buyer, setBuyer] = useState(EMPTY_BUYER);
+  // Buyer directory suggestions (G-9) — loaded on demand from /customers.
+  const [customerOptions, setCustomerOptions] = useState([]);
+  const customerTimer = useRef(null);
+  const [clientTransactionId, setClientTransactionId] = useState(newClientTxnId);
+  // Invoice-level discount (G-10) — recorded as a negative line on the bill, so
+  // the printed total matches the cash actually collected.
+  const [discount, setDiscount] = useState("");
 
   useEffect(() => {
     if (show) {
@@ -66,8 +83,36 @@ const PayConfirm = ({ show, data, onConfirm, onExit }) => {
       setPayDebits(null);
       setBuyerOpen(false);
       setBuyer(EMPTY_BUYER);
+      setCustomerOptions([]);
+      setClientTransactionId(newClientTxnId());
+      setDiscount("");
     }
   }, [show]);
+
+  // Debounced keyword search — the directory is small, so 300 ms is enough to
+  // stop firing a request per keystroke.
+  const searchBuyers = (keyword) => {
+    if (customerTimer.current) clearTimeout(customerTimer.current);
+    customerTimer.current = setTimeout(() => {
+      searchCustomers(keyword)
+        .then((res) => {
+          const result = res?.data;
+          setCustomerOptions(result?.success ? result.data || [] : []);
+        })
+        .catch(() => { });
+    }, 300);
+  };
+
+  const applyCustomer = (customer) => {
+    if (!customer) return;
+    setBuyer({
+      buyerName: customer.name || "",
+      company: customer.company || "",
+      taxCode: customer.taxCode || "",
+      address: customer.address || "",
+      email: customer.email || "",
+    });
+  };
 
   if (!show || !data) return null;
 
@@ -100,13 +145,19 @@ const PayConfirm = ({ show, data, onConfirm, onExit }) => {
   // Everything owed in this transaction: today's services + debts being settled
   const totalDue = regularTotal + debtPayAmount;
 
+  // Discount can never exceed what is owed.
+  const discountAmount = Math.min(
+    Math.max(Number(discount) || 0, 0),
+    totalDue
+  );
+
   // Today's share still payable before recording any debt — caps "Ghi nợ"
   const payableAmount = Math.max(regularTotal - advanceAmount, 0);
 
   // SỐ TIỀN: cash to collect now — the advance covers today's cost and the
   // settled debts; newly recorded debts reduce it further
   const amountToPay = Math.max(
-    totalDue - advanceAmount - debtInfo.totalRecordedDebt - debtInfo.pendingDebt,
+    totalDue - advanceAmount - debtInfo.totalRecordedDebt - debtInfo.pendingDebt - discountAmount,
     0
   );
 
@@ -263,6 +314,24 @@ const PayConfirm = ({ show, data, onConfirm, onExit }) => {
             </Box>
           )}
 
+          {/* Discount — recorded as a negative DISCOUNT line on the bill */}
+          {isPayment && (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 1 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
+                Chiết khấu ({VN_CURRENCY})
+              </Typography>
+              <TextField
+                size="small"
+                type="number"
+                value={discount}
+                onChange={(e) => setDiscount(e.target.value)}
+                placeholder="0"
+                sx={{ width: 130 }}
+                slotProps={{ htmlInput: { min: 0, step: 1000 } }}
+              />
+            </Box>
+          )}
+
           {/* Buyer/tax info for the bill — optional, business customers only */}
           {isPayment && (
             <>
@@ -290,6 +359,33 @@ const PayConfirm = ({ show, data, onConfirm, onExit }) => {
               </Box>
               <Collapse in={buyerOpen}>
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 1, mt: 1, pl: 4 }}>
+                  <Autocomplete
+                    size="small"
+                    options={customerOptions}
+                    getOptionLabel={(option) => option.name || option.company || ""}
+                    filterOptions={(options) => options}
+                    onInputChange={(_, value) => searchBuyers(value)}
+                    onChange={(_, value) => applyCustomer(value)}
+                    noOptionsText="Không tìm thấy khách hàng"
+                    renderOption={(props, option) => (
+                      <Box component="li" {...props} key={option.customerId}>
+                        <Box sx={{ display: "flex", flexDirection: "column" }}>
+                          <Typography variant="body2">
+                            {option.name}
+                            {option.taxCode ? ` — MST: ${option.taxCode}` : ""}
+                          </Typography>
+                          {option.company && (
+                            <Typography variant="caption" color="text.secondary">
+                              {option.company}
+                            </Typography>
+                          )}
+                        </Box>
+                      </Box>
+                    )}
+                    renderInput={(params) => (
+                      <TextField {...params} label="Tìm khách hàng (tên/MST)" />
+                    )}
+                  />
                   <TextField
                     size="small"
                     label="Tên người mua"
@@ -494,6 +590,8 @@ const PayConfirm = ({ show, data, onConfirm, onExit }) => {
               paymentMethod: paymentMethod,
               payDebits: payDebits,
               buyer: Object.values(buyer).some((v) => v && v.trim()) ? buyer : null,
+              clientTransactionId: clientTransactionId,
+              discountAmount: discountAmount,
             })}
             fullWidth
             size="large"

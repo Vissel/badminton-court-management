@@ -45,6 +45,16 @@ public class InvoiceItem {
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal amount;
 
+    /**
+     * VAT % snapshot for this line (per-item rate, falls back to the bill rate).
+     */
+    @Column(name = "vat_rate", precision = 5, scale = 2)
+    private BigDecimal vatRate;
+
+    /** VAT amount contained in {@code amount} (price-inclusive extraction). */
+    @Column(name = "vat_amount", precision = 12, scale = 2)
+    private BigDecimal vatAmount;
+
     @Column(length = 250)
     private String note;
 
@@ -55,7 +65,7 @@ public class InvoiceItem {
     }
 
     public InvoiceItem(InvoiceItemType itemType, String itemName, BigDecimal qty,
-                       BigDecimal unitPrice, BigDecimal amount) {
+            BigDecimal unitPrice, BigDecimal amount) {
         this(itemType, itemName, amount);
         this.qty = qty;
         this.unitPrice = unitPrice;

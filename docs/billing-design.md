@@ -46,7 +46,7 @@ flowchart LR
         XL[BillExcelExportService]
     end
 
-    subgraph DB [(MySQL)]
+    subgraph DB [MySQL]
         INV[(invoice)]
         ITM[(invoice_item)]
         SER[(invoice_series)]
@@ -149,13 +149,13 @@ sequenceDiagram
     Pay->>CP: payForPlayerAndCreateDebt (transactional)
     alt selected debts to settle
         CP->>DA: allocateDebitPayment(issueBill=false)
-        Note over DA: settles debts inside same tx;<br/>no separate bill
+        Note over DA: settles debts inside same tx,<br/>no separate bill
     end
     CP->>CP: save AvailablePlayer (leaveTime, payType, payAmount, services JSON)
     CP->>CB: issueCheckoutBill(PaymentDTO, savedPlayer)
     CB->>DB: SELECT current_no FROM invoice_series FOR UPDATE
     CB->>DB: insert invoice + invoice_item lines
-    Note over CB: VAT extracted: net = gross/(1+rate);<br/>collect = charges − advance − new debt
+    Note over CB: VAT extracted: net = gross/(1+rate),<br/>collect = charges − advance − new debt
     CB-->>CP: Invoice (billId, billNo)
     CP-->>Pay: PaymentDebitModel + bill refs
     Pay-->>FE: PayResponse {billId, billNo}
@@ -194,7 +194,7 @@ sequenceDiagram
         EP->>EP: render lines as bitmap (DejaVu Sans)
         EP->>P: ESC @ + GS v 0 raster + feed + cut → :9100
     else BROWSER
-        Note over CB: only print_count/last_printed_at<br/>recorded; FE already ran window.print()
+        Note over CB: only print_count/last_printed_at<br/>recorded, FE already ran window.print()
     end
     CB-->>BC: BillResponse (printCount updated)
 ```
@@ -224,7 +224,7 @@ sequenceDiagram
     else failure
         ES->>ES: einvoice_status=FAILED + einvoice_error (ops review)
     end
-    Note over A,M: GET /einvoice/status re-polls MISA;<br/>POST /einvoice retries a FAILED bill;<br/>GET /einvoice/pdf downloads the provider PDF
+    Note over A,M: GET /einvoice/status re-polls MISA,<br/>POST /einvoice retries a FAILED bill,<br/>GET /einvoice/pdf downloads the provider PDF
 ```
 
 Statuses: `NONE → PENDING → ISSUED | FAILED`; `CANCELLED` reserved for a

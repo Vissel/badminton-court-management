@@ -7,6 +7,7 @@ import com.badminton.exception.BusinessException;
 import com.badminton.exception.enums.ErrorCodeEnum;
 import com.badminton.repository.InvoiceRepository;
 import com.badminton.requestmodel.billing.BillListRequest;
+import com.badminton.response.billing.TaxReportResponse;
 import com.badminton.util.TimeUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.poi.ss.usermodel.CellStyle;
@@ -98,6 +99,57 @@ public class BillExcelExportService {
         } catch (IOException e) {
             throw new BusinessException(ErrorCodeEnum.INTERNAL_SERVER_ERROR,
                     "Cannot export bills: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Excel version of the period revenue/VAT summary (bảng kê bán ra) — one
+     * sheet with the grouped rows plus a totals row, matching the FE tab.
+     */
+    public void exportTaxReportToStream(TaxReportResponse report, OutputStream outputStream)
+            throws BusinessException {
+        String[] headers = { "Kỳ", "Số HĐ", "Doanh thu (gồm VAT)", "Giá chưa VAT", "Tiền VAT" };
+        try (SXSSFWorkbook workbook = new SXSSFWorkbook(100)) {
+            SXSSFSheet sheet = workbook.createSheet("Bảng kê thuế");
+            for (int c = 0; c < headers.length; c++) {
+                sheet.trackColumnForAutoSizing(c);
+            }
+            CellStyle headerStyle = headerStyle(workbook);
+            Row header = sheet.createRow(0);
+            for (int c = 0; c < headers.length; c++) {
+                header.createCell(c).setCellValue(headers[c]);
+                header.getCell(c).setCellStyle(headerStyle);
+            }
+
+            int rowNum = 1;
+            for (TaxReportResponse.Row row : report.getRows()) {
+                Row sheetRow = sheet.createRow(rowNum++);
+                int c = 0;
+                sheetRow.createCell(c++).setCellValue(nullToEmpty(row.getPeriod()));
+                sheetRow.createCell(c++).setCellValue(row.getBillCount());
+                sheetRow.createCell(c++).setCellValue(doubleVal(row.getGross()));
+                sheetRow.createCell(c++).setCellValue(doubleVal(row.getNet()));
+                sheetRow.createCell(c++).setCellValue(doubleVal(row.getVat()));
+            }
+
+            Row total = sheet.createRow(rowNum);
+            int c = 0;
+            total.createCell(c++).setCellValue("Tổng cộng");
+            total.createCell(c++).setCellValue(report.getBillCount());
+            total.createCell(c++).setCellValue(doubleVal(report.getGross()));
+            total.createCell(c++).setCellValue(doubleVal(report.getNet()));
+            total.createCell(c++).setCellValue(doubleVal(report.getVat()));
+
+            for (int col = 0; col < headers.length; col++) {
+                sheet.autoSizeColumn(col);
+                sheet.untrackColumnForAutoSizing(col);
+            }
+
+            workbook.write(outputStream);
+            workbook.dispose();
+        } catch (IOException e) {
+            throw new BusinessException(ErrorCodeEnum.INTERNAL_SERVER_ERROR,
+                    "Cannot export tax report: " + e.getMessage());
         }
     }
 

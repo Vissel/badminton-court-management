@@ -8,7 +8,7 @@ import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
 import Divider from "@mui/material/Divider";
 import PrintOutlinedIcon from "@mui/icons-material/PrintOutlined";
-import { getReceipt, printBill } from "../../api/billApi";
+import { getReceipt, printBill, fetchBillQr } from "../../api/billApi";
 import { emitApiError } from "../../api/errorBus";
 import { VN_CURRENCY, formatVND } from "../MoneyUtils";
 
@@ -35,7 +35,19 @@ const ITEM_TYPE_LABEL = {
   DEBT_PAID: "Trả nợ",
   DEBT_CREATED: "Ghi nợ",
   ADVANCE_DEDUCT: "Trả trước",
+  DISCOUNT: "Giảm giá",
 };
+
+// Correction copies are titled by their kind, forward bills by the configured
+// invoice kind (GTGT vs BAN_HANG) — never hardcoded to one form (G-15).
+const CORRECTION_TITLE = {
+  ADJUSTMENT: "HOÁ ĐƠN ĐIỀU CHỈNH",
+  REPLACEMENT: "HOÁ ĐƠN THAY THẾ",
+};
+
+const invoiceTitle = (bill, seller) =>
+  CORRECTION_TITLE[bill?.invoiceType] ||
+  (seller?.invoiceKind === "GTGT" ? "HOÁ ĐƠN GIÁ TRỊ GIA TĂNG" : "HOÁ ĐƠN BÁN HÀNG");
 
 // issuedAt is stored as an Instant already shifted +7h — format it as UTC
 // (same convention as DateTimeUtils.formatVNDateTime) to avoid double-shifting.
@@ -65,6 +77,7 @@ const Line = ({ label, value, bold, indent }) => (
 const ReceiptPrintDialog = ({ show, billId, onClose }) => {
   const [receipt, setReceipt] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [qrUrl, setQrUrl] = useState(null);
 
   useEffect(() => {
     if (!show || !billId) return;
@@ -110,6 +123,26 @@ const ReceiptPrintDialog = ({ show, billId, onClose }) => {
   const deductItems = items.filter(
     (i) => i.itemType === "ADVANCE_DEDUCT" || i.itemType === "DEBT_CREATED"
   );
+
+  // Buyer retrieval QR (G-11). Fetched as a blob through the API client so the
+  // JWT header is sent; a 404/no base just leaves the receipt without a QR.
+  const lookupUrl = bill?.einvoiceLookupUrl;
+  useEffect(() => {
+    setQrUrl(null);
+    if (!lookupUrl || !billId) return undefined;
+    let objectUrl = null;
+    fetchBillQr(billId)
+      .then((res) => {
+        if (res?.data instanceof Blob) {
+          objectUrl = URL.createObjectURL(res.data);
+          setQrUrl(objectUrl);
+        }
+      })
+      .catch(() => { });
+    return () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [billId, lookupUrl]);
 
   return (
     <Dialog open={show} onClose={onClose} maxWidth="xs" fullWidth>
@@ -166,7 +199,7 @@ const ReceiptPrintDialog = ({ show, billId, onClose }) => {
               align="center"
               sx={{ fontFamily: "monospace", fontWeight: 700, fontSize: "13px" }}
             >
-              HOÁ ĐƠN BÁN HÀNG
+              {invoiceTitle(bill, seller)}
             </Typography>
             <Typography
               align="center"
@@ -174,6 +207,14 @@ const ReceiptPrintDialog = ({ show, billId, onClose }) => {
             >
               Số: {bill.billNo}
             </Typography>
+            {bill.relatedBillNo && (
+              <Typography
+                align="center"
+                sx={{ fontFamily: "monospace", fontSize: "11px" }}
+              >
+                HĐ gốc: {bill.relatedBillNo}
+              </Typography>
+            )}
             <Typography
               align="center"
               sx={{ fontFamily: "monospace", fontSize: "11px" }}
@@ -241,6 +282,27 @@ const ReceiptPrintDialog = ({ show, billId, onClose }) => {
               </Typography>
             )}
             {bill.einvoiceNo && <Line label="HĐĐT" value={bill.einvoiceNo} />}
+
+            {/* Buyer retrieval QR — same payload the PDF/ESC-POS copies draw. */}
+            {qrUrl && (
+              <Box sx={{ textAlign: "center", mt: 1 }}>
+                <Box
+                  component="img"
+                  src={qrUrl}
+                  alt="QR tra cứu hoá đơn"
+                  sx={{ width: 132, height: 132, imageRendering: "pixelated" }}
+                />
+                <Typography
+                  sx={{
+                    fontFamily: "monospace",
+                    fontSize: "9px",
+                    wordBreak: "break-all",
+                  }}
+                >
+                  {bill.einvoiceLookupUrl}
+                </Typography>
+              </Box>
+            )}
 
             {seller?.billFooter && (
               <>

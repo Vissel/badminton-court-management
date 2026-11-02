@@ -6,6 +6,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.sql.Timestamp;
 
 @Entity
@@ -22,6 +23,13 @@ public class Service {
     private String serName;
 
     private float cost;
+
+    /**
+     * VAT % for this catalog row. Empty → the venue-wide
+     * {@code bill_config.vat_rate} applies (see CoreBillingService).
+     */
+    @Column(name = "vat_rate", precision = 5, scale = 2)
+    private BigDecimal vatRate;
 
     @Column(updatable = false, insertable = false)
     private Timestamp createdDate;

@@ -16,5 +16,7 @@ public class BillItemResponse {
     private BigDecimal qty;
     private BigDecimal unitPrice;
     private BigDecimal amount;
+    private BigDecimal vatRate;
+    private BigDecimal vatAmount;
     private String note;
 }

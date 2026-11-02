@@ -111,4 +111,25 @@
     <changeSet id="031" author="thach">
         <sqlFile path="db/changelog/user-manager-link.sql"/>
     </changeSet>
+    <changeSet id="032" author="devin">
+        <sqlFile path="db/changelog/billing-correction.sql"/>
+    </changeSet>
+    <changeSet id="033" author="devin">
+        <sqlFile path="db/changelog/billing-einvoice-archive.sql"/>
+    </changeSet>
+    <changeSet id="034" author="devin">
+        <sqlFile path="db/changelog/billing-payment-idempotency.sql"/>
+    </changeSet>
+    <changeSet id="035" author="devin">
+        <sqlFile path="db/changelog/billing-tax-config.sql"/>
+    </changeSet>
+    <changeSet id="036" author="devin">
+        <sqlFile path="db/changelog/billing-invoice-log.sql"/>
+    </changeSet>
+    <changeSet id="037" author="devin">
+        <sqlFile path="db/changelog/billing-discount.sql"/>
+    </changeSet>
+    <changeSet id="038" author="devin">
+        <sqlFile path="db/changelog/billing-customer.sql"/>
+    </changeSet>
 </databaseChangeLog>

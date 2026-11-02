@@ -25,6 +25,7 @@ public class BillResponse {
     private BigDecimal vatAmount;
     private BigDecimal total;
     private BigDecimal collectAmount;
+    private BigDecimal discountAmount;
     private String currency;
     private String payType;
     private String status;
@@ -38,6 +39,17 @@ public class BillResponse {
     private String einvoicePdfUrl;
     /** Last provider submission error — shown on FAILED bills for ops review. */
     private String einvoiceError;
+    /** Buyer retrieval link encoded in the receipt QR (Điều 11). */
+    private String einvoiceLookupUrl;
+    /** True once the provider XML is archived and downloadable. */
+    private boolean einvoiceXmlAvailable;
+    /** Original bill this correction points at (null on forward bills). */
+    private Long relatedBillId;
+    private String relatedBillNo;
+    private String correctionType;
+    private String adjustReason;
+    /** True when at least one correction bill already references this bill. */
+    private boolean corrected;
     private int printCount;
     private String note;
     private List<BillItemResponse> items;

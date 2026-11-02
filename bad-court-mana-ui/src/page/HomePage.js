@@ -1178,10 +1178,13 @@ function HomePage() {
     const recordedDebt = data.debitAmount || 0;
 
     // Everything settled by this payment: today's services + the old debts
-    // picked in the dialog, minus the amount converted into a NEW debt.
+    // picked in the dialog, minus the amount converted into a NEW debt and any
+    // discount granted at checkout (G-10).
     // (PayConfirm's SỐ TIỀN is only the cash collected now — the advance may
     // have covered part of this.)
-    const totalPaid = totalExpense + (data.payDebits?.totalPayAmount || 0) - recordedDebt;
+    const discountAmount = data.discountAmount || 0;
+    const totalPaid =
+      totalExpense + (data.payDebits?.totalPayAmount || 0) - recordedDebt - discountAmount;
 
     // send api pay
     api
@@ -1203,6 +1206,11 @@ function HomePage() {
         payDebits: data.payDebits || null,
         // optional business-buyer/tax info from the bill section of PayConfirm
         buyer: data.buyer || null,
+        // idempotency key of this checkout attempt: a retried POST returns the
+        // bill already issued instead of charging twice
+        clientTransactionId: data.clientTransactionId || null,
+        // discount recorded as a negative DISCOUNT line on the bill
+        discountAmount: discountAmount > 0 ? String(discountAmount) : null,
       })
       .then((res) => {
         const result = res?.data;

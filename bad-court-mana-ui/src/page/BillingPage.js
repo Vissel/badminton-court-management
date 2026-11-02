@@ -25,12 +25,19 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import Divider from "@mui/material/Divider";
 import Tooltip from "@mui/material/Tooltip";
+import Tabs from "@mui/material/Tabs";
+import Tab from "@mui/material/Tab";
 import PrintOutlinedIcon from "@mui/icons-material/PrintOutlined";
 import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import BlockOutlinedIcon from "@mui/icons-material/BlockOutlined";
 import SearchIcon from "@mui/icons-material/Search";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
+import EditNoteOutlinedIcon from "@mui/icons-material/EditNoteOutlined";
+import SwapHorizOutlinedIcon from "@mui/icons-material/SwapHorizOutlined";
+import HistoryOutlinedIcon from "@mui/icons-material/HistoryOutlined";
+import CodeOutlinedIcon from "@mui/icons-material/CodeOutlined";
+import MailOutlineOutlinedIcon from "@mui/icons-material/MailOutlineOutlined";
 import {
   listBills,
   getBill,
@@ -41,10 +48,18 @@ import {
   issueEInvoice,
   refreshEInvoiceStatus,
   downloadEInvoicePdf,
+  downloadEInvoiceXml,
+  sendEInvoiceMail,
+  getBillLogs,
 } from "../api/billApi";
 import { emitApiError } from "../api/errorBus";
 import { AuthContext } from "../context/AuthContext";
 import ReceiptPrintDialog from "./dialog/ReceiptPrintDialog";
+import CorrectionDialog from "./dialog/CorrectionDialog";
+import DraggableResizablePaper, {
+  DIALOG_DRAG_HANDLE,
+} from "./dialog/DraggableResizablePaper";
+import TaxReportPanel from "./TaxReportPanel";
 import DateInput from "./DateInput";
 import { downloadExport } from "./DebtManagementPage";
 import { VN_CURRENCY, formatVND } from "./MoneyUtils";
@@ -53,7 +68,28 @@ const PAGE_SIZE = 15;
 
 const STATUS_COLOR = { ISSUED: "success", VOIDED: "error" };
 const STATUS_LABEL = { ISSUED: "Đã phát hành", VOIDED: "Đã huỷ" };
-const TYPE_LABEL = { CHECKOUT: "Thanh toán", DEBT_SETTLEMENT: "Thu nợ" };
+const TYPE_LABEL = {
+  CHECKOUT: "Thanh toán",
+  DEBT_SETTLEMENT: "Thu nợ",
+  ADJUSTMENT: "Điều chỉnh",
+  REPLACEMENT: "Thay thế",
+};
+const CORRECTION_LABEL = { ADJUSTMENT: "Điều chỉnh", REPLACEMENT: "Thay thế" };
+// Internal-control trail actions (invoice_log.action).
+const LOG_ACTION_LABEL = {
+  ISSUE: "Phát hành",
+  PRINT: "In",
+  VOID: "Huỷ",
+  ADJUST: "Điều chỉnh",
+  REPLACE: "Thay thế",
+  DISCOUNT: "Giảm giá",
+  EINVOICE_ISSUE: "Phát hành HĐĐT",
+  EINVOICE_SUBMIT: "Gửi HĐĐT",
+  EINVOICE_STATUS: "Cập nhật HĐĐT",
+  EINVOICE_MAIL: "Gửi email HĐĐT",
+  EINVOICE_SEND: "Gửi HĐĐT",
+  CONFIG_UPDATE: "Cập nhật cấu hình",
+};
 const EINVOICE_LABEL = {
   NONE: "—",
   PENDING: "Đang gửi",
@@ -76,6 +112,24 @@ const plusOneDay = (yyyyMMdd) => {
   d.setUTCDate(d.getUTCDate() + 1);
   return d.toISOString().slice(0, 10);
 };
+
+const PageHeader = ({ tab, onTabChange, showTax }) => (
+  <>
+    <Typography variant="h4" component="h1" sx={{ mb: 2 }}>
+      Quản lý hoá đơn
+    </Typography>
+    {showTax && (
+      <Tabs
+        value={tab}
+        onChange={onTabChange}
+        sx={{ mb: 2, borderBottom: 1, borderColor: "divider" }}
+      >
+        <Tab label="Hoá đơn" />
+        <Tab label="Báo cáo thuế" />
+      </Tabs>
+    )}
+  </>
+);
 
 export default function BillingPage() {
   const { hasRole } = useContext(AuthContext);
@@ -101,6 +155,12 @@ export default function BillingPage() {
   // einvoiceEnabled gates the "Phát hành HĐĐT" actions.
   const [einvoiceEnabled, setEinvoiceEnabled] = useState(false);
   const [einvoiceBusy, setEinvoiceBusy] = useState(false);
+  const [tab, setTab] = useState(0);
+  // Correction dialog: { bill, mode } where mode is "ADJUST" | "REPLACE".
+  const [correction, setCorrection] = useState(null);
+  const [traceTarget, setTraceTarget] = useState(null);
+  const [traceLogs, setTraceLogs] = useState([]);
+  const [traceLoading, setTraceLoading] = useState(false);
 
   useEffect(() => {
     getBillConfig()
@@ -201,6 +261,52 @@ export default function BillingPage() {
       .catch(() => { });
   };
 
+  // Archived provider XML — the retention copy required by Điều 11.
+  const handleDownloadXml = (bill) => {
+    downloadEInvoiceXml(bill.billId)
+      .then((res) => {
+        if (res?.data) downloadExport(res, `hddt-${bill.billNo || bill.billId}.xml`);
+      })
+      .catch(() => { });
+  };
+
+  const handleSendMail = (billId) => {
+    setEinvoiceBusy(true);
+    sendEInvoiceMail(billId)
+      .then((res) => {
+        const result = res?.data;
+        if (result?.success) {
+          if (result.data) setDetailBill(result.data);
+          fetchBills();
+        } else {
+          emitApiError(result?.errorMessage || "Gửi email HĐĐT thất bại.");
+        }
+      })
+      .catch(() => { })
+      .finally(() => setEinvoiceBusy(false));
+  };
+
+  const openTrace = (billId) => {
+    setTraceTarget(billId);
+    setTraceLogs([]);
+    setTraceLoading(true);
+    getBillLogs(billId)
+      .then((res) => {
+        const result = res?.data;
+        if (result?.success) setTraceLogs(result.data || []);
+        else emitApiError(result?.errorMessage || "Không tải được lịch sử hoá đơn.");
+      })
+      .catch(() => { })
+      .finally(() => setTraceLoading(false));
+  };
+
+  // A correction produces a brand-new bill; surface it right away.
+  const handleCorrectionDone = (newBill) => {
+    setDetailBill(null);
+    fetchBills();
+    if (newBill?.billId) setDetailBill(newBill);
+  };
+
   useEffect(() => {
     fetchBills();
   }, [fetchBills]);
@@ -240,11 +346,27 @@ export default function BillingPage() {
       .catch(() => { });
   };
 
+  // Tax report tab (G-6) — a standalone panel, so the bill list keeps its state.
+  if (tab === 1 && canVoid) {
+    return (
+      <Box sx={{ maxWidth: 1200, mx: "auto", p: { xs: 1, sm: 2 } }}>
+        <PageHeader
+          tab={tab}
+          onTabChange={(_, value) => setTab(value)}
+          showTax={canVoid}
+        />
+        <TaxReportPanel />
+      </Box>
+    );
+  }
+
   return (
     <Box sx={{ maxWidth: 1200, mx: "auto", p: { xs: 1, sm: 2 } }}>
-      <Typography variant="h4" component="h1" sx={{ mb: 2 }}>
-        Quản lý hoá đơn
-      </Typography>
+      <PageHeader
+        tab={tab}
+        onTabChange={(_, value) => setTab(value)}
+        showTax={canVoid}
+      />
 
       {/* Filters */}
       <Stack
@@ -296,6 +418,8 @@ export default function BillingPage() {
             <MenuItem value="">Tất cả</MenuItem>
             <MenuItem value="CHECKOUT">Thanh toán</MenuItem>
             <MenuItem value="DEBT_SETTLEMENT">Thu nợ</MenuItem>
+            <MenuItem value="ADJUSTMENT">Điều chỉnh</MenuItem>
+            <MenuItem value="REPLACEMENT">Thay thế</MenuItem>
           </Select>
         </FormControl>
         <Button
@@ -389,15 +513,33 @@ export default function BillingPage() {
                       </IconButton>
                     </Tooltip>
                     {canVoid && bill.status === "ISSUED" && (
-                      <Tooltip title="Huỷ hoá đơn">
-                        <IconButton
-                          size="small"
-                          color="error"
-                          onClick={() => setVoidTarget(bill)}
-                        >
-                          <BlockOutlinedIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
+                      <>
+                        <Tooltip title="Lập hoá đơn điều chỉnh">
+                          <IconButton
+                            size="small"
+                            onClick={() => setCorrection({ bill, mode: "ADJUST" })}
+                          >
+                            <EditNoteOutlinedIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Lập hoá đơn thay thế">
+                          <IconButton
+                            size="small"
+                            onClick={() => setCorrection({ bill, mode: "REPLACE" })}
+                          >
+                            <SwapHorizOutlinedIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Huỷ hoá đơn">
+                          <IconButton
+                            size="small"
+                            color="error"
+                            onClick={() => setVoidTarget(bill)}
+                          >
+                            <BlockOutlinedIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </>
                     )}
                   </TableCell>
                 </TableRow>
@@ -427,10 +569,11 @@ export default function BillingPage() {
         onClose={() => setDetailBill(null)}
         maxWidth="sm"
         fullWidth
+        PaperComponent={DraggableResizablePaper}
       >
         {detailBill && (
           <>
-            <DialogTitle>
+            <DialogTitle className={DIALOG_DRAG_HANDLE} sx={{ cursor: "move" }}>
               Hoá đơn {detailBill.billNo}
               <Chip
                 size="small"
@@ -461,6 +604,23 @@ export default function BillingPage() {
                   <Typography variant="body2" color="error">
                     Đã huỷ bởi {detailBill.voidedBy} lúc {formatInstant(detailBill.voidedAt)}:{" "}
                     {detailBill.voidReason}
+                  </Typography>
+                )}
+                {detailBill.relatedBillNo && (
+                  <Typography variant="body2">
+                    Hoá đơn gốc: {detailBill.relatedBillNo}
+                    {detailBill.correctionType
+                      ? ` — ${CORRECTION_LABEL[detailBill.correctionType] ||
+                      detailBill.correctionType}`
+                      : ""}
+                  </Typography>
+                )}
+                {detailBill.adjustReason && (
+                  <Typography variant="body2">Lý do: {detailBill.adjustReason}</Typography>
+                )}
+                {detailBill.corrected && (
+                  <Typography variant="body2" color="warning.main">
+                    Đã có hoá đơn điều chỉnh/thay thế cho hoá đơn này.
                   </Typography>
                 )}
                 {detailBill.einvoiceNo && (
@@ -495,6 +655,11 @@ export default function BillingPage() {
               </Table>
               <Divider sx={{ my: 1 }} />
               <Stack spacing={0.5} alignItems="flex-end">
+                {detailBill.discountAmount > 0 && (
+                  <Typography variant="body2" color="success.main">
+                    Giảm giá: −{formatVND(detailBill.discountAmount)} {VN_CURRENCY}
+                  </Typography>
+                )}
                 <Typography variant="body2">
                   Tổng cộng: <strong>{formatVND(detailBill.total)} {VN_CURRENCY}</strong>
                 </Typography>
@@ -538,6 +703,43 @@ export default function BillingPage() {
                       Tải HĐĐT
                     </Button>
                   )}
+                  {detailBill.einvoiceStatus === "ISSUED" && (
+                    <>
+                      {detailBill.einvoiceXmlAvailable && (
+                        <Button
+                          startIcon={<CodeOutlinedIcon />}
+                          onClick={() => handleDownloadXml(detailBill)}
+                        >
+                          Tải XML
+                        </Button>
+                      )}
+                      {detailBill.buyerEmail && (
+                        <Button
+                          startIcon={<MailOutlineOutlinedIcon />}
+                          disabled={einvoiceBusy}
+                          onClick={() => handleSendMail(detailBill.billId)}
+                        >
+                          Gửi email HĐĐT
+                        </Button>
+                      )}
+                    </>
+                  )}
+                </>
+              )}
+              {canVoid && detailBill.status === "ISSUED" && (
+                <>
+                  <Button
+                    startIcon={<EditNoteOutlinedIcon />}
+                    onClick={() => setCorrection({ bill: detailBill, mode: "ADJUST" })}
+                  >
+                    Điều chỉnh
+                  </Button>
+                  <Button
+                    startIcon={<SwapHorizOutlinedIcon />}
+                    onClick={() => setCorrection({ bill: detailBill, mode: "REPLACE" })}
+                  >
+                    Thay thế
+                  </Button>
                 </>
               )}
               {canVoid && detailBill.status === "ISSUED" && (
@@ -547,6 +749,14 @@ export default function BillingPage() {
                   onClick={() => setVoidTarget(detailBill)}
                 >
                   Huỷ HĐ
+                </Button>
+              )}
+              {canVoid && (
+                <Button
+                  startIcon={<HistoryOutlinedIcon />}
+                  onClick={() => openTrace(detailBill.billId)}
+                >
+                  Lịch sử
                 </Button>
               )}
               <Button
@@ -573,10 +783,13 @@ export default function BillingPage() {
       <Dialog
         open={voidTarget != null}
         onClose={() => setVoidTarget(null)}
-        maxWidth="xs"
+        maxWidth="sm"
         fullWidth
+        PaperComponent={DraggableResizablePaper}
       >
-        <DialogTitle>Huỷ hoá đơn {voidTarget?.billNo}</DialogTitle>
+        <DialogTitle className={DIALOG_DRAG_HANDLE} sx={{ cursor: "move" }}>
+          Huỷ hoá đơn {voidTarget?.billNo}
+        </DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
             Hoá đơn đã huỷ vẫn được lưu lại để đối chiếu. Vui lòng nhập lý do.
@@ -596,6 +809,70 @@ export default function BillingPage() {
           <Button onClick={() => setVoidTarget(null)}>Đóng</Button>
           <Button variant="contained" color="error" onClick={confirmVoid}>
             Xác nhận huỷ
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <CorrectionDialog
+        show={correction != null}
+        bill={correction?.bill}
+        mode={correction?.mode}
+        onClose={() => setCorrection(null)}
+        onDone={handleCorrectionDone}
+      />
+
+      {/* Internal-control trail (G-5) */}
+      <Dialog
+        open={traceTarget != null}
+        onClose={() => setTraceTarget(null)}
+        maxWidth="sm"
+        fullWidth
+        PaperComponent={DraggableResizablePaper}
+      >
+        <DialogTitle className={DIALOG_DRAG_HANDLE} sx={{ cursor: "move" }}>
+          Lịch sử hoá đơn
+        </DialogTitle>
+        <DialogContent dividers>
+          {traceLoading ? (
+            <Box sx={{ textAlign: "center", py: 4 }}>
+              <CircularProgress size={28} />
+            </Box>
+          ) : traceLogs.length === 0 ? (
+            <Typography color="text.secondary">Chưa có ghi nhận nào.</Typography>
+          ) : (
+            <Stack spacing={1.5}>
+              {traceLogs.map((log) => (
+                <Box key={log.logId}>
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    alignItems="center"
+                    sx={{ flexWrap: "wrap" }}
+                    useFlexGap
+                  >
+                    <Chip
+                      size="small"
+                      label={LOG_ACTION_LABEL[log.action] || log.action}
+                    />
+                    <Typography variant="caption" color="text.secondary">
+                      {log.createdAt} · {log.actor || "—"}
+                      {log.ip ? ` · ${log.ip}` : ""}
+                    </Typography>
+                  </Stack>
+                  {log.detail && <Typography variant="body2">{log.detail}</Typography>}
+                  {log.error && (
+                    <Typography variant="body2" color="error">
+                      Lỗi: {log.error}
+                    </Typography>
+                  )}
+                </Box>
+              ))}
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button variant="outlined" onClick={() => setTraceTarget(null)}>
+            Đóng
           </Button>
         </DialogActions>
       </Dialog>

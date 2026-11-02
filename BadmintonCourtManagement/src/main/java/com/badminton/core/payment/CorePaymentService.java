@@ -1,8 +1,11 @@
 package com.badminton.core.payment;
 
 import com.badminton.constant.ServiceConstants;
+import com.badminton.core.billing.CoreBillingService;
 import com.badminton.core.debit.CoreDebitService;
 import com.badminton.core.player.CoreAvailablePlayerService;
+import com.badminton.entity.AvailablePlayer;
+import com.badminton.entity.Invoice;
 import com.badminton.entity.Payment;
 import com.badminton.enums.PaymentStatus;
 import com.badminton.exception.BusinessException;
@@ -33,10 +36,20 @@ public class CorePaymentService {
     CoreAvailablePlayerService coreAvailablePlayerService;
 
     @Autowired
+    CoreBillingService coreBillingService;
+
+    @Autowired
     PaymentRepository paymentRepository;
 
     @Transactional
     public PaymentDebitModel payForPlayerAndCreateDebt(PaymentDTO paymentDTO) throws BusinessException {
+        // G-7 idempotency: the client sends one UUID per payment attempt. If a
+        // bill already exists for it, the attempt was settled — hand that bill
+        // back instead of creating a second debit/allocation.
+        Invoice settled = coreBillingService.findByClientTxnId(paymentDTO.getClientTransactionId());
+        if (settled != null) {
+            return convertToReplayModel(paymentDTO, settled);
+        }
         try {
             // create new debit
             if (paymentDTO.getDebit() != null) {
@@ -49,22 +62,49 @@ public class CorePaymentService {
                 payDebitsResponse = coreDebitService.allocateDebitPayment(paymentDTO.getPayDebits());
                 if (payDebitsResponse == null || PaymentStatus.FAIL.equals(payDebitsResponse.getStatus())) {
                     throw new BusinessException(
-                            payDebitsResponse != null ? resolveErrorCode(payDebitsResponse.getErrorCode()) : ErrorCodeEnum.INTERNAL_SERVER_ERROR,
-                            payDebitsResponse != null ? payDebitsResponse.getMessage() : "Debit allocation returned empty response");
+                            payDebitsResponse != null ? resolveErrorCode(payDebitsResponse.getErrorCode())
+                                    : ErrorCodeEnum.INTERNAL_SERVER_ERROR,
+                            payDebitsResponse != null ? payDebitsResponse.getMessage()
+                                    : "Debit allocation returned empty response");
                 }
             }
 
             // save the player with leaveTime, service
-            AvailablePlayerPayModel savedPlayer = coreAvailablePlayerService.updatePaidAvailablePlayer(toAvaPlayerDTO(paymentDTO, payDebitsResponse));
+            AvailablePlayer paidPlayer = coreAvailablePlayerService
+                    .updatePaidAvailablePlayerEntity(toAvaPlayerDTO(paymentDTO, payDebitsResponse));
+            AvailablePlayerPayModel savedPlayer = coreAvailablePlayerService.toPayModel(paidPlayer);
 
-            return convertToModel(savedPlayer, payDebitsResponse, paymentDTO.getDebit());
+            // Issue the bill inside the payment transaction: a bill failure must
+            // roll the payment back, never leave money without a receipt.
+            Invoice bill = coreBillingService.issueCheckoutBill(paymentDTO, paidPlayer);
+
+            PaymentDebitModel model = convertToModel(savedPlayer, payDebitsResponse, paymentDTO.getDebit());
+            model.setBillId(bill.getInvoiceId());
+            model.setBillNo(bill.getBillNo());
+            return model;
         } catch (BusinessException e) {
             TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
             throw e;
         }
     }
 
-    private PaymentDebitModel convertToModel(AvailablePlayerPayModel savedPlayer, AllocateDebitPaymentResponse payDebitsResponse, CreateDebitDTO debit) {
+    /**
+     * Rebuilds the checkout response for an already-settled attempt. Amounts
+     * come from the bill, so the retry echoes what was actually charged.
+     */
+    private PaymentDebitModel convertToReplayModel(PaymentDTO paymentDTO, Invoice bill) {
+        PaymentDebitModel model = new PaymentDebitModel();
+        model.setPayFor(paymentDTO.getPlayerName());
+        model.setPayType(bill.getPayType());
+        model.setPayAmount(bill.getTotal());
+        model.setPayTime(bill.getIssuedAt());
+        model.setBillId(bill.getInvoiceId());
+        model.setBillNo(bill.getBillNo());
+        return model;
+    }
+
+    private PaymentDebitModel convertToModel(AvailablePlayerPayModel savedPlayer,
+            AllocateDebitPaymentResponse payDebitsResponse, CreateDebitDTO debit) {
         PaymentDebitModel paymentDebitModel = new PaymentDebitModel();
         paymentDebitModel.setPayFor(savedPlayer.getName());
         paymentDebitModel.setPayType(savedPlayer.getPayType());
@@ -82,12 +122,14 @@ public class CorePaymentService {
         return paymentDebitModel;
     }
 
-    private AvailablePlayerPayDTO toAvaPlayerDTO(PaymentDTO paymentDTO, AllocateDebitPaymentResponse payDebitsResponse) {
+    private AvailablePlayerPayDTO toAvaPlayerDTO(PaymentDTO paymentDTO,
+            AllocateDebitPaymentResponse payDebitsResponse) {
         List<ServiceDTO> services = paymentDTO.getServices() != null
                 ? new ArrayList<>(paymentDTO.getServices())
                 : new ArrayList<>();
         if (paymentDTO.getDebit() != null) {
-            services.add(new ServiceDTO(ServiceConstants.CREATE_DEBIT_VN, paymentDTO.getDebit().getDebitAmount().floatValue()));
+            services.add(new ServiceDTO(ServiceConstants.CREATE_DEBIT_VN,
+                    paymentDTO.getDebit().getDebitAmount().floatValue()));
         }
         if (payDebitsResponse != null) {
             services.add(new ServiceDTO(ServiceConstants.PAY_DEBIT_VN, payDebitsResponse.getPaidDebts().floatValue()));
@@ -124,7 +166,8 @@ public class CorePaymentService {
     @Transactional
     public Boolean cancelPayment(String playerName) {
         try {
-            coreAvailablePlayerService.updateUnPaidAvailablePlayer(AvailablePlayerPayDTO.builder().name(playerName).build());
+            coreAvailablePlayerService
+                    .updateUnPaidAvailablePlayer(AvailablePlayerPayDTO.builder().name(playerName).build());
         } catch (BusinessException e) {
             throw new RuntimeException(ErrorUtils.buildErrorMessage(e.getErrorCodeEnum()));
         }

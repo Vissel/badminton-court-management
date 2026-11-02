@@ -107,7 +107,38 @@ public class MisaMeInvoiceClient {
 
     /** GET {baseUrl}{downloadPath}?invoiceNo= — binary PDF. */
     public byte[] download(String invoiceNo) throws BusinessException {
-        String url = properties.getBaseUrl() + properties.getDownloadPath()
+        return downloadBinary(properties.getDownloadPath(), invoiceNo);
+    }
+
+    /**
+     * GET {baseUrl}{xmlPath}?invoiceNo= — the signed provider XML kept for the
+     * retention period required by NĐ 254/2026.
+     */
+    public String downloadXml(String invoiceNo) throws BusinessException {
+        byte[] body = downloadBinary(properties.getXmlPath(), invoiceNo);
+        return new String(body, StandardCharsets.UTF_8);
+    }
+
+    /**
+     * POST {baseUrl}{sendMailPath} — delivers the issued e-invoice to the buyer
+     * by email ("gửi bằng hình thức điện tử", Điều 11).
+     */
+    public JsonObject sendMail(String email, String transactionId, String invoiceNo) throws BusinessException {
+        Map<String, String> payload = new LinkedHashMap<>();
+        payload.put("Email", email);
+        payload.put("TransactionID", transactionId);
+        payload.put("InvoiceNo", invoiceNo);
+        HttpRequest request = HttpRequest.newBuilder(URI.create(properties.getBaseUrl() + properties.getSendMailPath()))
+                .timeout(Duration.ofSeconds(properties.getTimeoutSeconds()))
+                .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer " + token())
+                .POST(HttpRequest.BodyPublishers.ofString(new com.google.gson.Gson().toJson(payload)))
+                .build();
+        return sendForJson(request);
+    }
+
+    private byte[] downloadBinary(String path, String invoiceNo) throws BusinessException {
+        String url = properties.getBaseUrl() + path
                 + "?invoiceNo=" + URLEncoder.encode(invoiceNo, StandardCharsets.UTF_8);
         HttpRequest request = HttpRequest.newBuilder(URI.create(url))
                 .timeout(Duration.ofSeconds(properties.getTimeoutSeconds()))

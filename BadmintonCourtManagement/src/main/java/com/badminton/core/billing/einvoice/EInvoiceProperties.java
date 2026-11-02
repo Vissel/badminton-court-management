@@ -25,6 +25,7 @@ public class EInvoiceProperties {
     private String publishPath = "/api/integration/invoice";
     private String statusPath = "/api/integration/invoice/status";
     private String downloadPath = "/api/integration/invoice/download";
+    private String xmlPath = "/api/integration/invoice/download-xml";
     private String sendMailPath = "/api/integration/invoice/send-mail";
 
     public boolean isConfigured() {

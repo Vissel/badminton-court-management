@@ -1,5 +1,6 @@
 package com.badminton.entity;
 
+import com.badminton.enums.CorrectionType;
 import com.badminton.enums.EInvoiceStatus;
 import com.badminton.enums.InvoiceStatus;
 import com.badminton.enums.InvoiceType;
@@ -34,6 +35,21 @@ public class Invoice {
     @Enumerated(EnumType.STRING)
     @Column(name = "invoice_type", nullable = false, length = 20)
     private InvoiceType invoiceType;
+
+    /**
+     * Original bill this correction refers to (điều chỉnh / thay thế). Null on
+     * every forward bill; set on ADJUSTMENT and REPLACEMENT bills.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "related_invoice_id")
+    private Invoice relatedInvoice;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "correction_type", length = 20)
+    private CorrectionType correctionType;
+
+    @Column(name = "adjust_reason", length = 250)
+    private String adjustReason;
 
     @ManyToOne
     @JoinColumn(name = "session_id")
@@ -81,6 +97,9 @@ public class Invoice {
     @Column(name = "collect_amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal collectAmount;
 
+    @Column(name = "discount_amount", precision = 12, scale = 2)
+    private BigDecimal discountAmount;
+
     @Column(length = 10)
     private String currency = "VND";
 
@@ -125,6 +144,22 @@ public class Invoice {
 
     @Column(name = "einvoice_error", length = 500)
     private String einvoiceError;
+
+    /** Original XML returned by the provider — must be retained for archive. */
+    @Lob
+    @Column(name = "einvoice_xml")
+    private String einvoiceXml;
+
+    /** Buyer retrieval path (link/QR) required by Điều 11 NĐ 254/2026. */
+    @Column(name = "einvoice_lookup_url", length = 500)
+    private String einvoiceLookupUrl;
+
+    /**
+     * Client-generated idempotency key: a retried payment returns the bill
+     * already issued for this key instead of charging twice.
+     */
+    @Column(name = "client_txn_id", length = 64, unique = true)
+    private String clientTxnId;
 
     @Column(name = "print_count", nullable = false)
     private int printCount = 0;

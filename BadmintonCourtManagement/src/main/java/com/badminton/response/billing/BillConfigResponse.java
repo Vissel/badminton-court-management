@@ -24,5 +24,10 @@ public class BillConfigResponse {
     private boolean einvoiceEnabled;
     private String einvoiceSeries;
     private String einvoiceTemplate;
+    private String invoiceKind;
+    private String einvoicePattern;
+    private String bankName;
+    private String bankAccount;
+    private String einvoiceLookupBase;
     private boolean autoPrint;
 }

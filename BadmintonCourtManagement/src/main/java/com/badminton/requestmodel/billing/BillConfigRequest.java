@@ -24,5 +24,11 @@ public class BillConfigRequest {
     private Boolean einvoiceEnabled;
     private String einvoiceSeries;
     private String einvoiceTemplate;
+    /** GTGT | BAN_HANG — drives the invoice title sent to the provider. */
+    private String invoiceKind;
+    private String einvoicePattern;
+    private String bankName;
+    private String bankAccount;
+    private String einvoiceLookupBase;
     private Boolean autoPrint;
 }

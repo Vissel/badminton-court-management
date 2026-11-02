@@ -4,8 +4,11 @@ import com.badminton.constant.PayType;
 import com.badminton.entity.BillConfig;
 import com.badminton.entity.Invoice;
 import com.badminton.entity.InvoiceItem;
+import com.badminton.enums.CorrectionType;
 import com.badminton.enums.InvoiceItemType;
+import com.badminton.enums.InvoiceKind;
 import com.badminton.enums.InvoiceStatus;
+import com.badminton.enums.InvoiceType;
 import com.badminton.util.MoneyUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
@@ -45,10 +48,18 @@ public class ReceiptComposer {
         }
 
         doc.addSeparator();
-        doc.add(center("HOÁ ĐƠN BÁN HÀNG", ReceiptDocument.Style.TITLE));
+        doc.add(center(invoiceTitle(config), ReceiptDocument.Style.TITLE));
         doc.add(center("Số: " + invoice.getBillNo(), ReceiptDocument.Style.CENTER));
         if (invoice.getIssuedAt() != null) {
             doc.add(center(TS_FMT.format(invoice.getIssuedAt()), ReceiptDocument.Style.CENTER));
+        }
+        if (invoice.getCorrectionType() != null || invoice.getInvoiceType() == InvoiceType.ADJUSTMENT
+                || invoice.getInvoiceType() == InvoiceType.REPLACEMENT) {
+            doc.add(center(correctionLabel(invoice), ReceiptDocument.Style.CENTER_BOLD));
+            if (invoice.getRelatedInvoice() != null) {
+                doc.add(center("HĐ gốc: " + invoice.getRelatedInvoice().getBillNo(),
+                        ReceiptDocument.Style.SMALL));
+            }
         }
 
         // ── Buyer block ──
@@ -65,6 +76,11 @@ public class ReceiptComposer {
         }
         doc.add(pair("Thu ngân", invoice.getIssuedBy(), ReceiptDocument.Style.NORMAL));
         doc.add(pair("Thanh toán", payTypeLabel(invoice.getPayType()), ReceiptDocument.Style.NORMAL));
+        // G-13: transfer receipts carry the receiving account for reconciliation.
+        String bankLine = bankLine(config);
+        if (invoice.getPayType() == PayType.TRANSFER && bankLine != null) {
+            doc.add(pair("Ngân hàng", bankLine, ReceiptDocument.Style.SMALL));
+        }
 
         // ── Items ──
         doc.addSeparator();
@@ -108,6 +124,15 @@ public class ReceiptComposer {
             doc.add(pair("HĐĐT", invoice.getEinvoiceNo(), ReceiptDocument.Style.NORMAL));
         }
 
+        // ── Buyer retrieval QR (Điều 11) ──
+        String lookup = lookupUrl(invoice, config);
+        if (StringUtils.isNotBlank(lookup)) {
+            doc.addSeparator();
+            doc.setQrPayload(lookup);
+            doc.setQrCaption(lookup);
+            doc.add(center("Tra cứu hoá đơn", ReceiptDocument.Style.CENTER_BOLD));
+        }
+
         if (StringUtils.isNotBlank(config.getBillFooter())) {
             doc.addSeparator();
             for (String line : config.getBillFooter().split("\\R")) {
@@ -116,6 +141,36 @@ public class ReceiptComposer {
         }
         doc.add(center("Cảm ơn quý khách!", ReceiptDocument.Style.CENTER));
         return doc;
+    }
+
+    /** G-15: the printed title follows the configured invoice kind. */
+    private String invoiceTitle(BillConfig config) {
+        return config.getInvoiceKind() == InvoiceKind.GTGT
+                ? "HOÁ ĐƠN GIÁ TRỊ GIA TĂNG"
+                : "HOÁ ĐƠN BÁN HÀNG";
+    }
+
+    private String correctionLabel(Invoice invoice) {
+        return invoice.getCorrectionType() == CorrectionType.THAY_THE
+                ? "HOÁ ĐƠN THAY THẾ"
+                : "HOÁ ĐƠN ĐIỀU CHỈNH";
+    }
+
+    /**
+     * Retrieval link shown as a QR. Prefers the provider URL stored on the bill,
+     * then builds one from the configured base pattern.
+     */
+    private String lookupUrl(Invoice invoice, BillConfig config) {
+        if (StringUtils.isNotBlank(invoice.getEinvoiceLookupUrl())) {
+            return invoice.getEinvoiceLookupUrl();
+        }
+        String base = config.getEinvoiceLookupBase();
+        if (StringUtils.isBlank(base) || StringUtils.isBlank(invoice.getEinvoiceNo())) {
+            return null;
+        }
+        return base.replace("{no}", invoice.getEinvoiceNo())
+                .replace("{series}", StringUtils.defaultString(config.getEinvoiceSeries()))
+                .replace("{taxCode}", StringUtils.defaultString(config.getTaxCode()));
     }
 
     private String buyerName(Invoice invoice) {
@@ -130,6 +185,16 @@ public class ReceiptComposer {
             return "";
         }
         return payType == PayType.TRANSFER ? "Chuyển khoản" : "Tiền mặt";
+    }
+
+    /** "{bank} - {account}" from the venue config, or null when neither is set. */
+    private String bankLine(BillConfig config) {
+        if (StringUtils.isBlank(config.getBankName()) && StringUtils.isBlank(config.getBankAccount())) {
+            return null;
+        }
+        String name = StringUtils.defaultString(config.getBankName());
+        String account = StringUtils.defaultString(config.getBankAccount());
+        return StringUtils.isBlank(account) ? name : name + " - " + account;
     }
 
     private ReceiptDocument.Line center(String text, ReceiptDocument.Style style) {

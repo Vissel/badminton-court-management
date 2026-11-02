@@ -11,9 +11,12 @@ import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDType0Font;
+import org.apache.pdfbox.pdmodel.graphics.image.LosslessFactory;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
+import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 
@@ -25,9 +28,13 @@ import java.io.IOException;
 @Component
 public class BillPdfService {
 
-    private static final float MM = 2.83465f;          // 1 mm in PDF points
+    private static final float MM = 2.83465f; // 1 mm in PDF points
     private static final float MARGIN = 4f * MM;
     private static final float LINE_GAP = 1.2f;
+    /** QR side in points — 28 mm, large enough to scan from a thermal receipt. */
+    private static final float QR_SIZE = 28f * MM;
+
+    private final QrCodeRenderer qrCodeRenderer = new QrCodeRenderer();
 
     public byte[] render(ReceiptDocument doc, int paperWidthMm) throws BusinessException {
         float pageWidth = paperWidthMm * MM;
@@ -42,6 +49,12 @@ public class BillPdfService {
             for (Line line : doc.getLines()) {
                 height += lineHeight(line) + (line.getSub() != null ? subHeight() : 0);
             }
+            BufferedImage qr = doc.getQrPayload() != null
+                    ? qrCodeRenderer.render(doc.getQrPayload(), 260)
+                    : null;
+            if (qr != null) {
+                height += QR_SIZE + 6f * MM;
+            }
             height += MARGIN;
 
             PDPage page = new PDPage(new PDRectangle(pageWidth, height));
@@ -50,6 +63,9 @@ public class BillPdfService {
                 float y = height - MARGIN;
                 for (Line line : doc.getLines()) {
                     y = drawLine(cs, doc, line, pageWidth, y, regular, bold);
+                }
+                if (qr != null) {
+                    drawQr(cs, pdf, doc, qr, pageWidth, y, regular);
                 }
             }
 
@@ -67,6 +83,21 @@ public class BillPdfService {
             return 3.5f * MM;
         }
         return fontSize(line.getStyle()) * LINE_GAP + 1.5f;
+    }
+
+    /** QR + the retrieval URL underneath, centred on the page. */
+    private void drawQr(PDPageContentStream cs, PDDocument pdf, ReceiptDocument doc,
+            BufferedImage qr, float pageWidth, float y, PDType0Font regular) throws IOException {
+        PDImageXObject image = LosslessFactory.createFromImage(pdf, qr);
+        float x = Math.max(MARGIN, (pageWidth - QR_SIZE) / 2f);
+        float top = y - QR_SIZE;
+        cs.drawImage(image, x, top, QR_SIZE, QR_SIZE);
+        if (doc.getQrCaption() != null) {
+            float size = 6f;
+            float w = regular.getStringWidth(doc.getQrCaption()) / 1000f * size;
+            float cx = Math.max(MARGIN, (pageWidth - w) / 2f);
+            write(cs, regular, size, cx, top - 4f * MM, doc.getQrCaption());
+        }
     }
 
     private float subHeight() {
@@ -90,16 +121,16 @@ public class BillPdfService {
     }
 
     private float drawLine(PDPageContentStream cs, ReceiptDocument doc, Line line,
-                           float pageWidth, float y,
-                           PDType0Font regular, PDType0Font bold) throws IOException {
+            float pageWidth, float y,
+            PDType0Font regular, PDType0Font bold) throws IOException {
         if (line.getStyle() == Style.SEPARATOR) {
             float mid = y - 1.5f * MM;
             cs.setLineWidth(0.4f);
             cs.moveTo(MARGIN, mid);
             cs.lineTo(pageWidth - MARGIN, mid);
-            cs.setLineDashPattern(new float[]{2f, 2f}, 0);
+            cs.setLineDashPattern(new float[] { 2f, 2f }, 0);
             cs.stroke();
-            cs.setLineDashPattern(new float[]{}, 0);
+            cs.setLineDashPattern(new float[] {}, 0);
             return y - 3.5f * MM;
         }
         PDType0Font font = font(line.getStyle(), regular, bold);
@@ -128,7 +159,7 @@ public class BillPdfService {
     }
 
     private void write(PDPageContentStream cs, PDType0Font font, float size,
-                       float x, float y, String text) throws IOException {
+            float x, float y, String text) throws IOException {
         cs.beginText();
         cs.setFont(font, size);
         cs.newLineAtOffset(x, y);

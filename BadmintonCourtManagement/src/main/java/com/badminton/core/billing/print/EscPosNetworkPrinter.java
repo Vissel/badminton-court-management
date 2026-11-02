@@ -37,6 +37,15 @@ public class EscPosNetworkPrinter {
     private static final Font BASE_FONT = loadFont("/fonts/DejaVuSans.ttf");
     private static final Font BOLD_FONT = loadFont("/fonts/DejaVuSans-Bold.ttf");
 
+    /**
+     * Stateless helper; instantiated directly so the printer keeps working in
+     * slice tests that do not scan the print package.
+     */
+    private final QrCodeRenderer qrCodeRenderer = new QrCodeRenderer();
+
+    /** QR side length in the raster — ~31 mm at 203 dpi, scanned from paper. */
+    private static final int QR_SIZE_PX = 260;
+
     // Standard ESC/POS raster widths at ~203 dpi.
     public static int widthForPaperMm(int paperWidthMm) {
         return paperWidthMm <= 60 ? 384 : 576;
@@ -86,6 +95,12 @@ public class EscPosNetworkPrinter {
         for (Line line : doc.getLines()) {
             height += lineHeight(line, g0, normal, bold, title, small);
         }
+        BufferedImage qr = doc.getQrPayload() != null
+                ? qrCodeRenderer.render(doc.getQrPayload(), QR_SIZE_PX)
+                : null;
+        if (qr != null) {
+            height += qr.getHeight() + g0.getFontMetrics(small).getHeight() + 10;
+        }
         height += MARGIN_PX * 2;
         g0.dispose();
 
@@ -134,6 +149,17 @@ public class EscPosNetworkPrinter {
                 g.setFont(small);
                 g.drawString(line.getSub(), MARGIN_PX * 2, y + g.getFontMetrics().getAscent());
                 y += g.getFontMetrics().getHeight() + 2;
+            }
+        }
+        if (qr != null) {
+            g.drawImage(qr, Math.max(0, (widthPx - qr.getWidth()) / 2), y, null);
+            y += qr.getHeight();
+            if (doc.getQrCaption() != null) {
+                g.setFont(small);
+                FontMetrics fm = g.getFontMetrics();
+                String caption = doc.getQrCaption();
+                int cw = fm.stringWidth(caption);
+                g.drawString(caption, Math.max(0, (widthPx - cw) / 2), y + fm.getAscent());
             }
         }
         g.dispose();

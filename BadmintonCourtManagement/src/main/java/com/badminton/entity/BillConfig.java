@@ -1,5 +1,6 @@
 package com.badminton.entity;
 
+import com.badminton.enums.InvoiceKind;
 import com.badminton.enums.PrinterMode;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -68,6 +69,25 @@ public class BillConfig {
 
     @Column(name = "auto_print", nullable = false)
     private boolean autoPrint = true;
+
+    /** GTGT (khấu trừ) or BAN_HANG (trực tiếp/khoán) — drives the invoice title. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "invoice_kind", length = 20)
+    private InvoiceKind invoiceKind = InvoiceKind.BAN_HANG;
+
+    /** Ký hiệu mẫu số hoá đơn, e.g. "1C26TAA". */
+    @Column(name = "einvoice_pattern", length = 50)
+    private String einvoicePattern;
+
+    @Column(name = "bank_name", length = 120)
+    private String bankName;
+
+    @Column(name = "bank_account", length = 40)
+    private String bankAccount;
+
+    /** Buyer lookup portal base — the QR/link on the receipt is built from it. */
+    @Column(name = "einvoice_lookup_base", length = 300)
+    private String einvoiceLookupBase;
 
     @Column(name = "updated_by", length = 50)
     private String updatedBy;

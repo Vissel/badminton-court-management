@@ -23,4 +23,15 @@ public class PaymentDTO {
      * Optional per-bill VAT % override — only honoured for ADMINISTRATOR/ROOT.
      */
     private BigDecimal vatRate;
+    /**
+     * FE-generated idempotency key (one per checkout attempt). A retry with the
+     * same key returns the bill created by the first attempt instead of
+     * issuing a duplicate.
+     */
+    private String clientTransactionId;
+    /**
+     * Optional invoice-level discount (gross, price-inclusive). Recorded as a
+     * negative DISCOUNT line so the printed total matches what was collected.
+     */
+    private BigDecimal discountAmount;
 }

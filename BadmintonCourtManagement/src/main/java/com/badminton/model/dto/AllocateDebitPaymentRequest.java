@@ -25,4 +25,9 @@ public class AllocateDebitPaymentRequest {
     private BuyerInfo buyer;
     /** Optional per-bill VAT % override — ADMINISTRATOR/ROOT only. */
     private BigDecimal vatRate;
+    /**
+     * FE-generated idempotency key; a retry returns the already-issued bill
+     * instead of creating a second one.
+     */
+    private String clientTransactionId;
 }

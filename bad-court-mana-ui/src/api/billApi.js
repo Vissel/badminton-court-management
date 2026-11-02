@@ -38,3 +38,43 @@ export const downloadBillPdf = (billId) =>
   api.get(`/api/v1/bills/${billId}/pdf`, { responseType: "blob" });
 export const downloadEInvoicePdf = (billId) =>
   api.get(`/api/v1/bills/${billId}/einvoice/pdf`, { responseType: "blob" });
+// Archived provider XML (retention copy of the issued e-invoice).
+export const downloadEInvoiceXml = (billId) =>
+  api.get(`/api/v1/bills/${billId}/einvoice/xml`, { responseType: "blob" });
+
+// Buyer retrieval QR (G-11) as a PNG blob — an <img src> cannot send the JWT,
+// so the receipt view fetches it here and renders an object URL. 404 means no
+// retrieval base is configured: the receipt then prints without a QR.
+export const fetchBillQr = (billId) =>
+  api.get(`/api/v1/bills/${billId}/qr`, {
+    responseType: "blob",
+    skipErrorToast: true,
+  });
+
+// Resend the issued e-invoice to the buyer's email. `email` is optional: the
+// backend falls back to the buyer email stored on the bill.
+export const sendEInvoiceMail = (billId, email) =>
+  api.post(`/api/v1/bills/${billId}/einvoice/send`, email ? { email } : {});
+
+// Correction invoices (ROOT/ADMINISTRATOR only). Adjust = delta lines only,
+// replace = a full new bill that voids the original.
+export const adjustBill = (billId, payload) =>
+  api.post(`/api/v1/bills/${billId}/adjust`, payload);
+export const replaceBill = (billId, payload) =>
+  api.post(`/api/v1/bills/${billId}/replace`, payload);
+
+// Internal-control trail of one bill (issue/void/adjust/e-invoice/config).
+export const getBillLogs = (billId) => api.get(`/api/v1/bills/${billId}/logs`);
+
+// Revenue + output VAT summary. groupBy: DAY | MONTH | QUARTER.
+export const getTaxReport = (payload) =>
+  api.post("/api/v1/bills/tax-report", payload || {});
+export const exportTaxReport = (payload) =>
+  api.post("/api/v1/bills/tax-report/export", payload || {}, {
+    responseType: "blob",
+  });
+
+// Per-service VAT overrides edited from Setup (write is admin-only).
+export const listServiceVat = () => api.get("/api/v1/bills/service-vat");
+export const updateServiceVat = (serviceId, vatRate) =>
+  api.put(`/api/v1/bills/service-vat/${serviceId}`, { vatRate });

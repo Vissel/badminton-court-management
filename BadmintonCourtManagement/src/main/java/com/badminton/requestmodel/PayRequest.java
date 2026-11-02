@@ -30,4 +30,14 @@ public class PayRequest {
     private BigDecimal vatRate;
     /** Hint for the FE: auto-open the receipt print view after payment. */
     private Boolean printBill;
+    /**
+     * Optional invoice-level discount (VND, VAT-inclusive). Recorded as a
+     * negative DISCOUNT line so the printed total matches what was collected.
+     */
+    private BigDecimal discountAmount;
+    /**
+     * Idempotency key of one checkout attempt: a retried request carrying the
+     * same value returns the bill already issued by the first attempt.
+     */
+    private String clientTransactionId;
 }

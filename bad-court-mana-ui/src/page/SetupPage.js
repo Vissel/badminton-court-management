@@ -21,11 +21,14 @@ import Chip from "@mui/material/Chip";
 import Tooltip from "@mui/material/Tooltip";
 import Alert from "@mui/material/Alert";
 import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
 import SearchIcon from "@mui/icons-material/Search";
 import api from "../api/index";
-import { getBillConfig, updateBillConfig, testPrinter } from "../api/billApi";
+import { getBillConfig, updateBillConfig, testPrinter, listServiceVat, updateServiceVat } from "../api/billApi";
+import { searchCustomers, deleteCustomer } from "../api/customerApi";
 import { emitApiError } from "../api/errorBus";
+import CustomerDialog from "./dialog/CustomerDialog";
 import { VN_CURRENCY, formatVND } from "./MoneyUtils";
 import { normalizeSearchText } from "./TextUtils";
 
@@ -45,6 +48,11 @@ const EMPTY_BILL_CONFIG = {
   einvoiceEnabled: false,
   einvoiceSeries: "",
   einvoiceTemplate: "",
+  invoiceKind: "BAN_HANG",
+  einvoicePattern: "",
+  bankName: "",
+  bankAccount: "",
+  einvoiceLookupBase: "",
 };
 
 // ---------------------------------------------------------------------------
@@ -261,6 +269,97 @@ function SetupPage() {
   const setBillField = (field, value) =>
     setBillConfig((prev) => ({ ...prev, [field]: value }));
 
+  // Per-service VAT overrides (G-8): a blank input means "use the venue rate".
+  const [serviceVatRows, setServiceVatRows] = useState([]);
+  const [savingVatId, setSavingVatId] = useState(null);
+
+  const fetchServiceVat = async () => {
+    try {
+      const res = await listServiceVat();
+      if (res?.data?.success && res.data.data) {
+        setServiceVatRows(
+          res.data.data.map((row) => ({
+            ...row,
+            vatText: row.vatRate == null ? "" : String(row.vatRate),
+          }))
+        );
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const handleVatRowChange = (serviceId, value) =>
+    setServiceVatRows((prev) =>
+      prev.map((row) =>
+        row.serviceId === serviceId ? { ...row, vatText: value } : row
+      )
+    );
+
+  // Persists on blur so the cashier does not have to hunt for a save button.
+  const persistVatRow = async (row) => {
+    const raw = String(row.vatText ?? "").trim();
+    const rate = raw === "" ? null : Number(raw);
+    if (rate != null && (isNaN(rate) || rate < 0 || rate >= 100)) {
+      emitApiError("Thuế suất VAT phải trong khoảng 0–99.");
+      return;
+    }
+    setSavingVatId(row.serviceId);
+    try {
+      const res = await updateServiceVat(row.serviceId, rate);
+      if (res?.data?.success && res.data.data) {
+        const saved = res.data.data;
+        handleVatRowChange(
+          row.serviceId,
+          saved.vatRate == null ? "" : String(saved.vatRate)
+        );
+      } else if (res?.data) {
+        emitApiError(res.data.errorMessage || "Cập nhật thuế suất thất bại.");
+      }
+    } catch (error) {
+      // interceptor already surfaced the error
+    } finally {
+      setSavingVatId(null);
+    }
+  };
+
+  // Buyer directory (G-9): the same list backs the checkout autocomplete, so an
+  // entry typed here is what the cashier can pick at payment time.
+  const [customers, setCustomers] = useState([]);
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [customerDialog, setCustomerDialog] = useState(null);
+  const [deletingCustomerId, setDeletingCustomerId] = useState(null);
+
+  const fetchCustomers = async () => {
+    try {
+      const res = await searchCustomers();
+      if (res?.data?.success && Array.isArray(res.data.data)) {
+        setCustomers(res.data.data);
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const handleDeleteCustomer = async (customer) => {
+    if (!window.confirm(`Xoá khách hàng "${customer.name}" khỏi danh mục?`)) {
+      return;
+    }
+    setDeletingCustomerId(customer.customerId);
+    try {
+      const res = await deleteCustomer(customer.customerId);
+      if (res?.data?.success) {
+        await fetchCustomers();
+      } else if (res?.data) {
+        emitApiError(res.data.errorMessage || "Xoá khách hàng thất bại.");
+      }
+    } catch (error) {
+      // interceptor already surfaced the error
+    } finally {
+      setDeletingCustomerId(null);
+    }
+  };
+
   const handleSaveBillConfig = async () => {
     const vat = Number(billConfig.vatRate);
     if (isNaN(vat) || vat < 0 || vat >= 100) {
@@ -285,10 +384,16 @@ function SetupPage() {
         einvoiceEnabled: billConfig.einvoiceEnabled,
         einvoiceSeries: billConfig.einvoiceSeries || null,
         einvoiceTemplate: billConfig.einvoiceTemplate || null,
+        invoiceKind: billConfig.invoiceKind || "BAN_HANG",
+        einvoicePattern: billConfig.einvoicePattern || null,
+        bankName: billConfig.bankName || null,
+        bankAccount: billConfig.bankAccount || null,
+        einvoiceLookupBase: billConfig.einvoiceLookupBase || null,
       });
       if (res?.data?.success) {
         alert("Lưu cấu hình hoá đơn thành công!");
         setBillConfig({ ...EMPTY_BILL_CONFIG, ...res.data.data });
+        fetchServiceVat();
       } else if (res?.data) {
         emitApiError(res.data.errorMessage || "Lưu cấu hình hoá đơn thất bại.");
       }
@@ -534,6 +639,8 @@ function SetupPage() {
   useEffect(() => {
     fetchEntries();
     fetchBillConfig();
+    fetchServiceVat();
+    fetchCustomers();
 
     const handleClickOutside = (event) => {
       if (tableRef.current && !tableRef.current.contains(event.target)) {
@@ -579,6 +686,16 @@ function SetupPage() {
   };
   const visibleShuttleBalls = filterRows(tableShuttleBalls, ballSearch, (ball) => ball.shuttleName);
   const visibleServices = filterRows(tableServices, serviceSearch, (service) => service.serviceName);
+
+  // A buyer matches on any identifying field, so one box covers company names
+  // and tax codes alike.
+  const customerTerm = normalizeSearchText(customerSearch);
+  const visibleCustomers = customers.filter((customer) =>
+    !customerTerm ||
+    [customer.name, customer.company, customer.taxCode, customer.phone, customer.email].some(
+      (value) => normalizeSearchText(value).includes(customerTerm)
+    )
+  );
 
   return (
     <Box sx={{ maxWidth: 1100, mx: "auto", p: { xs: 1, sm: 2 } }}>
@@ -1071,6 +1188,20 @@ function SetupPage() {
               helperText="Giá bán đã bao gồm VAT"
             />
           </Grid>
+          <Grid size={{ xs: 12, sm: 3 }}>
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label="Loại hoá đơn"
+              value={billConfig.invoiceKind || "BAN_HANG"}
+              onChange={(e) => setBillField("invoiceKind", e.target.value)}
+              helperText="Tên in trên hoá đơn"
+            >
+              <MenuItem value="BAN_HANG">Hoá đơn bán hàng</MenuItem>
+              <MenuItem value="GTGT">Hoá đơn giá trị gia tăng</MenuItem>
+            </TextField>
+          </Grid>
           <Grid size={{ xs: 12 }}>
             <TextField
               fullWidth
@@ -1180,6 +1311,100 @@ function SetupPage() {
               disabled={!billConfig.einvoiceEnabled}
             />
           </Grid>
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <TextField
+              fullWidth
+              size="small"
+              label="Ký hiệu mẫu (pattern)"
+              value={billConfig.einvoicePattern}
+              onChange={(e) => setBillField("einvoicePattern", e.target.value)}
+              disabled={!billConfig.einvoiceEnabled}
+              helperText="Ví dụ 1/001 — dùng khi gửi HĐĐT"
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <TextField
+              fullWidth
+              size="small"
+              label="Ngân hàng"
+              value={billConfig.bankName}
+              onChange={(e) => setBillField("bankName", e.target.value)}
+              disabled={!billConfig.einvoiceEnabled}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <TextField
+              fullWidth
+              size="small"
+              label="Số tài khoản"
+              value={billConfig.bankAccount}
+              onChange={(e) => setBillField("bankAccount", e.target.value)}
+              disabled={!billConfig.einvoiceEnabled}
+            />
+          </Grid>
+          <Grid size={{ xs: 12 }}>
+            <TextField
+              fullWidth
+              size="small"
+              label="Đường dẫn tra cứu hoá đơn"
+              value={billConfig.einvoiceLookupBase}
+              onChange={(e) => setBillField("einvoiceLookupBase", e.target.value)}
+              helperText="Dùng cho mã QR in trên hoá đơn — có thể chứa {no}, {series}, {taxCode}."
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12 }}>
+            <Typography variant="subtitle2" color="text.secondary">
+              Thuế suất theo từng dịch vụ
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+              Để trống để dùng thuế suất chung ở trên. Giá bán vẫn là giá đã bao gồm VAT.
+            </Typography>
+            <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 280 }}>
+              <Table size="small" stickyHeader>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Dịch vụ</TableCell>
+                    <TableCell sx={{ width: 140 }} align="right">
+                      VAT (%)
+                    </TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {serviceVatRows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={2} align="center" sx={{ py: 3 }}>
+                        <Typography color="text.secondary">
+                          Chưa có dịch vụ nào.
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    serviceVatRows.map((row) => (
+                      <TableRow key={row.serviceId} hover>
+                        <TableCell>{row.serviceName}</TableCell>
+                        <TableCell align="right">
+                          <TextField
+                            size="small"
+                            type="number"
+                            value={row.vatText}
+                            placeholder={String(billConfig.vatRate ?? 0)}
+                            disabled={savingVatId === row.serviceId}
+                            onChange={(e) =>
+                              handleVatRowChange(row.serviceId, e.target.value)
+                            }
+                            onBlur={() => persistVatRow(row)}
+                            sx={{ width: 110 }}
+                            slotProps={{ htmlInput: { min: 0, max: 99, step: 1 } }}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Grid>
 
           <Grid size={{ xs: 12 }}>
             <Button
@@ -1203,6 +1428,107 @@ function SetupPage() {
           </Grid>
         </Grid>
       </Paper>
+
+      {/* ── Buyer directory (G-9) ── */}
+      <Paper variant="outlined" sx={{ mt: 3, p: 2 }}>
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          spacing={1.5}
+          alignItems={{ xs: "stretch", sm: "center" }}
+          sx={{ mb: 1 }}
+        >
+          <Box>
+            <Typography variant="h6">Danh mục khách hàng</Typography>
+            <Typography variant="caption" color="text.secondary">
+              Dùng cho ô tìm khách hàng khi thanh toán và thông tin người mua trên
+              hoá đơn điện tử.
+            </Typography>
+          </Box>
+          <TextField
+            size="small"
+            placeholder="Tìm theo tên, công ty, MST…"
+            value={customerSearch}
+            onChange={(e) => setCustomerSearch(e.target.value)}
+            sx={{ ml: { sm: "auto" }, minWidth: 220 }}
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" />
+                  </InputAdornment>
+                ),
+              },
+            }}
+          />
+          <Button variant="contained" onClick={() => setCustomerDialog({})}>
+            + Thêm khách hàng
+          </Button>
+        </Stack>
+        <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 280 }}>
+          <Table size="small" stickyHeader>
+            <TableHead>
+              <TableRow>
+                <TableCell>Khách hàng</TableCell>
+                <TableCell>Công ty</TableCell>
+                <TableCell sx={{ width: 130 }}>MST</TableCell>
+                <TableCell sx={{ width: 140 }}>Điện thoại</TableCell>
+                <TableCell sx={{ width: 220 }}>Email</TableCell>
+                <TableCell sx={{ width: 96 }} align="right">
+                  Thao tác
+                </TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {visibleCustomers.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
+                    <Typography color="text.secondary">
+                      {customerSearch
+                        ? `Không tìm thấy "${customerSearch}".`
+                        : "Chưa có khách hàng nào."}
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                visibleCustomers.map((customer) => (
+                  <TableRow key={customer.customerId} hover>
+                    <TableCell>{customer.name}</TableCell>
+                    <TableCell>{customer.company || "—"}</TableCell>
+                    <TableCell>{customer.taxCode || "—"}</TableCell>
+                    <TableCell>{customer.phone || "—"}</TableCell>
+                    <TableCell>{customer.email || "—"}</TableCell>
+                    <TableCell align="right">
+                      <IconButton
+                        size="small"
+                        title="Sửa khách hàng"
+                        onClick={() => setCustomerDialog(customer)}
+                      >
+                        <EditOutlinedIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        color="error"
+                        title="Xoá khách hàng"
+                        disabled={deletingCustomerId === customer.customerId}
+                        onClick={() => handleDeleteCustomer(customer)}
+                      >
+                        <DeleteOutlinedIcon fontSize="small" />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Paper>
+
+      <CustomerDialog
+        show={customerDialog != null}
+        customer={customerDialog}
+        onClose={() => setCustomerDialog(null)}
+        onDone={fetchCustomers}
+      />
     </Box>
   );
 }

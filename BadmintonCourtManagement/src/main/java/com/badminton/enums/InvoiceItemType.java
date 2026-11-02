@@ -15,6 +15,10 @@ public enum InvoiceItemType {
     DEBT_PAID,
     /** "Trả trước" — prepaid advance applied to this bill (negative amount). */
     ADVANCE_DEDUCT,
-    /** "Ghi nợ" — amount carved out as new debt, not collected (negative amount). */
-    DEBT_CREATED
+    /**
+     * "Ghi nợ" — amount carved out as new debt, not collected (negative amount).
+     */
+    DEBT_CREATED,
+    /** "Chiết khấu" — invoice-level discount (negative amount). */
+    DISCOUNT
 }

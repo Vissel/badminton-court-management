@@ -22,6 +22,11 @@ import com.badminton.model.dto.ServiceDTO;
 import com.badminton.repository.BillConfigRepository;
 import com.badminton.repository.InvoiceRepository;
 import com.badminton.repository.InvoiceSeriesRepository;
+import com.badminton.requestmodel.billing.AdjustBillRequest;
+import com.badminton.requestmodel.billing.AdjustItemRequest;
+import com.badminton.requestmodel.billing.ReplaceBillRequest;
+import com.badminton.response.billing.BillResponse;
+import com.badminton.response.billing.TaxReportResponse;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,7 +49,8 @@ import static org.mockito.Mockito.when;
 @DataJpaTest
 @ActiveProfiles("test")
 @TestPropertySource(locations = "classpath:application-test.properties")
-@Import({ CoreBillingService.class, ReceiptComposer.class, BillPdfService.class, EscPosNetworkPrinter.class })
+@Import({ CoreBillingService.class, ReceiptComposer.class, BillPdfService.class, EscPosNetworkPrinter.class,
+                InvoiceAuditLogger.class })
 class CoreBillingServiceTest {
 
         @Autowired
@@ -243,5 +249,176 @@ class CoreBillingServiceTest {
                 assertTrue(all.contains("Tổng cộng"));
                 assertTrue(all.contains("Trong đó VAT (10%)"));
                 assertTrue(all.contains("Thực thu"));
+        }
+
+        // ---------- P0 G-1: adjustment / replacement ----------
+
+        @Test
+        void adjustmentBill_linksToOriginalAndKeepsGaplessNumbering() throws Exception {
+                Invoice original = coreBillingService.issueCheckoutBill(
+                                checkoutDto(List.of(new ServiceDTO("Tiền sân", 50000))), availablePlayer);
+
+                AdjustBillRequest request = new AdjustBillRequest();
+                request.setReason("Tính thiếu giờ");
+                AdjustItemRequest line = new AdjustItemRequest();
+                line.setItemName("Tiền sân bổ sung");
+                line.setAmount(new BigDecimal("20000"));
+                request.setItems(List.of(line));
+
+                BillResponse correction = coreBillingService.issueAdjustmentBill(original.getInvoiceId(), request);
+
+                assertEquals("ADJUSTMENT", correction.getInvoiceType());
+                assertEquals("DIEU_CHINH", correction.getCorrectionType());
+                assertEquals(original.getInvoiceId(), correction.getRelatedBillId());
+                assertEquals(original.getBillNo(), correction.getRelatedBillNo());
+                // The original keeps its number and stays issued.
+                assertEquals("BL-000001", original.getBillNo());
+                assertEquals("BL-000002", correction.getBillNo());
+                assertEquals("ISSUED", coreBillingService.getBill(original.getInvoiceId()).getStatus());
+                assertTrue(coreBillingService.getBill(original.getInvoiceId()).isCorrected());
+        }
+
+        @Test
+        void replacementBill_voidsOriginal() throws Exception {
+                Invoice original = coreBillingService.issueCheckoutBill(
+                                checkoutDto(List.of(new ServiceDTO("Tiền sân", 50000))), availablePlayer);
+
+                ReplaceBillRequest request = new ReplaceBillRequest();
+                request.setReason("Sai tên khách");
+                AdjustItemRequest line = new AdjustItemRequest();
+                line.setItemName("Tiền sân");
+                line.setAmount(new BigDecimal("70000"));
+                request.setItems(List.of(line));
+
+                BillResponse replacement = coreBillingService.issueReplacementBill(original.getInvoiceId(), request);
+
+                assertEquals("REPLACEMENT", replacement.getInvoiceType());
+                assertEquals("THAY_THE", replacement.getCorrectionType());
+                assertEquals(0, replacement.getTotal().compareTo(new BigDecimal("70000")));
+                assertEquals("VOIDED", coreBillingService.getBill(original.getInvoiceId()).getStatus());
+                assertEquals("Thay thế bởi " + replacement.getBillNo(),
+                                coreBillingService.getBill(original.getInvoiceId()).getVoidReason());
+        }
+
+        // ---------- P0 G-2: correction before void ----------
+
+        @Test
+        void voidBill_issuedEinvoiceRequiresCorrectionFirst() throws Exception {
+                Invoice bill = coreBillingService.issueCheckoutBill(
+                                checkoutDto(List.of(new ServiceDTO("Tiền sân", 50000))), availablePlayer);
+                Invoice stored = invoiceRepository.findById(bill.getInvoiceId()).orElseThrow();
+                stored.setEinvoiceStatus(com.badminton.enums.EInvoiceStatus.ISSUED);
+                stored.setEinvoiceNo("E-0001");
+                invoiceRepository.saveAndFlush(stored);
+
+                assertThrows(IllegalArgumentException.class,
+                                () -> coreBillingService.voidBill(bill.getInvoiceId(), "Huỷ"));
+
+                AdjustBillRequest request = new AdjustBillRequest();
+                request.setReason("Điều chỉnh trước khi huỷ");
+                AdjustItemRequest line = new AdjustItemRequest();
+                line.setItemName("Giảm giá");
+                line.setAmount(new BigDecimal("-50000"));
+                request.setItems(List.of(line));
+                coreBillingService.issueAdjustmentBill(bill.getInvoiceId(), request);
+
+                var response = coreBillingService.voidBill(bill.getInvoiceId(), "Huỷ nội bộ");
+                assertEquals("VOIDED", response.getStatus());
+        }
+
+        // ---------- P1 G-7: payment idempotency ----------
+
+        @Test
+        void checkoutBill_sameClientTransactionIdReturnsSameBill() {
+                PaymentDTO dto = checkoutDto(List.of(new ServiceDTO("Tiền sân", 50000)));
+                dto.setClientTransactionId("txn-abc");
+
+                Invoice first = coreBillingService.issueCheckoutBill(dto, availablePlayer);
+                Invoice second = coreBillingService.issueCheckoutBill(dto, availablePlayer);
+
+                assertEquals(first.getInvoiceId(), second.getInvoiceId());
+                assertEquals(1, invoiceRepository.count());
+                assertEquals("txn-abc", first.getClientTxnId());
+        }
+
+        // ---------- P2 G-10: discount ----------
+
+        @Test
+        void checkoutBill_recordsDiscountAsNegativeLine() {
+                PaymentDTO dto = checkoutDto(List.of(new ServiceDTO("Tiền sân", 50000)));
+                dto.setDiscountAmount(new BigDecimal("10000"));
+
+                Invoice bill = coreBillingService.issueCheckoutBill(dto, availablePlayer);
+
+                assertEquals(0, bill.getTotal().compareTo(new BigDecimal("40000")));
+                assertEquals(0, bill.getDiscountAmount().compareTo(new BigDecimal("10000")));
+                var discount = bill.getItems().stream()
+                                .filter(i -> i.getItemType() == InvoiceItemType.DISCOUNT).findFirst().orElseThrow();
+                assertEquals(0, discount.getAmount().compareTo(new BigDecimal("-10000")));
+        }
+
+        // ---------- P2 G-8: per-item VAT ----------
+
+        @Test
+        void checkoutBill_usesPerServiceVatRateWhenConfigured() {
+                com.badminton.entity.Service water = new com.badminton.entity.Service("Nước suối", 10000f);
+                water.setVatRate(new BigDecimal("5"));
+                entityManager.persist(water);
+                entityManager.flush();
+
+                Invoice bill = coreBillingService.issueCheckoutBill(checkoutDto(List.of(
+                                new ServiceDTO("Tiền sân", 60000),
+                                new ServiceDTO("Nước suối", 40000))), availablePlayer);
+
+                // 60000 @10% -> 5455 ; 40000 @5% -> 1905
+                assertEquals(0, bill.getVatAmount().compareTo(new BigDecimal("7360")));
+                assertEquals(0, bill.getSubtotal().compareTo(new BigDecimal("92640")));
+                assertEquals(0, bill.getItems().stream()
+                                .filter(i -> "Nước suối".equals(i.getItemName()))
+                                .findFirst().orElseThrow().getVatRate().compareTo(new BigDecimal("5")));
+        }
+
+        // ---------- P1 G-6: tax report ----------
+
+        @Test
+        void taxReport_sumsIssuedBillsAndSkipsVoided() throws Exception {
+                Invoice kept = coreBillingService.issueCheckoutBill(
+                                checkoutDto(List.of(new ServiceDTO("Tiền sân", 110000))), availablePlayer);
+                Invoice voided = coreBillingService.issueCheckoutBill(
+                                checkoutDto(List.of(new ServiceDTO("Tiền sân", 55000))), availablePlayer);
+                coreBillingService.voidBill(voided.getInvoiceId(), "Test");
+
+                com.badminton.requestmodel.billing.TaxReportRequest request = new com.badminton.requestmodel.billing.TaxReportRequest();
+                request.setGroupBy("DAY");
+                TaxReportResponse report = coreBillingService.taxReport(request);
+
+                assertEquals(1, report.getBillCount());
+                assertEquals(0, report.getGross().compareTo(new BigDecimal("110000")));
+                assertEquals(0, report.getNet().compareTo(new BigDecimal("100000")));
+                assertEquals(0, report.getVat().compareTo(new BigDecimal("10000")));
+                assertEquals(1, report.getRows().size());
+                assertEquals(kept.getBillNo(), coreBillingService.getBill(kept.getInvoiceId()).getBillNo());
+        }
+
+        // ---------- P0 G-11: QR on the receipt ----------
+
+        @Test
+        void receiptComposer_addsQrPayloadWhenLookupBaseConfigured() {
+                ReceiptComposer composer = new ReceiptComposer();
+                Invoice invoice = new Invoice();
+                invoice.setBillNo("BL-000009");
+                invoice.setTotal(new BigDecimal("110000"));
+                invoice.setCollectAmount(new BigDecimal("110000"));
+                invoice.setEinvoiceNo("E-0009");
+
+                BillConfig config = new BillConfig();
+                config.setTaxCode("0123456789");
+                config.setEinvoiceSeries("1C26TAA");
+                config.setEinvoiceLookupBase("https://hoadon.misa.vn/{taxCode}/{series}/{no}");
+
+                var doc = composer.compose(invoice, config);
+
+                assertEquals("https://hoadon.misa.vn/0123456789/1C26TAA/E-0009", doc.getQrPayload());
+                assertEquals(doc.getQrPayload(), doc.getQrCaption());
         }
 }

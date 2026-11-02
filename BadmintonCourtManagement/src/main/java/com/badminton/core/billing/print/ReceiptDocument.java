@@ -32,8 +32,33 @@ public class ReceiptDocument {
 
     private final List<Line> lines = new ArrayList<>();
 
+    /**
+     * Buyer retrieval link of the e-invoice. Renderers draw it as a QR code
+     * with {@link #qrCaption} underneath; null means "no QR on this receipt".
+     */
+    private String qrPayload;
+
+    /** Text printed under the QR — the same URL, in small font. */
+    private String qrCaption;
+
     public void add(Line line) {
         lines.add(line);
+    }
+
+    public String getQrPayload() {
+        return qrPayload;
+    }
+
+    public void setQrPayload(String qrPayload) {
+        this.qrPayload = qrPayload;
+    }
+
+    public String getQrCaption() {
+        return qrCaption;
+    }
+
+    public void setQrCaption(String qrCaption) {
+        this.qrCaption = qrCaption;
     }
 
     public void addSeparator() {

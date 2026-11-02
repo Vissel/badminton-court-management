@@ -108,19 +108,24 @@ public class PayServiceImpl implements PayService {
         dto.setPayType(request.getPayType());
         dto.setDebit(request.getDebitRequest() != null ? convertToCreateDebitDTO(request.getDebitRequest()) : null);
         dto.setPayDebits(
-                request.getPayDebits() != null ? convertToAllocateDebitPaymentRequest(request.getPayDebits()) : null);
+                request.getPayDebits() != null
+                        ? convertToAllocateDebitPaymentRequest(request.getPayDebits(), request.getClientTransactionId())
+                        : null);
         dto.setBuyer(request.getBuyer());
         dto.setVatRate(request.getVatRate());
+        dto.setDiscountAmount(request.getDiscountAmount());
+        dto.setClientTransactionId(request.getClientTransactionId());
         return dto;
     }
 
     private AllocateDebitPaymentRequest convertToAllocateDebitPaymentRequest(
-            com.badminton.requestmodel.debit.PayDebitRequest request) {
+            com.badminton.requestmodel.debit.PayDebitRequest request, String clientTransactionId) {
         return AllocateDebitPaymentRequest.builder()
                 .playerName(request.getPlayerName())
                 .payAmount(BigDecimal.valueOf(request.getTotalPayAmount()))
                 .payMethod(request.getPaymentMethod())
                 .note(request.getNote())
+                .clientTransactionId(clientTransactionId)
                 .listDebitPay(request.getListDebitPay() != null
                         ? request.getListDebitPay().stream()
                                 .map(debitPay -> DebitPayDTO.builder()

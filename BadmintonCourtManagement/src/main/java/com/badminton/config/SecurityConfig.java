@@ -67,6 +67,10 @@ public class SecurityConfig {
                         .requestMatchers("/court-mana/**", "/session/**", "/gameResult/**", "/api/v1/pay/**")
                         .hasAnyRole(ROOT, ADMIN, COORDINATOR)
                         .requestMatchers("/api/v1/users/**").hasAnyRole(ROOT, ADMIN)
+                        // G-9: the checkout buyer autocomplete is a read used by the
+                        // coordinator too; writes stay ROOT/ADMIN via /api/** below.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/customers/**")
+                        .hasAnyRole(ROOT, ADMIN, COORDINATOR)
                         .requestMatchers("/api/products/**", "/api/inventory/**", "/api/v1/manager/**",
                                 "/api/v1/debit/**", "/api/v1/player/**", "/api/**")
                         .hasAnyRole(ROOT, ADMIN)

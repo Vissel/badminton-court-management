@@ -92,11 +92,13 @@ public class CoreAvailablePlayerService {
     }
 
     public Optional<AvailablePlayer> findAvailableByNameInSession(String name) {
-        return availablePlayerRepository.findAvailablePlayerInSessionByNameAndLeaveTimeNull(coreSession.findCurrentSession(), name);
+        return availablePlayerRepository
+                .findAvailablePlayerInSessionByNameAndLeaveTimeNull(coreSession.findCurrentSession(), name);
     }
 
     public Optional<AvailablePlayer> findForUpdateAvailablePlayerInSessionByName(String name) {
-        return availablePlayerRepository.findForUpdateAvailablePlayerInSessionByName(coreSession.findCurrentSession(), name);
+        return availablePlayerRepository.findForUpdateAvailablePlayerInSessionByName(coreSession.findCurrentSession(),
+                name);
     }
 
     /**
@@ -106,6 +108,15 @@ public class CoreAvailablePlayerService {
      * @throws BusinessException
      */
     public AvailablePlayerPayModel updatePaidAvailablePlayer(AvailablePlayerPayDTO dto) throws BusinessException {
+        return convertToModel(updatePaidAvailablePlayerEntity(dto), PayStatus.PAID);
+    }
+
+    /**
+     * Same transition as {@link #updatePaidAvailablePlayer} but returns the
+     * entity, so the caller can stamp the checkout bill with the session and
+     * player it just closed.
+     */
+    public AvailablePlayer updatePaidAvailablePlayerEntity(AvailablePlayerPayDTO dto) throws BusinessException {
         Optional<AvailablePlayer> optPlayer = findForUpdateAvailablePlayerInSessionByName(
                 dto.getName());
         AvailablePlayerCheck.isAvailablePlayerPresent(optPlayer);
@@ -116,7 +127,11 @@ public class CoreAvailablePlayerService {
         availablePlayer.setPayType(dto.getPayType());
         availablePlayer.setPayAmount(dto.getPayAmount());
 
-        AvailablePlayer savedPlayer = availablePlayerRepository.save(availablePlayer);
+        return availablePlayerRepository.save(availablePlayer);
+    }
+
+    /** Maps an already-paid entity to its response model. */
+    public AvailablePlayerPayModel toPayModel(AvailablePlayer savedPlayer) {
         return convertToModel(savedPlayer, PayStatus.PAID);
     }
 
@@ -154,8 +169,10 @@ public class CoreAvailablePlayerService {
     /**
      * update available player with service change.
      * <p>
-     * A line that is already on the player keeps its place and takes the requested cost, so a
-     * repeated edit (e.g. a rental duration change) refreshes one line instead of stacking
+     * A line that is already on the player keeps its place and takes the requested
+     * cost, so a
+     * repeated edit (e.g. a rental duration change) refreshes one line instead of
+     * stacking
      * duplicates.
      *
      * @param updateAvaPlayerDTO
@@ -174,7 +191,8 @@ public class CoreAvailablePlayerService {
     }
 
     /**
-     * Replace the cost of the line carrying the same service name, or append the line.
+     * Replace the cost of the line carrying the same service name, or append the
+     * line.
      */
     private void upsertService(List<ServiceDTO> services, ServiceDTO newService) {
         services.stream()
