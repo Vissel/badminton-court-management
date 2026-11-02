@@ -1,9 +1,11 @@
 package com.badminton.controller;
 
+import com.badminton.requestmodel.DeleteUsersRequest;
 import com.badminton.requestmodel.RegisterUserDTO;
 import com.badminton.requestmodel.ResetUserRequest;
 import com.badminton.requestmodel.UpdateUserRequest;
 import com.badminton.response.AppUserResponse;
+import com.badminton.response.UserDeleteBatchResponse;
 import com.badminton.response.result.Result;
 import com.badminton.service.UserService;
 import com.badminton.util.ResponseConvertor;
@@ -44,6 +46,25 @@ public class UserManagementController {
         if (request.getActive() == null)
             return badRequest("active is required.");
         return ResponseConvertor.convert(userService.updateUserStatus(userId, request.getActive()));
+    }
+
+    /**
+     * ROOT-only: soft-deletes an account. It disappears from the user list and
+     * can no longer log in, but its row is kept for the audit trail.
+     */
+    @DeleteMapping("/{userId}")
+    public ResponseEntity<Result<AppUserResponse>> deleteUser(@PathVariable Long userId) {
+        return ResponseConvertor.convert(userService.deleteUser(userId));
+    }
+
+    /**
+     * ROOT-only bulk removal used by the multi-select in user management. Posted
+     * rather than sent as a DELETE so the selected ids travel in the body, which
+     * every proxy forwards. Removed and skipped accounts come back together.
+     */
+    @PostMapping("/bulk-delete")
+    public ResponseEntity<Result<UserDeleteBatchResponse>> deleteUsers(@RequestBody DeleteUsersRequest request) {
+        return ResponseConvertor.convert(userService.deleteUsers(request.getUserIds()));
     }
 
     /**

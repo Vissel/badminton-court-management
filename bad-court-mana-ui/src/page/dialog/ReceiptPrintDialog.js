@@ -74,7 +74,7 @@ const Line = ({ label, value, bold, indent }) => (
   </Box>
 );
 
-const ReceiptPrintDialog = ({ show, billId, onClose }) => {
+const ReceiptPrintDialog = ({ show, billId, onClose, onPrinted }) => {
   const [receipt, setReceipt] = useState(null);
   const [loading, setLoading] = useState(false);
   const [qrUrl, setQrUrl] = useState(null);
@@ -96,6 +96,13 @@ const ReceiptPrintDialog = ({ show, billId, onClose }) => {
       .finally(() => setLoading(false));
   }, [show, billId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Once the print action is done, dismiss this dialog and let the parent
+  // dismiss any pop-up stacked behind it (bill detail, pay confirm...).
+  const finishAfterPrint = () => {
+    if (onPrinted) onPrinted();
+    else onClose();
+  };
+
   const handlePrint = () => {
     if (receipt?.printerMode === "NETWORK") {
       // Backend renders + pushes an ESC/POS raster job to the printer IP:port
@@ -103,15 +110,20 @@ const ReceiptPrintDialog = ({ show, billId, onClose }) => {
       printBill(billId)
         .then((res) => {
           const result = res?.data;
-          if (!result?.success) {
+          if (result?.success) {
+            finishAfterPrint();
+          } else {
             emitApiError(result?.errorMessage || "In hoá đơn thất bại.");
           }
         })
         .catch(() => { });
       return;
     }
+    // window.print() blocks until the browser print dialog is dismissed, so
+    // everything below runs once the user has printed (or cancelled) it.
     window.print();
     if (billId) printBill(billId, "BROWSER").catch(() => { });
+    finishAfterPrint();
   };
 
   const bill = receipt?.bill;

@@ -502,8 +502,8 @@ public class CourtServicesService {
      * The game/team rows belong to the court core, so this only delegates.
      * </p>
      */
-    public Boolean addAvailablePlayerToCourtArea(String playerName, CourtDTO courtDTO, ShuttleBallDTO shuttleBallDTO) {
-        return coreCourtService.addAvailablePlayerToCourtArea(playerName, courtDTO, shuttleBallDTO);
+    public Boolean addAvailablePlayerToCourtArea(String playerName, CourtDTO courtDTO) {
+        return coreCourtService.addAvailablePlayerToCourtArea(playerName, courtDTO);
     }
 
     private long getAvaIdFromPlayer(AvailablePlayer avaPlayer) {

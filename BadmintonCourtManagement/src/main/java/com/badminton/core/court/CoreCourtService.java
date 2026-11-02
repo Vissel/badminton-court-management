@@ -33,12 +33,12 @@ public class CoreCourtService {
      * @return false when the court is unknown or a check rejects the seating (game not in
      * "Not start", shuttle ball not in the catalog, player not in the session)
      */
-    public boolean addAvailablePlayerToCourtArea(String playerName, CourtDTO courtDTO, ShuttleBallDTO shuttleBallDTO) {
+    public boolean addAvailablePlayerToCourtArea(String playerName, CourtDTO courtDTO) {
         try {
             Optional<Court> courtOpt = courtRepo.findById(Integer.valueOf(courtDTO.getCourtId()));
             CourtCheck.isCourtPresent(courtOpt);
             return coreGameService.addPlayerToCourt(courtOpt.get(), playerName,
-                    courtDTO.getCourtAreas().getFirst().getArea(), shuttleBallDTO);
+                    courtDTO.getCourtAreas().getFirst().getArea());
         } catch (BusinessException e) {
             log.warn("Adding {} to court {} is refused: {}", playerName, courtDTO.getCourtId(), e.getErrorMessage());
             return false;

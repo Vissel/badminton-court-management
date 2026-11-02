@@ -372,7 +372,7 @@ public class CoreGameService {
      *                           is not in the catalog, or the player is not in the current session
      */
     @Transactional(rollbackFor = Exception.class)
-    public boolean addPlayerToCourt(Court court, String playerName, String area, ShuttleBallDTO shuttleBallDTO)
+    public boolean addPlayerToCourt(Court court, String playerName, String area)
             throws BusinessException {
         GameCheck.isCourtAreaValid(area);
         // Every open row of this court counts (endedDate is null), whatever its state: a stale
@@ -382,7 +382,7 @@ public class CoreGameService {
         GameCheck.isGameNotStart(openGames);
         // orElseGet cannot carry the checked failure of opening a game, so the fallback stays explicit.
         Optional<Game> waitingGame = notStartGame(openGames);
-        Game game = waitingGame.isPresent() ? waitingGame.get() : openGame(court, shuttleBallDTO);
+        Game game = waitingGame.isPresent() ? waitingGame.get() : openGame(court);
         return seatPlayer(game, playerName, area);
     }
 
@@ -395,10 +395,8 @@ public class CoreGameService {
     /**
      * Open the court's game with the chosen shuttle ball.
      */
-    private Game openGame(Court court, ShuttleBallDTO shuttleBallDTO) throws BusinessException {
-        ShuttleBall ball = GameCheck.isShuttleBallPresent(coreShuttleBallService
-                .findActiveBall(shuttleBallDTO.getShuttleName(), shuttleBallDTO.getShuttleCost()), shuttleBallDTO);
-        return gameRepository.save(new Game(court, ball));
+    private Game openGame(Court court) throws BusinessException {
+        return gameRepository.save(new Game(court));
     }
 
     /**

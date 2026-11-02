@@ -132,4 +132,7 @@
     <changeSet id="038" author="devin">
         <sqlFile path="db/changelog/billing-customer.sql"/>
     </changeSet>
+    <changeSet id="039" author="thach">
+        <sqlFile path="db/changelog/user-soft-delete.sql"/>
+    </changeSet>
 </databaseChangeLog>

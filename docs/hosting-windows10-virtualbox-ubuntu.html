@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Badminton Court Management — Hosting Guide: Windows 10 + VirtualBox + Ubuntu</title>
+    <style>
+        :root {
+            --bg: #ffffff;
+            --fg: #1f2933;
+            --muted: #52606d;
+            --code-bg: #f5f7fa;
+            --code-fg: #24292e;
+            --border: #d9e2ec;
+            --accent: #0b6b53;
+            --warn-bg: #fff8e6;
+            --warn-border: #e0a800;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--fg);
+            font: 16px/1.65 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        .wrap {
+            max-width: 980px;
+            margin: 0 auto;
+            padding: 32px 24px 96px;
+        }
+
+        header.doc {
+            border-bottom: 3px solid var(--accent);
+            padding-bottom: 16px;
+            margin-bottom: 24px;
+        }
+
+        header.doc h1 {
+            margin: 0 0 6px;
+            font-size: 30px;
+            color: var(--accent);
+        }
+
+        header.doc p.sub {
+            margin: 0;
+            color: var(--muted);
+            font-size: 15px;
+        }
+
+        h2 {
+            font-size: 24px;
+            margin: 48px 0 12px;
+            padding-top: 18px;
+            border-top: 1px solid var(--border);
+            color: var(--accent);
+        }
+
+        h3 {
+            font-size: 19px;
+            margin: 30px 0 10px;
+        }
+
+        h4 {
+            font-size: 16px;
+            margin: 22px 0 8px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        p,
+        li {
+            overflow-wrap: break-word;
+        }
+
+        kbd {
+            font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+            font-size: 12.5px;
+            background: #fff;
+            border: 1px solid var(--border);
+            border-bottom-width: 2px;
+            border-radius: 4px;
+            padding: 1px 5px;
+        }
+
+        code {
+            font-family: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, "Courier New", monospace;
+            font-size: 14px;
+            background: var(--code-bg);
+            color: var(--code-fg);
+            padding: 1px 5px;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+        }
+
+        pre {
+            background: var(--code-bg);
+            border: 1px solid var(--border);
+            border-left: 4px solid var(--accent);
+            border-radius: 6px;
+            padding: 14px 16px;
+            overflow-x: auto;
+            margin: 14px 0;
+        }
+
+        pre code {
+            background: none;
+            border: none;
+            padding: 0;
+            font-size: 13.5px;
+            line-height: 1.55;
+        }
+
+        .lbl {
+            display: inline-block;
+            font-size: 11.5px;
+            font-weight: 700;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+            color: #fff;
+            background: var(--muted);
+            border-radius: 3px;
+            padding: 2px 7px;
+            margin: 10px 0 0 0;
+        }
+
+        .lbl.win {
+            background: #0f62fe;
+        }
+
+        .lbl.lin {
+            background: #dd4814;
+        }
+
+        .lbl.file {
+            background: #6b4eff;
+        }
+
+        .lbl.yaml {
+            background: #0b7285;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 18px 0;
+            font-size: 15px;
+        }
+
+        th,
+        td {
+            border: 1px solid var(--border);
+            padding: 9px 11px;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        th {
+            background: var(--code-bg);
+            font-weight: 600;
+        }
+
+        td code {
+            white-space: nowrap;
+        }
+
+        .box {
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 14px 16px;
+            margin: 18px 0;
+            background: #f9fafb;
+        }
+
+        .box.warn {
+            background: var(--warn-bg);
+            border-color: var(--warn-border);
+        }
+
+        .box .t {
+            font-weight: 700;
+            margin: 0 0 6px;
+        }
+
+        ul.tight li {
+            margin: 4px 0;
+        }
+
+        nav.toc {
+            background: var(--code-bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 16px 20px;
+        }
+
+        nav.toc h2 {
+            margin: 0 0 8px;
+            padding: 0;
+            border: 0;
+            font-size: 18px;
+        }
+
+        nav.toc ol {
+            margin: 0;
+            padding-left: 22px;
+            columns: 2;
+            column-gap: 32px;
+        }
+
+        nav.toc li {
+            margin: 3px 0;
+            break-inside: avoid;
+        }
+
+        nav.toc a {
+            color: var(--fg);
+            text-decoration: none;
+        }
+
+        nav.toc a:hover {
+            color: var(--accent);
+            text-decoration: underline;
+        }
+
+        hr {
+            border: 0;
+            border-top: 1px solid var(--border);
+            margin: 32px 0;
+        }
+
+        footer.doc {
+            margin-top: 56px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border);
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        a {
+            color: #0b57a8;
+        }
+
+        .flow pre {
+            border-left-color: var(--muted);
+        }
+
+        @media print {
+            body {
+                font-size: 12pt;
+            }
+
+            .wrap {
+                max-width: none;
+                padding: 0;
+            }
+
+            h2 {
+                page-break-after: avoid;
+            }
+
+            pre,
+            table,
+            .box {
+                page-break-inside: avoid;
+            }
+
+            nav.toc ol {
+                columns: 1;
+            }
+
+            a {
+                color: inherit;
+                text-decoration: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+
+        <header class="doc">
+            <h1>Turn a Windows 10 Laptop into a Hosted Server</h1>
+            <p class="sub">VirtualBox + Ubuntu Server → Tomcat 11 + Java 21 + MySQL → Cloudflare Tunnel → public
+                domain.<br>
+                Target application: <strong>Badminton Court Management</strong> (backend WAR + React frontend, QA
+                build). Document version: 2 November 2026.</p>
+        </header>
+
+        <nav class="toc">
+            <h2>Contents</h2>
+            <ol>
+                <li><a href="#overview">Architecture overview</a></li>
+                <li><a href="#part0">Part 0 — Windows side checks before installing</a></li>
+                <li><a href="#part1">Part 1 — Install VirtualBox + Extension Pack + ISO</a></li>
+                <li><a href="#part2">Part 2 — Create the VM (with 2 network adapters)</a></li>
+                <li><a href="#part3">Part 3 — Install Ubuntu Server</a></li>
+                <li><a href="#part4">Part 4 — Network configuration inside Ubuntu</a></li>
+                <li><a href="#part5">Part 5 — SSH + file transfer from Windows</a></li>
+                <li><a href="#part6">Part 6 — Java 21, Tomcat 11, WAR deployment</a></li>
+                <li><a href="#part7">Part 7 — MySQL in the VM</a></li>
+                <li><a href="#part8">Part 8 — Cloudflare Tunnel to your domain</a></li>
+                <li><a href="#part9">Part 9 — Firewall, keep-alive, boot resilience</a></li>
+                <li><a href="#part10">Part 10 — Verification ladder &amp; troubleshooting</a></li>
+            </ol>
+        </nav>
+
+        <h2 id="overview">Architecture overview</h2>
+        <p>Everything the venue needs runs inside one Linux VM on the laptop. The laptop never needs a public IP,
+            router port-forwarding or open inbound ports — the tunnel is dialled <em>out</em> from the VM.</p>
+
+        <div class="box flow">
+            <pre><code>Internet user
+   |  https://quancaulong.example.com/caulong-tc-qa/
+   v
+Cloudflare edge  ----(outbound tunnel, cloudflared)----+
+                                                       |
+Windows 10 laptop  ====================================|
+  |                                                    v
+  +-- VirtualBox VM "badcourt-ubuntu"  (Ubuntu Server)
+          |-- cloudflared  -&gt; localhost:8080
+          |-- Tomcat 11 / Java 21
+          |     |-- caulong-tc-qa.zip            -&gt; /caulong-tc-qa/   (React SPA)
+          |     |-- bad-court-management-qa.war  -&gt; /bad-court-management-qa/api/v1/...
+          |-- MySQL 8   localhost:3306  (badminton-qa)
+          |
+          NIC1 = BRIDGED   -&gt; real LAN (192.168.1.200) + internet
+          NIC2 = HOST-ONLY -&gt; 192.168.56.100, SSH/SCP admin from Windows</code></pre>
+        </div>
+
+        <p><strong>Two adapters, on purpose:</strong> the bridged NIC gives the VM a normal LAN identity (other
+            phones/PCs can
+            reach it directly, and it has internet for <code>apt</code> and the tunnel). The host-only NIC gives you an
+            admin
+            address that <em>never changes</em>, even when you move between Wi-Fi networks or the router hands out a new
+            DHCP lease.</p>
+
+        <h2 id="part0">Part 0 — Before you install (Windows side checks)</h2>
+
+        <h3>0.1 Virtualization must be enabled in BIOS/UEFI</h3>
+        <p>Task Manager (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Esc</kbd>) → Performance → CPU → bottom right:
+            <code>Virtualization: Enabled</code>.
+        </p>
+        <p>If <strong>Disabled</strong>: reboot → BIOS key (Dell <kbd>F2</kbd>, Lenovo <kbd>F2</kbd>/<kbd>Enter</kbd>,
+            HP <kbd>F10</kbd>, Asus <kbd>Del</kbd>) → enable <code>Intel Virtualization Technology (VT-x)</code> /
+            <code>AMD-V</code> and <code>VT-d</code> → save &amp; reboot.
+        </p>
+
+        <h3>0.2 Hyper-V coexistence</h3>
+        <p>VirtualBox 7.1 works while Hyper-V is active, but bridged networking and disk performance are smoother
+            without it.
+            <kbd>Win</kbd>+<kbd>R</kbd> → <code>optionalfeatures.exe</code> → <strong>uncheck</strong>:
+        </p>
+        <ul class="tight">
+            <li>Hyper-V (and all sub-items)</li>
+            <li>Virtual Machine Platform</li>
+            <li>Windows Hypervisor Platform</li>
+            <li>Windows Sandbox</li>
+            <li>Windows Subsystem for Linux</li>
+        </ul>
+        <p>Then reboot. Also turn off the features that force the hypervisor on:
+            <em>Windows Security → Device security → Core isolation details → Memory integrity = Off</em>, and
+            <em>Security processor → Credential Guard = Not enabled</em>.
+        </p>
+
+        <h3>0.3 Note your laptop's active NIC name</h3>
+        <span class="lbl win">PowerShell</span>
+        <pre><code>Get-NetAdapter | Select-Object Name, Status, MacAddress | Format-Table -AutoSize</code></pre>
+        <p>You will need the exact <code>Name</code> of the adapter that currently has internet — typically
+            <code>Wi-Fi</code>, <code>Realtek PCIe GbE Family Controller</code>, <code>Intel(R) Wi-Fi 6 AX201</code>.
+        </p>
+
+        <h3>0.4 Reserve a free LAN address for the VM's static IP</h3>
+        <span class="lbl win">PowerShell</span>
+        <pre><code>ipconfig                              # note IPv4 + default gateway, e.g. 192.168.1.35 / 192.168.1.1
+Test-Connection 192.168.1.200 -Count 1   # must NOT reply; pick another last octet if it does</code></pre>
+
+        <h2 id="part1">Part 1 — Install VirtualBox</h2>
+
+        <h3>1.1 Download</h3>
+        <ul class="tight">
+            <li>Application: <a
+                    href="https://www.virtualbox.org/wiki/Downloads">https://www.virtualbox.org/wiki/Downloads</a> →
+                <strong>VirtualBox 7.1.x — Windows hosts</strong> (<code>.exe</code>, ~120 MB).
+            </li>
+            <li><strong>Oracle VM VirtualBox Extension Pack</strong> 7.1.x (same page, <code>.vbox-extpack</code>;
+                PUEL licence — personal/educational use). Needed for USB 2.0/3.0, RDP, disk encryption.</li>
+        </ul>
+
+        <h3>1.2 Run the installer</h3>
+        <p>Defaults are fine. Watch for the <strong>“VirtualBox network interfaces — are you sure you want to
+                install…”</strong>
+            dialog and click <strong>Install</strong>: without it there is no Host-Only adapter and step 2.2 fails.
+            Windows may show a driver-installation prompt — allow it. Your network connection drops for a few seconds;
+            this is normal.</p>
+
+        <h3>1.3 Add the Extension Pack</h3>
+        <p>GUI → <em>File → Preferences → Extensions</em> → <code>+</code> → select the <code>.vbox-extpack</code> →
+            <em>Agree</em>.
+            Verify:</p>
+        <span class="lbl win">PowerShell</span>
+        <pre><code>cd "C:\Program Files\Oracle\VirtualBox"
+.\VBoxManage.exe list extpacks</code></pre>
+        <p>Expected line: <code>Extension Pack #0: Oracle VM VirtualBox Extension Pack … Version: "7.1.x"</code>.</p>
+
+        <h3>1.4 Download the Ubuntu ISO (no USB stick needed)</h3>
+        <p>The VM boots the ISO directly. Save it to e.g. <code>D:\vm-iso\</code>:</p>
+        <ul class="tight">
+            <li><strong>Ubuntu Server 24.04.x LTS, amd64</strong> — best-matched documentation:
+                <a href="https://releases.ubuntu.com/24.04/">https://releases.ubuntu.com/24.04/</a> →
+                <code>ubuntu-24.04.x-live-server-amd64.iso</code> (~3 GB).
+            </li>
+            <li><strong>Ubuntu Server 26.04.1 LTS</strong> (<a
+                    href="https://ubuntu.com/download/server">ubuntu.com/download/server</a>)
+                is equally fine — every command in this document is identical on both.</li>
+            <li>Pick <em>Server</em>, not Desktop: no GUI needed, less RAM, services run headless.</li>
+        </ul>
+
+        <h2 id="part2">Part 2 — Create the VM</h2>
+        <p>The command line is used so the adapter order is exact and reproducible. Run from
+            <code>C:\Program Files\Oracle\VirtualBox</code> in PowerShell.
+        </p>
+
+        <h4>2.1 Base VM, CPU/RAM, disk, ISO</h4>
+        <span class="lbl win">PowerShell</span>
+        <pre><code>$VBM = ".\VBoxManage.exe"
+$VM  = "badcourt-ubuntu"
+$ISO = "D:\vm-iso\ubuntu-24.04.3-live-server-amd64.iso"
+
+&amp; $VBM createvm --name $VM --ostype Ubuntu_64 --register --basefolder "D:\VirtualMachines"
+&amp; $VBM modifyvm   $VM --memory 6144 --vcpus 2 --cpus-exec on `
+                    --nic1 intelpro1000 --nic2 intelpro1000 `
+                    --boot1 dvd --boot2 disk --graphicscontroller vmsvga --vram 16
+
+&amp; $VBM storagectl --name $VM --controller "SATA" --add sata --controller IntelAhci --bootbus 1
+&amp; $VBM createhd   --filename "D:\VirtualMachines\$VM\$VM-disk001.vdi" `
+                  --size 61440 --format VDI --variant Fixed
+&amp; $VBM storageattach --name $VM --controller "SATA" --type hdd `
+                     --medium "D:\VirtualMachines\$VM\$VM-disk001.vdi"
+
+&amp; $VBM storagectl  --name $VM --controller "IDE" --add ide
+&amp; $VBM storageattach --name $VM --controller "IDE" --type dvddrive --medium $ISO</code></pre>
+        <div class="box">
+            <p class="t">Sizing rationale</p>
+            <p>2 vCPU / 6 GB covers Tomcat (<code>-Xmx1024m</code>) + MySQL + <code>cloudflared</code> with the laptop
+                still usable.
+                <code>--cpus-exec on</code> is required for 64-bit guests on some hosts. <code>Fixed</code> VDI is
+                slower to create but
+                does not grow unpredictably and is measurably faster than dynamically expanding.
+                Intel PRO/1000 (<code>--nic… intelpro1000</code>) is the best-supported Linux driver under VirtualBox.
+            </p>
+        </div>
+
+        <h4>2.2 Network — the important part</h4>
+        <span class="lbl win">PowerShell</span>
+        <pre><code># Adapter 1: BRIDGED to the laptop's real NIC
+#   -&gt; VM joins the physical LAN, gets internet, is visible to phones/PCs on the Wi-Fi
+&amp; $VBM modifyvm $VM --bridgeadapter1 "Wi-Fi"     # &lt;-- exact Name from step 0.3
+
+# Adapter 2: HOST-ONLY
+#   -&gt; stable private Windows &lt;-&gt; VM channel for SSH/SCP, unaffected by Wi-Fi changes / AP isolation
+&amp; $VBM list hostonlyifs
+&amp; $VBM modifyvm $VM --hostonlyadapter2 "VirtualBox Host-Only Ethernet Adapter"</code></pre>
+
+        <p><strong>Pin the MAC addresses</strong> so DHCP reservations and your netplan match what you wrote on paper:
+        </p>
+        <span class="lbl win">PowerShell</span>
+        <pre><code>&amp; $VBM modifyvm $VM --macaddress1 080027A1B2C3
+&amp; $VBM modifyvm $VM --macaddress2 080027A1B2C4
+&amp; $VBM showvminfo $VM | Select-String "NIC"</code></pre>
+
+        <div class="box warn">
+            <p class="t">GUI equivalent (if you prefer clicking)</p>
+            <p>Settings → Network: Adapter 1 <em>Attached to: Bridged Adapter</em>, Name = your Wi-Fi/LAN NIC;
+                Adapter 2 <em>Attached to: Host-only Adapter</em>, Name =
+                <code>VirtualBox Host-Only Ethernet Adapter</code>.
+                Advanced → Type: <em>Intel PRO/1000 MT (PRO/1000)</em>. If the Host-only list is empty, open
+                <em>File → Tools → Network Manager → Host-only</em> and click <em>Create</em>.
+            </p>
+        </div>
+
+        <h4>2.3 Start it for the installation</h4>
+        <span class="lbl win">PowerShell</span>
+        <pre><code>&amp; $VBM startvm $VM            # GUI window - you need to watch the installer
+# &amp; $VBM startvm $VM --type headless   # later, for everyday operation</code></pre>
+
+        <h2 id="part3">Part 3 — Install Ubuntu Server</h2>
+        <p>Subiquity (the installer) is keyboard-driven: <kbd>↑↓</kbd> move, <kbd>Tab</kbd>/<kbd>Shift+Tab</kbd> jump to
+            buttons,
+            <kbd>Space</kbd> toggles, <kbd>Enter</kbd> confirms.
+        </p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Screen</th>
+                    <th>Choose</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>1</td>
+                    <td>Language / keyboard</td>
+                    <td><em>English</em>, default layout, <em>Ubuntu Server</em> (not “Minimised”)</td>
+                </tr>
+                <tr>
+                    <td>2</td>
+                    <td>Network connections</td>
+                    <td>Leave both interfaces on <em>IPv4 = Automatic (DHCP)</em> — statics are set in Part 4.
+                        Note which is which: the <code>192.168.1.x</code> one is the bridge (<code>enp0s3</code>),
+                        the <code>192.168.56.x</code> one is host-only (<code>enp0s8</code>).</td>
+                </tr>
+                <tr>
+                    <td>3</td>
+                    <td>Mirror address</td>
+                    <td>Default (<code>http://archive.ubuntu.com/ubuntu</code>), or a closer mirror if one answers
+                        faster</td>
+                </tr>
+                <tr>
+                    <td>4</td>
+                    <td>Storage</td>
+                    <td><em>Entire disk</em> → the 60 GB disk → <em>Done</em>. ext4,
+                        <strong>no LVM, no encryption</strong> (simpler and faster; nothing here needs
+                        encryption-at-rest).
+                        Confirm the destructive bootloader prompt.
+                    </td>
+                </tr>
+                <tr>
+                    <td>5</td>
+                    <td>Profile setup</td>
+                    <td>Your name <code>admin</code>, server name <code>badcourt-srv</code>,
+                        username <code>admin</code>, strong password. <em>Import VPN = No</em>.</td>
+                </tr>
+                <tr>
+                    <td>6</td>
+                    <td>Feature settings</td>
+                    <td><strong>Enable “Install OpenSSH server”</strong> — <kbd>Tab</kbd> → <kbd>Space</kbd>.
+                        Skipping this costs you all the Windows-side convenience later. <em>Ubuntu Pro = Skip</em>.</td>
+                </tr>
+                <tr>
+                    <td>7</td>
+                    <td>Upgrade to the new installer</td>
+                    <td>Skip — either choice works.</td>
+                </tr>
+                <tr>
+                    <td>8</td>
+                    <td>Reboot</td>
+                    <td><em>Reboot now</em>, then detach the ISO so you don’t boot the installer again.</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <span class="lbl win">PowerShell (once the reboot begins)</span>
+        <pre><code>&amp; $VBM storageattach --name $VM --controller "IDE" --type dvddrive --medium none
+&amp; $VBM startvm $VM --type headless</code></pre>
+        <p>After that, SSH (Part 5) is your console. If you ever need to watch the VM screen again, use
+            <code>&amp; $VBM controlvm $VM poweroff</code> then <code>&amp; $VBM startvm $VM</code> (GUI).
+        </p>
+
+        <h2 id="part4">Part 4 — Network configuration inside Ubuntu</h2>
+
+        <h3>4.1 Identify interfaces</h3>
+        <span class="lbl lin">Ubuntu (VM console)</span>
+        <pre><code>ip -br link
+ip -4 addr
+# example output
+#   lo        UNKNOWN
+#   enp0s3    UP  192.168.1.57/24      &lt;- BRIDGED (DHCP from your router)
+#   enp0s8    UP  192.168.56.101/24    &lt;- HOST-ONLY
+ip route | grep default                # must be via enp0s3</code></pre>
+        <p>Cross-check the MACs with what you pinned in 2.2: the interface whose MAC ends <code>B2:C3</code> is the
+            bridge,
+            <code>B2:C4</code> is host-only. If the names differ (e.g. <code>ens33</code>), use your real names in the
+            netplan file.
+        </p>
+
+        <h3>4.2 Confirm the host-only gateway on Windows</h3>
+        <p>VirtualBox GUI → <em>File → Tools → Network Manager → Host-only</em> tab →
+            <code>VirtualBox Host-Only Ethernet Adapter</code> → <strong>IPv4 Address</strong> =
+            <code>192.168.56.1</code>,
+            mask <code>255.255.255.0</code>. On the <em>DHCP-Server</em> tab, <strong>uncheck “Enable Server”</strong>
+            (or at least keep its
+            pool away from <code>192.168.56.100</code>), then close the dialog.
+        </p>
+        <span class="lbl win">PowerShell</span>
+        <pre><code>Get-NetIPAddress -AddressFamily IPv4 | Where-Object InterfaceAlias -like "*Host-Only*" |
+    Select-Object InterfaceAlias, IPAddress, PrefixLength</code></pre>
+
+        <h3>4.3 Write a single netplan file</h3>
+        <p>Ubuntu Server ships cloud-init netplan files that are re-applied on boot; keeping <strong>exactly
+                one</strong>
+            <code>/etc/netplan/*.yaml</code> removes the usual “duplicate config wins” failures.
+            <strong>YAML: spaces only, never tabs.</strong>
+        </p>
+        <span class="lbl lin">Ubuntu</span>
+        <pre><code>sudo rm -f /etc/netplan/*.yaml
+sudo nano /etc/netplan/50-cloud-init.yaml</code></pre>
+        <span class="lbl file">/etc/netplan/50-cloud-init.yaml — stage 1 (DHCP on the bridge)</span>
+        <pre><code>network:
+  version: 2
+  ethernets:
+    enp0s3:                     # NIC 1 - BRIDGED: joins the real LAN
+      dhcp4: true
+    enp0s8:                     # NIC 2 - HOST-ONLY: static, admin path from Windows
+      dhcp4: false
+      addresses:
+        - 192.168.56.100/24
+      routes:
+        - to: default
+          via: 192.168.56.1
+      nameservers:
+        addresses: [8.8.8.8, 1.1.1.1]</code></pre>
+        <span class="lbl lin">Ubuntu</span>
+        <pre><code>sudo chmod 600 /etc/netplan/50-cloud-init.yaml
+sudo netplan try        # auto-reverts after 120s if you lock yourself out - safest first apply
+# or, once confident:
+sudo netplan apply</code></pre>
+
+        <div class="box warn">
+            <p class="t">Why the host-only default route is harmless</p>
+            <p>Linux keeps one main routing table; the DHCP lease on <code>enp0s3</code> installs
+                <code>default via 192.168.1.1</code> with a lower metric than netplan’s static one, so internet traffic
+                still leaves via the
+                bridge — verify with <code>ip route get 1.1.1.1</code> after applying. If it ever picks
+                <code>enp0s8</code>, delete the static
+                default route from the <code>enp0s8</code> block: Windows→VM SSH still works, because it is the same L2
+                segment. The route is
+                there only so the VM can resolve names if the bridge is momentarily down.
+            </p>
+        </div>
+
+        <h3>4.4 Verify stage 1</h3>
+        <span class="lbl lin">Ubuntu</span>
+        <pre><code>ip -4 addr show enp0s3 | grep inet
+ip -4 addr show enp0s8 | grep inet       # 192.168.56.100
+ping -c2 192.168.56.1                    # Windows over host-only
+ping -c2 8.8.8.8                         # internet over bridge
+ping -c2 ubuntu.com                      # DNS works
+ip route get 1.1.1.1                     # dev enp0s3  &lt;-- required</code></pre>
+
+        <h3>4.5 Make the bridged address static (server-grade)</h3>
+        <p>So LAN bookmarks, the tunnel origin and router rules never break. Substitute your own subnet/gateway from
+            0.3–0.4:</p>
+        <span class="lbl file">/etc/netplan/50-cloud-init.yaml — final</span>
+        <pre><code>network:
+  version: 2
+  ethernets:
+    enp0s3:
+      dhcp4: false
+      dhcp6: false
+      addresses:
+        - 192.168.1.200/24
+      routes:
+        - to: default
+          via: 192.168.1.1
+        - to: 192.168.1.0/24
+          via: 192.168.1.1
+          scope: link
+      nameservers:
+        addresses: [192.168.1.1, 1.1.1.1, 8.8.8.8]
+    enp0s8:
+      dhcp4: false
+      addresses:
+        - 192.168.56.100/24
+      nameservers:
+        addresses: [8.8.8.8, 1.1.1.1]</code></pre>
+        <span class="lbl lin">Ubuntu</span>
+        <pre><code>sudo netplan apply
+ip -4 addr show enp0s3 | grep inet       # 192.168.1.200/24
+ping -c2 192.168.1.1                     # router
+ping -c2 8.8.8.8                         # internet</code></pre>
+        <span class="lbl win">PowerShell</span>
+        <pre><code>ping 192.168.56.100 -n 2
+ping 192.168.1.200  -n 2      # both must reply</code></pre>
+        <p>Optionally reserve <code>192.168.1.200 → 08:00:27:A1:B2:C3</code> as a static DHCP lease on the router too —
+            it prevents a
+            duplicate-IP if you ever flip back to DHCP. Otherwise keep the pure-static config above.</p>
+
+        <div class="box">
+            <p class="t">Fully unattended alternative</p>
+            <p>Re-run the install with an <em>autoinstall</em> (Subiquity autoinstall endpoint) supplying the netplan
+                above plus a
+                <code>late-commands</code> block that installs OpenSSH and creates your user — the
+                <code>user-data</code> is a small cloud-init
+                YAML. Ask for that file if you want to rebuild this VM repeatably.
+            </p>
+        </div>
+
+        <h2 id="part5">Part 5 — SSH + file transfer from Windows</h2>
+        <span class="lbl win">PowerShell</span>
+        <pre><code>Get-WindowsCapability -Online -Name OpenSSH.Client*
+Add-WindowsCapability -Online -Name OpenSSH.Client~~~~0.0.1.0   # if State: Not present
+
+ssh admin@192.168.56.100          # host-only path, always available
+ssh admin@192.168.1.200           # bridged path, as any LAN admin would
+
+mkdir D:\build -Force
+scp D:\build\bad-court-management-qa.war D:\build\caulong-tc-qa.zip `
+    admin@192.168.56.100:/home/admin/deploy_tmp/</code></pre>
+        <p>Optional key auth (removes passwords from scripts):</p>
+        <span class="lbl win">PowerShell</span>
+        <pre><code>ssh-keygen -t ed25519
+type $env:USERPROFILE\.ssh\id_ed25519.pub | `
+  ssh admin@192.168.56.100 "mkdir -p ~/.ssh; cat &gt;&gt; ~/.ssh/authorized_keys"</code></pre>
+
+        <h4>Shared folder (optional convenience)</h4>
+        <span class="lbl win">PowerShell</span>
+        <pre><code>&amp; $VBM sharedfolder add badcourt-ubuntu --name build --hostpath "D:\build" --automount</code></pre>
+        <p>Mounting it needs Guest Additions
+            (<code>sudo apt install build-essential dkms linux-headers-$(uname -r)</code>, then
+            <em>Devices → Insert Guest Additions CD image</em> → run <code>VBoxLinuxAdditions.run</code>). Guest
+            Additions are frequently
+            broken while Hyper-V is enabled, so treat <code>scp</code> as the primary and shared folders as a bonus.
+        </p>
+
+        <h2 id="part6">Part 6 — Java 21, Tomcat 11, WAR deployment</h2>
+        <span class="lbl lin">Ubuntu (over SSH)</span>
+        <pre><code>sudo apt update &amp;&amp; sudo apt full-upgrade -y
+sudo apt install -y openjdk-21-jdk-headless curl unzip
+java -version                       # openjdk 21.x
+
+sudo mkdir -p /home/admin/deploy
+cp ~/deploy_tmp/*.war ~/deploy_tmp/*.zip /home/admin/deploy/ 2&gt;/dev/null; ls -l /home/admin/deploy
+
+# dedicated service user + Tomcat 11 (matches apache-tomcat-11.0.18)
+sudo useradd -r -m -s /usr/sbin/nologin tomcat
+cd /opt
+sudo curl -LO https://dlcdn.apache.org/tomcat/tomcat-11/v11.0.18/bin/apache-tomcat-11.0.18.tar.gz
+sudo tar xzf apache-tomcat-11.0.18.tar.gz &amp;&amp; sudo mv apache-tomcat-11.0.18 tomcat
+sudo rm -rf /opt/tomcat/webapps/*
+sudo cp /home/admin/deploy/bad-court-management-qa.war /opt/tomcat/webapps/
+sudo cp /home/admin/deploy/caulong-tc-qa.zip           /opt/tomcat/webapps/caulong-tc-qa.zip
+sudo chown -R tomcat:tomcat /opt/tomcat
+ls -l /opt/tomcat/webapps</code></pre>
+
+        <div class="box">
+            <p class="t">File name = context path</p>
+            <ul class="tight">
+                <li><code>caulong-tc-qa.zip</code> → deployed URL <code>/caulong-tc-qa/</code>, matching the QA React
+                    build’s
+                    <code>homepage</code> value.
+                </li>
+                <li>Deploying the PROD build instead? Name it <code>caulong-tc.zip</code> so the URL is
+                    <code>/caulong-tc/</code> and the
+                    bundled asset paths resolve.</li>
+                <li><code>bad-court-management-qa.war</code> → API root <code>/bad-court-management-qa/api/v1/…</code>.
+                </li>
+                <li>Want the SPA at <code>/</code>? Rename to <code>ROOT.zip</code> and build React with
+                    <code>homepage: "/"</code> —
+                    otherwise keep the subpath exactly as the build expects.</li>
+            </ul>
+        </div>
+
+        <h4>systemd unit for Tomcat</h4>
+        <span class="lbl file">/etc/systemd/system/tomcat.service</span>
+        <pre><code>[Unit]
+Description=Apache Tomcat 11 - Badminton Court Management
+After=network-online.target mysql.service
+Wants=network-online.target
+
+[Service]
+Type=forking
+User=tomcat
+Group=tomcat
+Environment=JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+Environment=CATALINA_HOME=/opt/tomcat
+Environment=CATALINA_BASE=/opt/tomcat
+Environment=CATALINA_PID=/opt/tomcat/temp/tomcat.pid
+Environment="CATALINA_OPTS=-Dliquibase.secureParsing=false -Xms512m -Xmx1024m -Dfile.encoding=UTF-8"
+ExecStart=/opt/tomcat/bin/startup.sh
+ExecStop=/opt/tomcat/bin/shutdown.sh
+Restart=on-failure
+RestartSec=10
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target</code></pre>
+        <p><code>-Dliquibase.secureParsing=false</code> is required by the Liquibase changelog setup — it is the same
+            flag your
+            Windows <code>catalina.bat</code> workaround adds. The unit above is therefore the only place JVM options
+            need to be set.</p>
+
+        <span class="lbl lin">Ubuntu</span>
+        <pre><code>sudo systemctl daemon-reload
+sudo systemctl enable --now tomcat
+sleep 15
+curl -I http://localhost:8080/caulong-tc-qa/         # expect HTTP/1.1 200 OK
+sudo journalctl -u tomcat -n 60 --no-pager
+ls /opt/tomcat/logs/ &amp;&amp; sudo tail -50 /opt/tomcat/logs/catalina.out</code></pre>
+        <p>If you get a bare “Apache Tomcat 404” page instead of a Spring error body, that is a <em>wrong context
+                path</em>,
+            not a dead application — list <code>/opt/tomcat/webapps</code> and match the names exactly.</p>
+
+        <h2 id="part7">Part 7 — MySQL inside the VM</h2>
+        <span class="lbl lin">Ubuntu</span>
+        <pre><code>sudo apt install -y mysql-server
+sudo mysql &lt;&lt;'SQL'
+CREATE DATABASE IF NOT EXISTS badminton-qa;
+CREATE USER IF NOT EXISTS 'badmintonqa-user01'@'localhost'
+  IDENTIFIED WITH mysql_native_password BY 'user01password';
+GRANT ALL PRIVILEGES ON `badminton-qa`.* TO 'badmintonqa-user01'@'localhost';
+FLUSH PRIVILEGES;
+SQL
+
+# optional: load an existing QA dump instead of letting Liquibase build from scratch
+sudo mysql -u root &lt; /home/admin/deploy/badminton-qa.sql
+
+sudo systemctl status mysql --no-pager | head -5</code></pre>
+        <p>Point the app at it in the QA properties:</p>
+        <span class="lbl file">application-qa.properties (datasource lines)</span>
+        <pre><code>spring.datasource.url=jdbc:mysql://localhost:3306/badminton-qa?useSSL=false&amp;allowPublicKeyRetrieval=true&amp;serverTimezone=Asia/Ho_Chi_Minh
+spring.datasource.username=badmintonqa-user01
+spring.datasource.password=user01password</code></pre>
+        <p><strong>Legacy database adoption:</strong> the WAR self-adopts an existing database with zero manual steps —
+            changesets
+            001–028 are frozen and accept any stored checksum, 025 auto-skips on databases migrated under the old
+            <code>rbac-jwt.sql</code> lineage, and only the additive 029–031 apply on first boot. Old data is 0-impact,
+            so restoring a
+            <code>mysqldump</code> is optional; Liquibase creates the schema when starting empty. Still take a
+            backup/snapshot before the
+            first boot against real data.
+        </p>
+        <p>Keep MySQL bound to <code>localhost</code> (the default). If you must use the Windows MySQL instead:
+            <code>spring.datasource.url=jdbc:mysql://192.168.56.1:3306/…</code>, create the user with host
+            <code>'%'</code>,
+            set <code>bind-address=0.0.0.0</code> in the Windows <code>my.ini</code>, and open 3306 in the Windows
+            firewall for the
+            host-only subnet only.
+        </p>
+
+        <h2 id="part8">Part 8 — Cloudflare Tunnel to your domain</h2>
+        <p>No public IP, no router login, no port-forward, no ISP call — and it works behind the CGNAT and
+            inbound-80/443 blocks
+            typical of residential ISPs. Free HTTPS included.</p>
+
+        <h3>8.1 Prepare the domain</h3>
+        <ul class="tight">
+            <li>Buy a domain, add a site at <a href="https://dash.cloudflare.com">dash.cloudflare.com</a>,
+                and set your registrar’s nameservers to the two Cloudflare gives you.</li>
+            <li>Wait until the zone status is <em>Active</em> (<code>nslookup -type=ns yourdomain.com 1.1.1.1</code>
+                should show
+                Cloudflare NS). Free plan is enough; the tunnel creates its own DNS record.</li>
+        </ul>
+
+        <h3>8.2 Authenticate from Windows (the VM has no browser)</h3>
+        <span class="lbl win">PowerShell</span>
+        <pre><code>$cf = "$env:TEMP\cloudflared.exe"
+Invoke-WebRequest "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile $cf
+&amp; $cf tunnel login                     # browser opens -&gt; choose your zone
+&amp; $cf tunnel list                       # sanity check: API reachable
+
+scp "$env:USERPROFILE\.cloudflared\cert.pem" admin@192.168.56.100:/home/admin/cert.pem</code></pre>
+
+        <h3>8.3 Create the tunnel inside Ubuntu</h3>
+        <span class="lbl lin">Ubuntu (as your user, not root)</span>
+        <pre><code>sudo curl -L "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64" `
+     -o /usr/local/bin/cloudflared
+sudo chmod +x /usr/local/bin/cloudflared
+cloudflared --version
+
+mkdir -p ~/.cloudflared
+mv ~/cert.pem ~/.cloudflared/cert.pem
+
+cloudflared tunnel create bad-court
+#  -&gt; "Tunnel credentials written to /home/admin/.cloudflared/&lt;UUID&gt;.json"
+UUID=$(basename "$HOME/.cloudflared" 2&gt;/dev/null; ls ~/.cloudflared/*.json | head -1 | xargs basename | cut -d. -f1)
+echo "Tunnel UUID: $UUID"
+
+cloudflared tunnel route dns bad-court quancaulong.example.com
+# extra hostnames you may want:
+# cloudflared tunnel route dns bad-court api.quancaulong.example.com</code></pre>
+        <span class="lbl yaml">~/.cloudflared/config.yml</span>
+        <pre><code>tunnel: &lt;TUNNEL-UUID&gt;
+credentials-file: /home/admin/.cloudflared/&lt;TUNNEL-UUID&gt;.json
+
+ingress:
+  - hostname: quancaulong.example.com
+    service: http://localhost:8080
+  # - hostname: api.quancaulong.example.com
+  #   service: http://localhost:8080/bad-court-management-qa
+  - service: http_status:404</code></pre>
+        <p>Order matters: the first matching hostname wins and the bare <code>service:</code> line must stay last.
+            Replace <code>&lt;TUNNEL-UUID&gt;</code> in both places with the value printed by
+            <code>tunnel create</code>.</p>
+
+        <h3>8.4 Install as a service</h3>
+        <span class="lbl lin">Ubuntu</span>
+        <pre><code>sudo cloudflared service install
+# writes /etc/systemd/system/cloudflared.service (runs as root, reads /root/.cloudflared)
+
+sudo mkdir -p /etc/cloudflared
+sudo cp ~/.cloudflared/config.yml /etc/cloudflared/
+sudo cp ~/.cloudflared/*.json     /etc/cloudflared/
+sudo cp ~/.cloudflared/cert.pem   /etc/cloudflared/
+sudo sed -i "s#/home/admin/.cloudflared/#/etc/cloudflared/#g" /etc/cloudflared/config.yml
+sudo chown -R root:root /etc/cloudflared &amp;&amp; sudo chmod 600 /etc/cloudflared/*.json
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now cloudflared
+sudo systemctl status cloudflared --no-pager | head -12
+sudo journalctl -u cloudflared -n 30 --no-pager | grep -Ei "registered|connection|established"</code></pre>
+        <p>Healthy log: <code>"Registered tunnel connection"</code> ×4. Then test from anywhere:
+            <code>https://quancaulong.example.com/caulong-tc-qa/</code>.
+        </p>
+
+        <div class="box">
+            <p class="t">LAN-only variant (skip Cloudflare entirely)</p>
+            <p>Browse to <code>http://192.168.1.200:8080/caulong-tc-qa/</code> from any device on the venue Wi-Fi.
+                To use a name anyway, add a DNS A record <code>quancaulong.local → 192.168.1.200</code> on your router
+                (if it serves DNS),
+                or edit each client’s hosts file — <code>C:\Windows\System32\drivers\etc\hosts</code>:
+                <code>192.168.1.200 quancaulong.local</code>.
+            </p>
+        </div>
+        <div class="box">
+            <p class="t">If you do have a real public IP</p>
+            <p>Check: <code>curl -s ifconfig.me</code> in the VM vs the WAN IP shown in the router. Identical → public.
+                If it starts with
+                <code>10.x</code>, <code>100.64–127.x</code> or <code>172.16–31.x</code> → CGNAT, use the tunnel. With a
+                real public IP you may
+                instead forward 80/443 on the router to <code>192.168.1.200</code> and let Caddy terminate TLS:
+                <code>sudo apt install caddy</code> +
+                <code>caddy reverse-proxy --from quancaulong.example.com --to localhost:8080</code>, plus
+                <code>ddclient</code> if the IP is
+                dynamic. Only 80/443 get exposed either way.
+            </p>
+        </div>
+
+        <h2 id="part9">Part 9 — Firewall, keep-alive, boot resilience</h2>
+
+        <h3>9.1 Ubuntu side</h3>
+        <span class="lbl lin">Ubuntu</span>
+        <pre><code>sudo apt install -y ufw
+sudo ufw allow from 192.168.56.0/24 to any port 22 proto tcp
+sudo ufw allow from 192.168.1.0/24  to any port 22 proto tcp
+sudo ufw default deny incoming
+sudo ufw enable
+sudo ufw status verbose
+
+# what is reachable from the LAN? 8080/3306 should NOT appear
+sudo ss -tlnp | grep -E ':(22|8080|3306)'</code></pre>
+        <p>To force Tomcat localhost-only, edit <code>/opt/tomcat/conf/server.xml</code>:</p>
+        <span class="lbl file">/opt/tomcat/conf/server.xml (Connector)</span>
+        <pre><code>&lt;Connector port="8080" protocol="HTTP/1.1" address="127.0.0.1"
+           connectionTimeout="20000" redirectPort="8443" /&gt;</code></pre>
+        <p>That is the tightest setup — the tunnel is then the only way in. Drop the <code>address</code> attribute if
+            you also want
+            direct LAN access on <code>:8080</code>, and in that case scope it:
+            <code>sudo ufw allow from 192.168.1.0/24 to any port 8080</code>.</p>
+        <span class="lbl lin">Ubuntu</span>
+        <pre><code>sudo systemctl disable --now sleep.target suspend.target hibernate.target hybrid-sleep.target
+sudo apt install -y unattended-upgrades</code></pre>
+
+        <h3>9.2 Windows laptop side — the VM is only as alive as its host</h3>
+        <span class="lbl win">PowerShell (admin)</span>
+        <pre><code>powercfg /change standby-timeout-ac 0
+powercfg /change disk-timeout-ac 0
+powercfg /change hibernate-timeout-ac 0
+powercfg /h off                       # hibernation off: suspend would kill the VM</code></pre>
+        <p>Lid close → do nothing: <em>Control Panel → Hardware and Sound → Power Options → Choose what closing the lid
+                does</em>
+            → “Close the lid” on <em>Plugged in</em> = <strong>Do nothing</strong>.</p>
+        <p>Autostart the VM at boot, headless:</p>
+        <span class="lbl win">PowerShell (admin)</span>
+        <pre><code>schtasks /Create /TN "StartBadcourtVM" /SC ONSTART /RU SYSTEM /F `
+  /TR "'C:\Program Files\Oracle\VirtualBox\VBoxManage.exe' startvm badcourt-ubuntu --type headless"
+
+schtasks /Run   /TN "StartBadcourtVM"        # test immediately
+schtasks /Query /TN "StartBadcourtVM" /V /FO LIST | Select-String "Last|Next|Status"</code></pre>
+        <p>Inside Ubuntu the services come up on their own — verify:
+            <code>systemctl is-enabled tomcat mysql cloudflared</code> → three <code>enabled</code>.
+        </p>
+
+        <h3>9.3 Snapshots — your undo button</h3>
+        <span class="lbl win">PowerShell</span>
+        <pre><code>&amp; $VBM snapshot take  badcourt-ubuntu "pre-tunnel"
+&amp; $VBM snapshot list  badcourt-ubuntu
+&amp; $VBM snapshot delete-child badcourt-ubuntu "pre-tunnel"    # once all is good
+&amp; $VBM closevm badcourt-ubuntu             # ACPI shutdown, like a real server power-off</code></pre>
+        <p>Off-laptop backup: <code>VBoxManage export badcourt-ubuntu -o D:\backup\badcourt-ubuntu.ova</code>, plus a
+            nightly
+            <code>mysqldump</code> cron inside Ubuntu — the database is the real asset, not the VM.
+        </p>
+
+        <h2 id="part10">Part 10 — Verification ladder &amp; troubleshooting</h2>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Check</th>
+                    <th>Where</th>
+                    <th>Command / action</th>
+                    <th>Pass signal</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>1</td>
+                    <td>VM internet</td>
+                    <td>Ubuntu</td>
+                    <td><code>ping -c2 8.8.8.8</code></td>
+                    <td>0% loss</td>
+                </tr>
+                <tr>
+                    <td>2</td>
+                    <td>Admin path</td>
+                    <td>Windows</td>
+                    <td><code>ssh admin@192.168.56.100</code></td>
+                    <td>shell prompt</td>
+                </tr>
+                <tr>
+                    <td>3</td>
+                    <td>Tomcat serving SPA</td>
+                    <td>Ubuntu</td>
+                    <td><code>curl -I http://localhost:8080/caulong-tc-qa/</code></td>
+                    <td><code>200 OK</code></td>
+                </tr>
+                <tr>
+                    <td>4</td>
+                    <td>Backend alive + auth OK</td>
+                    <td>Ubuntu</td>
+                    <td><code>curl -i http://localhost:8080/bad-court-management-qa/api/v1/users</code></td>
+                    <td><code>401</code> with <code>WWW-Authenticate: Bearer</code></td>
+                </tr>
+                <tr>
+                    <td>5</td>
+                    <td>DB reachable by app</td>
+                    <td>Ubuntu</td>
+                    <td><code>sudo tail -20 /opt/tomcat/logs/catalina.out</code></td>
+                    <td>no <code>Communications link failure</code>; Liquibase ran</td>
+                </tr>
+                <tr>
+                    <td>6</td>
+                    <td>LAN reachable</td>
+                    <td>phone on Wi-Fi</td>
+                    <td><code>http://192.168.1.200:8080/caulong-tc-qa/</code></td>
+                    <td>login page renders</td>
+                </tr>
+                <tr>
+                    <td>7</td>
+                    <td>Tunnel registered</td>
+                    <td>Ubuntu</td>
+                    <td><code>journalctl -u cloudflared | grep Registered</code></td>
+                    <td>4 connections</td>
+                </tr>
+                <tr>
+                    <td>8</td>
+                    <td>Public HTTPS</td>
+                    <td>phone on <strong>mobile data</strong></td>
+                    <td><code>https://quancaulong.example.com/caulong-tc-qa/</code></td>
+                    <td>login page, valid padlock</td>
+                </tr>
+                <tr>
+                    <td>9</td>
+                    <td>End-to-end business flow</td>
+                    <td>public URL</td>
+                    <td>log in, create a court session, issue a bill</td>
+                    <td>data visible after reload</td>
+                </tr>
+                <tr>
+                    <td>10</td>
+                    <td>Reboot survival</td>
+                    <td>Windows</td>
+                    <td>reboot the laptop, touch nothing</td>
+                    <td>#7 and #8 pass ~90 s later</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>Troubleshooting matrix</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Symptom</th>
+                    <th>Likely cause</th>
+                    <th>Fix</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>VirtualBox: “VT-x is disabled in the BIOS” / VM won’t start</td>
+                    <td>firmware virtualization off, or Hyper-V still active</td>
+                    <td>steps 0.1 / 0.2; confirm the optional-features boxes are unchecked and Core isolation is off
+                    </td>
+                </tr>
+                <tr>
+                    <td>Bridged NIC shows “network cable unplugged” in the installer</td>
+                    <td>wrong <code>--bridgeadapter1</code> name, or a VPN/killer-NIC driver blocking promiscuous mode
+                    </td>
+                    <td><code>VBoxManage list bridgedifs</code> for exact names; temporarily <code>--nic1 nat</code> to
+                        prove the rest of the stack, then rebind</td>
+                </tr>
+                <tr>
+                    <td>Internet dies whenever the laptop switches Wi-Fi ↔ Ethernet</td>
+                    <td>bridge bound to the now-inactive physical NIC</td>
+                    <td><code>VBoxManage modifyvm badcourt-ubuntu --bridgeadapter1 "&lt;new name&gt;"</code> +
+                        <code>sudo netplan apply</code>; or add a third VM NIC for the other medium</td>
+                </tr>
+                <tr>
+                    <td><code>netplan apply</code> warns about duplicates, or config reverts after reboot</td>
+                    <td>more than one <code>/etc/netplan/*.yaml</code>; cloud-init rewriting it</td>
+                    <td>keep exactly one file (4.3); if it reappears, <code>sudo cloud-init clean --logs</code> and
+                        re-apply</td>
+                </tr>
+                <tr>
+                    <td>SSH to <code>192.168.56.100</code> refused while LAN SSH works</td>
+                    <td>host-only DHCP pool collision, or the static never applied</td>
+                    <td>disable the host-only DHCP server (4.2); <code>ip -4 addr show enp0s8</code> must show
+                        <code>.100/24</code></td>
+                </tr>
+                <tr>
+                    <td>Phone on Wi-Fi can’t reach <code>192.168.1.200:8080</code> though the VM pings fine</td>
+                    <td>router AP isolation / guest network</td>
+                    <td>disable client isolation, or use the public tunnel URL</td>
+                </tr>
+                <tr>
+                    <td>Tomcat “404 — Apache Tomcat” page instead of the SPA</td>
+                    <td>context-path mismatch (archive name vs build <code>homepage</code>)</td>
+                    <td><code>ls /opt/tomcat/webapps</code>; QA build → <code>caulong-tc-qa.zip</code>, PROD build →
+                        <code>caulong-tc.zip</code></td>
+                </tr>
+                <tr>
+                    <td>Liquibase fails at boot with checksum errors on 001–028</td>
+                    <td>missing <code>-Dliquibase.secureParsing=false</code></td>
+                    <td>confirm it in <code>CATALINA_OPTS</code> in <code>tomcat.service</code>, then
+                        <code>sudo systemctl restart tomcat</code></td>
+                </tr>
+                <tr>
+                    <td><code>Access denied for user 'badmintonqa-user01'@'localhost'</code></td>
+                    <td>dump restored a user with a different host or auth plugin</td>
+                    <td>re-run the Part 7 SQL block (<code>mysql_native_password</code>) and
+                        <code>FLUSH PRIVILEGES</code></td>
+                </tr>
+                <tr>
+                    <td>Public URL shows Cloudflare error 1033 / “connection refused”</td>
+                    <td>ingress <code>service:</code> port or hostname typo; Tomcat not listening</td>
+                    <td><code>curl -I localhost:8080</code> first, then fix <code>config.yml</code> and
+                        <code>sudo systemctl restart cloudflared</code></td>
+                </tr>
+                <tr>
+                    <td><code>tunnel login</code> doesn’t list the zone / <code>route dns</code> errors</td>
+                    <td>domain not yet <em>Active</em> on Cloudflare nameservers</td>
+                    <td>wait for NS propagation, then retry</td>
+                </tr>
+                <tr>
+                    <td>Site goes down after laptop sleep or lid close</td>
+                    <td>Windows power policy suspended the VM</td>
+                    <td>9.2 — <code>standby-timeout-ac 0</code>, <code>powercfg /h off</code>, lid = Do nothing</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>Day-2 operations</h3>
+        <span class="lbl lin">Ubuntu</span>
+        <pre><code>sudo systemctl status tomcat mysql cloudflared --no-pager | grep -E "Active|●"
+sudo journalctl -u tomcat -f
+sudo tail -f /opt/tomcat/logs/catalina.out
+mysqldump --defaults-extra-file=/home/admin/.my.cnf badminton-qa | gzip &gt; ~/bk-$(date +%F).sql.gz</code></pre>
+        <h4>Deploy a new build</h4>
+        <span class="lbl win">PowerShell</span>
+        <pre><code>scp build\bad-court-management-qa.war admin@192.168.56.100:/home/admin/deploy/</code></pre>
+        <span class="lbl lin">Ubuntu</span>
+        <pre><code>sudo cp /home/admin/deploy/bad-court-management-qa.war /opt/tomcat/webapps/
+sudo chown tomcat:tomcat /opt/tomcat/webapps/bad-court-management-qa.war
+sudo systemctl restart tomcat          # Tomcat re-expands the WAR on start
+curl -I http://localhost:8080/bad-court-management-qa/api/v1/users   # expect 401 = healthy</code></pre>
+
+        <footer class="doc">
+            <p>Generated for the <em>Badminton Court Management</em> project — Java 21 / Spring Boot 3.5 WAR on Tomcat
+                11,
+                React CRA frontend built for subpath <code>/caulong-tc/</code> (PROD) and <code>/caulong-tc-qa/</code>
+                (QA), MySQL + Liquibase.</p>
+            <p>Open in any browser; print to PDF for a paper copy. Placeholder values to replace: the tunnel hostname
+                <code>quancaulong.example.com</code>, the LAN gateway/IP reservations (<code>192.168.1.1</code>,
+                <code>192.168.1.200</code>),
+                and the database password.
+            </p>
+        </footer>
+
+    </div>
+</body>
+
+</html>

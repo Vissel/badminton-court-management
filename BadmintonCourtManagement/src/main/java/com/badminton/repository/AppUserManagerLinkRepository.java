@@ -12,4 +12,7 @@ public interface AppUserManagerLinkRepository extends JpaRepository<AppUserManag
     Optional<AppUserManagerLink> findByManagedUser_UserId(Long managedUserId);
 
     void deleteByManagedUser_UserId(Long managedUserId);
+
+    /** Links where the given user is the manager (used when that account is removed). */
+    void deleteByManager_UserId(Long managerUserId);
 }

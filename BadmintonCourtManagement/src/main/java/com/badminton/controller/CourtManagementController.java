@@ -154,8 +154,7 @@ public class CourtManagementController {
 
     @PostMapping(value = "/addPlayerToCourt")
     public ResponseEntity<Boolean> addAvaPlayerToCourt(@RequestBody GameDTO gameDTO) throws Exception {
-        Boolean res = courtService.addAvailablePlayerToCourtArea(gameDTO.getPlayerName(), gameDTO.getCourt(),
-                gameDTO.getShuttleBalls().getFirst());
+        Boolean res = courtService.addAvailablePlayerToCourtArea(gameDTO.getPlayerName(), gameDTO.getCourt());
         // The boolean is the only signal that the court did not get its game row, and a rent
         // on that court is refused afterwards, so log it here where the chain starts.
         log.info("Add player {} into court {} returns {}", gameDTO.getPlayerName(),

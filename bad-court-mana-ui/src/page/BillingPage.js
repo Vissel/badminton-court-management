@@ -881,6 +881,12 @@ export default function BillingPage() {
         show={printBillId != null}
         billId={printBillId}
         onClose={() => setPrintBillId(null)}
+        onPrinted={() => {
+          // After the receipt is printed, also drop the detail pop-up that
+          // may be stacked behind it.
+          setPrintBillId(null);
+          setDetailBill(null);
+        }}
       />
     </Box>
   );

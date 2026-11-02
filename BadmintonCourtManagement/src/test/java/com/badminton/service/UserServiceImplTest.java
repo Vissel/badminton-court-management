@@ -47,7 +47,7 @@ class UserServiceImplTest {
     void administratorCanCreateCoordinatorButNotPeerAdministrator() {
         authenticate("admin1", "ROLE_ADMINISTRATOR");
         when(rsaKeyService.decrypt(any())).thenReturn("raw");
-        when(appUserRepository.findByUsername("admin1"))
+        when(appUserRepository.findActiveByUsername("admin1"))
                 .thenReturn(Optional.of(user(99L, "admin1", RoleName.ADMINISTRATOR)));
         when(roleRepository.findByRoleName(RoleName.COORDINATOR)).thenReturn(Optional.of(role(RoleName.COORDINATOR)));
         when(appUserRepository.save(any())).thenAnswer(inv -> {
@@ -66,9 +66,9 @@ class UserServiceImplTest {
     @Test
     void administratorCanDeactivateCoordinatorButNotAdministratorOrRoot() {
         authenticate("admin1", "ROLE_ADMINISTRATOR");
-        when(appUserRepository.findById(1L)).thenReturn(Optional.of(user(1L, "coord1", RoleName.COORDINATOR)));
-        when(appUserRepository.findById(2L)).thenReturn(Optional.of(user(2L, "admin2", RoleName.ADMINISTRATOR)));
-        when(appUserRepository.findById(3L)).thenReturn(Optional.of(user(3L, "rootuser", RoleName.ROOT)));
+        when(appUserRepository.findActiveById(1L)).thenReturn(Optional.of(user(1L, "coord1", RoleName.COORDINATOR)));
+        when(appUserRepository.findActiveById(2L)).thenReturn(Optional.of(user(2L, "admin2", RoleName.ADMINISTRATOR)));
+        when(appUserRepository.findActiveById(3L)).thenReturn(Optional.of(user(3L, "rootuser", RoleName.ROOT)));
         when(appUserRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         assertTrue(service.updateUserStatus(1L, false).isSuccess());
@@ -79,7 +79,7 @@ class UserServiceImplTest {
     @Test
     void administratorCannotAssignAdministratorRole() {
         authenticate("admin1", "ROLE_ADMINISTRATOR");
-        when(appUserRepository.findById(1L)).thenReturn(Optional.of(user(1L, "coord1", RoleName.COORDINATOR)));
+        when(appUserRepository.findActiveById(1L)).thenReturn(Optional.of(user(1L, "coord1", RoleName.COORDINATOR)));
 
         assertFalse(service.updateUserRole(1L, "ADMINISTRATOR").isSuccess());
         assertFalse(service.updateUserRole(1L, "ROOT").isSuccess());
@@ -90,8 +90,8 @@ class UserServiceImplTest {
         authenticate("rootuser", "ROLE_ROOT");
         AppUser self = user(1L, "rootuser", RoleName.ROOT);
         AppUser admin = user(2L, "admin1", RoleName.ADMINISTRATOR);
-        when(appUserRepository.findById(1L)).thenReturn(Optional.of(self));
-        when(appUserRepository.findById(2L)).thenReturn(Optional.of(admin));
+        when(appUserRepository.findActiveById(1L)).thenReturn(Optional.of(self));
+        when(appUserRepository.findActiveById(2L)).thenReturn(Optional.of(admin));
         when(appUserRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(roleRepository.findByRoleName(RoleName.COORDINATOR)).thenReturn(Optional.of(role(RoleName.COORDINATOR)));
 
@@ -105,8 +105,8 @@ class UserServiceImplTest {
     @Test
     void onlyRootCanAssignManagerToCoordinator() {
         authenticate("rootuser", "ROLE_ROOT");
-        when(appUserRepository.findById(1L)).thenReturn(Optional.of(user(1L, "coord1", RoleName.COORDINATOR)));
-        when(appUserRepository.findById(2L)).thenReturn(Optional.of(user(2L, "admin1", RoleName.ADMINISTRATOR)));
+        when(appUserRepository.findActiveById(1L)).thenReturn(Optional.of(user(1L, "coord1", RoleName.COORDINATOR)));
+        when(appUserRepository.findActiveById(2L)).thenReturn(Optional.of(user(2L, "admin1", RoleName.ADMINISTRATOR)));
 
         assertTrue(service.assignManager(1L, 2L).isSuccess());
         verify(linkRepository, times(1)).save(any());
@@ -119,9 +119,9 @@ class UserServiceImplTest {
     @Test
     void assignManagerRejectsNonCoordinatorAndNonAdministrator() {
         authenticate("rootuser", "ROLE_ROOT");
-        when(appUserRepository.findById(1L)).thenReturn(Optional.of(user(1L, "coord1", RoleName.COORDINATOR)));
-        when(appUserRepository.findById(2L)).thenReturn(Optional.of(user(2L, "coord2", RoleName.COORDINATOR)));
-        when(appUserRepository.findById(3L)).thenReturn(Optional.of(user(3L, "admin1", RoleName.ADMINISTRATOR)));
+        when(appUserRepository.findActiveById(1L)).thenReturn(Optional.of(user(1L, "coord1", RoleName.COORDINATOR)));
+        when(appUserRepository.findActiveById(2L)).thenReturn(Optional.of(user(2L, "coord2", RoleName.COORDINATOR)));
+        when(appUserRepository.findActiveById(3L)).thenReturn(Optional.of(user(3L, "admin1", RoleName.ADMINISTRATOR)));
 
         // Manager is not an administrator (both are coordinators).
         assertFalse(service.assignManager(1L, 2L).isSuccess());
@@ -133,7 +133,7 @@ class UserServiceImplTest {
     @Test
     void rootRoleIsNeverGrantable() {
         authenticate("rootuser", "ROLE_ROOT");
-        when(appUserRepository.findById(2L)).thenReturn(Optional.of(user(2L, "admin1", RoleName.ADMINISTRATOR)));
+        when(appUserRepository.findActiveById(2L)).thenReturn(Optional.of(user(2L, "admin1", RoleName.ADMINISTRATOR)));
 
         // A root actor cannot create another root account...
         assertFalse(service.saveAdminUser(dto("root2", "ROOT")));
@@ -154,8 +154,8 @@ class UserServiceImplTest {
         AppUser admin = user(2L, "admin1", RoleName.ADMINISTRATOR);
         AppUserManagerLink existing = new AppUserManagerLink();
         existing.setLinkId(7L);
-        when(appUserRepository.findById(1L)).thenReturn(Optional.of(coord));
-        when(appUserRepository.findById(2L)).thenReturn(Optional.of(admin));
+        when(appUserRepository.findActiveById(1L)).thenReturn(Optional.of(coord));
+        when(appUserRepository.findActiveById(2L)).thenReturn(Optional.of(admin));
         when(linkRepository.findByManagedUser_UserId(1L)).thenReturn(Optional.of(existing));
 
         assertTrue(service.assignManager(1L, 2L).isSuccess());
@@ -165,6 +165,124 @@ class UserServiceImplTest {
         // Hibernate flushes inserts before deletes.
         verify(linkRepository, never()).deleteByManagedUser_UserId(any());
         verify(linkRepository, times(1)).save(existing);
+    }
+
+    @Test
+    void onlyRootCanRemoveUserAndRootAccountsStay() {
+        AppUser coord = user(1L, "coord1", RoleName.COORDINATOR);
+        AppUser otherRoot = user(3L, "root2", RoleName.ROOT);
+        when(appUserRepository.findActiveById(1L)).thenReturn(Optional.of(coord));
+        when(appUserRepository.findActiveById(3L)).thenReturn(Optional.of(otherRoot));
+        when(appUserRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        // An administrator can never remove an account.
+        authenticate("admin1", "ROLE_ADMINISTRATOR");
+        assertFalse(service.deleteUser(1L).isSuccess());
+
+        // Root accounts are provisioned outside the app and stay untouchable.
+        SecurityContextHolder.clearContext();
+        authenticate("rootuser", "ROLE_ROOT");
+        assertFalse(service.deleteUser(3L).isSuccess());
+        assertFalse(otherRoot.isDeleted());
+
+        assertTrue(service.deleteUser(1L).isSuccess());
+        assertTrue(coord.isDeleted());
+        assertFalse(coord.isActive());
+        verify(appUserRepository, times(1)).save(any());
+        verify(jwtService, times(1)).revokeAllForUser(coord);
+        verify(linkRepository).deleteByManagedUser_UserId(1L);
+        verify(linkRepository).deleteByManager_UserId(1L);
+    }
+
+    @Test
+    void rootCannotRemoveItself() {
+        authenticate("rootuser", "ROLE_ROOT");
+        AppUser self = user(1L, "rootuser", RoleName.ROOT);
+        when(appUserRepository.findActiveById(1L)).thenReturn(Optional.of(self));
+
+        assertFalse(service.deleteUser(1L).isSuccess());
+        verify(appUserRepository, never()).save(any());
+    }
+
+    @Test
+    void removedUsersNeverReachTheList() {
+        authenticate("rootuser", "ROLE_ROOT");
+        when(appUserRepository.findAllActive())
+                .thenReturn(List.of(user(2L, "admin1", RoleName.ADMINISTRATOR)));
+        when(linkRepository.findAll()).thenReturn(List.of());
+
+        var result = service.listUsers();
+
+        assertTrue(result.isSuccess());
+        assertEquals(1, result.getData().size());
+        // The listing must query the active-only projection, never findAll().
+        verify(appUserRepository, never()).findAll();
+    }
+
+    @Test
+    void rootRemovesSeveralSelectedAccountsInOneRequest() {
+        authenticate("rootuser", "ROLE_ROOT");
+        AppUser coord1 = user(1L, "coord1", RoleName.COORDINATOR);
+        AppUser coord2 = user(2L, "coord2", RoleName.COORDINATOR);
+        AppUser admin = user(3L, "admin1", RoleName.ADMINISTRATOR);
+        when(appUserRepository.findActiveById(1L)).thenReturn(Optional.of(coord1));
+        when(appUserRepository.findActiveById(2L)).thenReturn(Optional.of(coord2));
+        when(appUserRepository.findActiveById(3L)).thenReturn(Optional.of(admin));
+        when(appUserRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        var result = service.deleteUsers(List.of(1L, 2L, 3L));
+
+        assertTrue(result.isSuccess());
+        assertEquals(3, result.getData().getRequested());
+        assertEquals(List.of("coord1", "coord2", "admin1"), result.getData().getRemoved());
+        assertTrue(result.getData().getSkipped().isEmpty());
+        assertTrue(coord1.isDeleted() && coord2.isDeleted() && admin.isDeleted());
+        verify(jwtService, times(3)).revokeAllForUser(any());
+        verify(linkRepository, times(3)).deleteByManagedUser_UserId(any());
+        verify(linkRepository, times(3)).deleteByManager_UserId(any());
+    }
+
+    @Test
+    void bulkRemovalSkipsTheActorRootAccountsAndMissingRows() {
+        authenticate("rootuser", "ROLE_ROOT");
+        AppUser self = user(1L, "rootuser", RoleName.ROOT);
+        AppUser otherRoot = user(2L, "root2", RoleName.ROOT);
+        AppUser coord = user(3L, "coord1", RoleName.COORDINATOR);
+        when(appUserRepository.findActiveById(1L)).thenReturn(Optional.of(self));
+        when(appUserRepository.findActiveById(2L)).thenReturn(Optional.of(otherRoot));
+        when(appUserRepository.findActiveById(3L)).thenReturn(Optional.of(coord));
+        when(appUserRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        var result = service.deleteUsers(List.of(1L, 2L, 3L, 99L));
+
+        // One blocked account must not cancel the rest of the selection.
+        assertTrue(result.isSuccess());
+        assertEquals(4, result.getData().getRequested());
+        assertEquals(List.of("coord1"), result.getData().getRemoved());
+        assertEquals(3, result.getData().getSkipped().size());
+        assertFalse(self.isDeleted());
+        assertFalse(otherRoot.isDeleted());
+        verify(appUserRepository, times(1)).save(any());
+    }
+
+    @Test
+    void bulkRemovalFailsWhenNothingInTheSelectionCanBeRemoved() {
+        authenticate("rootuser", "ROLE_ROOT");
+        when(appUserRepository.findActiveById(2L)).thenReturn(Optional.of(user(2L, "root2", RoleName.ROOT)));
+
+        var result = service.deleteUsers(List.of(2L));
+
+        assertFalse(result.isSuccess());
+        assertTrue(result.getErrorMessage().contains("root2"));
+        verify(appUserRepository, never()).save(any());
+    }
+
+    @Test
+    void administratorCannotRemoveUsersInBulk() {
+        authenticate("admin1", "ROLE_ADMINISTRATOR");
+
+        assertFalse(service.deleteUsers(List.of(1L, 2L)).isSuccess());
+        verify(appUserRepository, never()).findActiveById(any());
     }
 
     private void authenticate(String username, String authority) {

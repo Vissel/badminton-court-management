@@ -10,6 +10,7 @@ import Snackbar from "@mui/material/Snackbar";
 import Alert from "@mui/material/Alert";
 import MenuItem from "@mui/material/MenuItem";
 import Chip from "@mui/material/Chip";
+import Checkbox from "@mui/material/Checkbox";
 import InputAdornment from "@mui/material/InputAdornment";
 import Paper from "@mui/material/Paper";
 import Table from "@mui/material/Table";
@@ -18,6 +19,10 @@ import TableCell from "@mui/material/TableCell";
 import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
+import DialogActions from "@mui/material/DialogActions";
 import SearchIcon from "@mui/icons-material/Search";
 import api from "../api/index";
 import { emitApiError } from "../api/errorBus";
@@ -25,6 +30,7 @@ import { encryptPassword, withKeyRetry } from "../api/rsaCrypto";
 import { AuthContext } from "../context/AuthContext";
 import { getUsername } from "../api/tokenStore";
 import { normalizeSearchText } from "./TextUtils";
+import DraggableResizablePaper, { DIALOG_DRAG_HANDLE } from "./dialog/DraggableResizablePaper";
 
 const RESET_TOKEN_TTL = 3 * 60 * 1000;
 
@@ -46,6 +52,12 @@ function SuperAdminPage() {
   const [resetUserName, setResetUserName] = useState("");
   const [resetPass, setResetPass] = useState({ newPass: "", repeatNewPass: "" });
   const [secondsLeft, setSecondsLeft] = useState(0);
+  // Removal is confirmed first: the account is hidden, not erased. The same
+  // dialog serves the row button (one account) and the multi-select (many).
+  const [deleteTargets, setDeleteTargets] = useState([]);
+  const [deleting, setDeleting] = useState(false);
+  // Rows ticked in the table; only root can tick, and only removable rows.
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [snackbar, setSnackbar] = useState({ open: false, message: "" });
   const timerRef = useRef(null);
   const expireRef = useRef(null);
@@ -81,10 +93,49 @@ function SuperAdminPage() {
     })
     : users;
 
+  // Root alone removes accounts, never itself and never a provisioned root one.
+  const canRemove = (user) =>
+    isRoot && primaryRole(user) !== "Root" && user.username !== myUsername;
+  const selectableUsers = visibleUsers.filter(canRemove);
+  const selectedUsers = users.filter((user) => selectedIds.has(user.userId));
+  const allSelected =
+    selectableUsers.length > 0 &&
+    selectableUsers.every((user) => selectedIds.has(user.userId));
+  const someSelected = selectableUsers.some((user) => selectedIds.has(user.userId));
+
+  const toggleUserSelection = (userId) => {
+    setSelectedIds((ids) => {
+      const next = new Set(ids);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+  };
+
+  // Header checkbox ticks (or clears) every removable row currently listed.
+  const toggleAllSelection = () => {
+    setSelectedIds((ids) => {
+      const next = new Set(ids);
+      const clear = selectableUsers.every((user) => next.has(user.userId));
+      selectableUsers.forEach((user) => {
+        if (clear) next.delete(user.userId);
+        else next.add(user.userId);
+      });
+      return next;
+    });
+  };
+
   const loadUsers = useCallback(async () => {
     try {
       const res = await api.get("/api/v1/users");
-      if (res?.data?.success) setUsers(res.data.data || []);
+      if (res?.data?.success) {
+        const next = res.data.data || [];
+        setUsers(next);
+        // Accounts that left the list must not stay ticked.
+        setSelectedIds(
+          (ids) => new Set([...ids].filter((id) => next.some((user) => user.userId === id)))
+        );
+      }
     } catch (err) {
       console.error(err);
     }
@@ -196,6 +247,42 @@ function SuperAdminPage() {
     }
   };
 
+  // Root-only bulk removal: one request for the whole ticked selection. The
+  // backend returns what it removed and what it had to skip (root accounts,
+  // the signed-in account, rows that no longer exist).
+  const handleDeleteUsers = async () => {
+    if (deleteTargets.length === 0) return;
+    setDeleting(true);
+    try {
+      const res = await api.post("/api/v1/users/bulk-delete", {
+        userIds: deleteTargets.map((user) => user.userId),
+      });
+      if (res?.data?.success) {
+        const removed = res.data.data?.removed || [];
+        const skipped = res.data.data?.skipped || [];
+        setSnackbar({
+          open: true,
+          message:
+            removed.length === 1
+              ? `Đã xoá người dùng ${removed[0]}.`
+              : `Đã xoá ${removed.length} người dùng.`,
+        });
+        if (skipped.length > 0) {
+          emitApiError(`Không xoá được: ${skipped.join("; ")}.`);
+        }
+        setDeleteTargets([]);
+        setSelectedIds(new Set());
+        loadUsers();
+      } else {
+        emitApiError(res?.data?.errorMessage || "Không thể xoá người dùng.");
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const handleResetPassword = async () => {
     if (!resetPass.newPass || !resetPass.repeatNewPass) {
       emitApiError("Vui lòng điền đầy đủ mật khẩu mới.");
@@ -291,6 +378,24 @@ function SuperAdminPage() {
                 },
               }}
             />
+            {isRoot && selectedIds.size > 0 && (
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Typography variant="body2" color="text.secondary">
+                  Đã chọn {selectedIds.size}
+                </Typography>
+                <Button
+                  size="small"
+                  variant="contained"
+                  color="error"
+                  onClick={() => setDeleteTargets(selectedUsers)}
+                >
+                  Xoá đã chọn
+                </Button>
+                <Button size="small" onClick={() => setSelectedIds(new Set())}>
+                  Bỏ chọn
+                </Button>
+              </Stack>
+            )}
             <Typography variant="body2" color="text.secondary" sx={{ ml: "auto" }}>
               {visibleUsers.length}/{users.length} người dùng
             </Typography>
@@ -306,6 +411,17 @@ function SuperAdminPage() {
             <Table size="small" stickyHeader>
               <TableHead>
                 <TableRow>
+                  {isRoot && (
+                    <TableCell padding="checkbox">
+                      <Checkbox
+                        size="small"
+                        checked={allSelected}
+                        indeterminate={!allSelected && someSelected}
+                        onChange={toggleAllSelection}
+                        disabled={selectableUsers.length === 0}
+                      />
+                    </TableCell>
+                  )}
                   <TableCell>Tên đăng nhập</TableCell>
                   <TableCell>Vai trò</TableCell>
                   {isRoot && <TableCell>Quản lý</TableCell>}
@@ -317,7 +433,21 @@ function SuperAdminPage() {
                 {visibleUsers.map((user) => {
                   const manageable = canManage(user) && user.username !== myUsername;
                   return (
-                    <TableRow key={user.userId}>
+                    <TableRow
+                      key={user.userId}
+                      hover
+                      selected={selectedIds.has(user.userId)}
+                    >
+                      {isRoot && (
+                        <TableCell padding="checkbox">
+                          <Checkbox
+                            size="small"
+                            checked={selectedIds.has(user.userId)}
+                            disabled={!canRemove(user)}
+                            onChange={() => toggleUserSelection(user.userId)}
+                          />
+                        </TableCell>
+                      )}
                       <TableCell>{user.username}</TableCell>
                       <TableCell>
                         <TextField
@@ -372,22 +502,36 @@ function SuperAdminPage() {
                         />
                       </TableCell>
                       <TableCell align="right">
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          color={user.active ? "dark" : "success"}
-                          disabled={!manageable}
-                          onClick={() => handleStatusChange(user)}
-                        >
-                          {user.active ? "Vô hiệu" : "Kích hoạt"}
-                        </Button>
+                        <Stack direction="row" spacing={1} justifyContent="flex-end">
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color={user.active ? "dark" : "success"}
+                            disabled={!manageable}
+                            onClick={() => handleStatusChange(user)}
+                          >
+                            {user.active ? "Vô hiệu" : "Kích hoạt"}
+                          </Button>
+                          {/* Only root removes accounts, never itself and never
+                              another root account (those are provisioned). */}
+                          {canRemove(user) && (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              color="error"
+                              onClick={() => setDeleteTargets([user])}
+                            >
+                              Xoá
+                            </Button>
+                          )}
+                        </Stack>
                       </TableCell>
                     </TableRow>
                   );
                 })}
                 {visibleUsers.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={isRoot ? 6 : 5} align="center" sx={{ py: 4 }}>
+                    <TableCell colSpan={isRoot ? 7 : 5} align="center" sx={{ py: 4 }}>
                       <Typography color="text.secondary">
                         {userSearch
                           ? `Không tìm thấy "${userSearch}".`
@@ -533,6 +677,56 @@ function SuperAdminPage() {
           </Grid>
         )}
       </Grid>
+      <Dialog
+        open={deleteTargets.length > 0}
+        onClose={deleting ? undefined : () => setDeleteTargets([])}
+        maxWidth="sm"
+        fullWidth
+        PaperComponent={DraggableResizablePaper}
+      >
+        <DialogTitle className={DIALOG_DRAG_HANDLE} sx={{ cursor: "move" }}>
+          {deleteTargets.length === 1
+            ? `Xoá người dùng ${deleteTargets[0].username}`
+            : `Xoá ${deleteTargets.length} người dùng`}
+        </DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" color="text.secondary">
+            {deleteTargets.length === 1
+              ? "Tài khoản sẽ bị ẩn khỏi danh sách người dùng và không thể đăng nhập nữa."
+              : "Các tài khoản sau sẽ bị ẩn khỏi danh sách người dùng và không thể đăng nhập nữa."}{" "}
+            Hoá đơn, công nợ và các dữ liệu liên quan vẫn được giữ lại.
+          </Typography>
+          {deleteTargets.length > 1 && (
+            <Box sx={{ mt: 1.5, maxHeight: 180, overflowY: "auto" }}>
+              <Stack spacing={0.5}>
+                {deleteTargets.map((user) => (
+                  <Typography key={user.userId} variant="body2">
+                    • {user.username}{" "}
+                    <Typography component="span" variant="body2" color="text.secondary">
+                      ({vnLabel(primaryRole(user))})
+                    </Typography>
+                  </Typography>
+                ))}
+              </Stack>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteTargets([])} disabled={deleting}>
+            Đóng
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleDeleteUsers}
+            disabled={deleting}
+          >
+            {deleteTargets.length === 1
+              ? "Xoá người dùng"
+              : `Xoá ${deleteTargets.length} người dùng`}
+          </Button>
+        </DialogActions>
+      </Dialog>
       <Snackbar
         open={snackbar.open}
         autoHideDuration={4000}

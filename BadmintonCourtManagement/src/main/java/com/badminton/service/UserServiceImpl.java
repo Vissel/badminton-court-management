@@ -14,6 +14,7 @@ import com.badminton.repository.UserRepository;
 import com.badminton.requestmodel.RegisterUserDTO;
 import com.badminton.requestmodel.ResetUserRequest;
 import com.badminton.response.AppUserResponse;
+import com.badminton.response.UserDeleteBatchResponse;
 import com.badminton.response.result.Result;
 import com.badminton.util.RsaKeyService;
 import com.badminton.service.JwtService;
@@ -28,6 +29,7 @@ import org.springframework.util.Assert;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -38,6 +40,7 @@ public class UserServiceImpl implements UserService {
     private static final int ROOT_RANK = 3;
     private static final int ADMIN_RANK = 2;
     private static final int COORDINATOR_RANK = 1;
+    private static final String USER_NOT_PRESENT = "tài khoản không còn tồn tại";
 
     private final PasswordEncoder encoder;
     private final UserRepository playerRepository;
@@ -95,7 +98,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public ResponseEntity<String> generateResetPassToken(String userName) {
-        AppUser user = appUserRepository.findByUsername(userName).orElse(null);
+        AppUser user = appUserRepository.findActiveByUsername(userName).orElse(null);
         if (user == null)
             return ResponseEntity.badRequest().body("User is not present.");
         if (!canManageRank(rankOf(user)))
@@ -111,7 +114,7 @@ public class UserServiceImpl implements UserService {
             request.setNewPass(rsaKeyService.decrypt(request.getNewPass()));
             request.setRepeatNewPass(rsaKeyService.decrypt(request.getRepeatNewPass()));
             validateRequest(request);
-            AppUser user = appUserRepository.findByUsername(request.getUserName())
+            AppUser user = appUserRepository.findActiveByUsername(request.getUserName())
                     .orElseThrow(() -> new IllegalArgumentException("User is not present."));
             Assert.isTrue(canManageRank(rankOf(user)), "Insufficient permission to manage this user.");
             user.setPassword(encoder.encode(request.getNewPass()));
@@ -144,7 +147,7 @@ public class UserServiceImpl implements UserService {
         if (actorRank < ADMIN_RANK)
             return forbidden();
         List<AppUser> users = actorRank == ROOT_RANK
-                ? appUserRepository.findAll()
+                ? appUserRepository.findAllActive()
                 : linkedCoordinatorsOf(actor());
         Map<Long, AppUser> managersByManagedId = appUserManagerLinkRepository.findAll().stream()
                 .collect(Collectors.toMap(link -> link.getManagedUser().getUserId(), AppUserManagerLink::getManager));
@@ -172,6 +175,7 @@ public class UserServiceImpl implements UserService {
         return appUserManagerLinkRepository.findByManager_UserId(manager.getUserId()).stream()
                 .map(AppUserManagerLink::getManagedUser)
                 .filter(user -> rankOf(user) == COORDINATOR_RANK)
+                .filter(user -> !user.isDeleted())
                 .toList();
     }
 
@@ -263,6 +267,98 @@ public class UserServiceImpl implements UserService {
     }
 
     /**
+     * ROOT-only removal. The account is soft-deleted (is_deleted set) instead of
+     * erased: every user query filters it out and it can no longer sign in, while
+     * its row stays for the audit trail and the invoice/debt references. Root
+     * accounts are provisioned outside the app and are never removable here.
+     */
+    @Override
+    @Transactional
+    public Result<AppUserResponse> deleteUser(Long userId) {
+        if (actorRank() != ROOT_RANK)
+            return forbidden();
+        AppUser user = appUserRepository.findActiveById(userId).orElse(null);
+        if (user == null)
+            return badRequest(USER_NOT_PRESENT);
+        String blocked = removalBlockedReason(user);
+        if (blocked != null)
+            return badRequest(blocked);
+        Result<AppUserResponse> result = new Result<>();
+        result.setSuccess(true);
+        result.setData(AppUserResponse.from(markRemoved(user)));
+        return result;
+    }
+
+    /**
+     * ROOT-only bulk removal behind the multi-select in user management. Each
+     * selected account is checked on its own: the removable ones are hidden,
+     * the others are returned in {@code skipped}, so one blocked account never
+     * cancels the rest of the selection.
+     */
+    @Override
+    @Transactional
+    public Result<UserDeleteBatchResponse> deleteUsers(List<Long> userIds) {
+        if (actorRank() != ROOT_RANK)
+            return forbidden();
+        List<Long> ids = userIds == null
+                ? List.of()
+                : userIds.stream().filter(Objects::nonNull).distinct().toList();
+        if (ids.isEmpty())
+            return badRequest("Chưa chọn tài khoản nào để xoá.");
+        UserDeleteBatchResponse batch = new UserDeleteBatchResponse();
+        batch.setRequested(ids.size());
+        for (Long userId : ids) {
+            AppUser user = appUserRepository.findActiveById(userId).orElse(null);
+            if (user == null) {
+                batch.getSkipped().add(userId + ": " + USER_NOT_PRESENT);
+                continue;
+            }
+            String blocked = removalBlockedReason(user);
+            if (blocked != null) {
+                batch.getSkipped().add(user.getUsername() + ": " + blocked);
+                continue;
+            }
+            batch.getRemoved().add(markRemoved(user).getUsername());
+        }
+        if (batch.getRemoved().isEmpty())
+            return badRequest("Không xoá được tài khoản nào. " + String.join(" ", batch.getSkipped()));
+        Result<UserDeleteBatchResponse> result = new Result<>();
+        result.setSuccess(true);
+        result.setData(batch);
+        return result;
+    }
+
+    /**
+     * Reason a selected account must stay, or null when it may be removed.
+     * Root accounts are provisioned outside the app, and nobody removes the
+     * account they are signed in with.
+     */
+    private String removalBlockedReason(AppUser user) {
+        if (user.getUsername().equals(actorName()))
+            return "không thể xoá tài khoản đang đăng nhập";
+        if (rankOf(user) >= ROOT_RANK)
+            return "tài khoản Root không thể xoá";
+        return null;
+    }
+
+    /**
+     * Hides one account: soft-delete marker plus deactivation (keeps it unusable
+     * even if someone clears the flag by hand), manager links dropped in both
+     * directions and every refresh token revoked.
+     */
+    private AppUser markRemoved(AppUser user) {
+        user.setDeleted(true);
+        user.setActive(false);
+        Long userId = user.getUserId();
+        // Manager links point at the removed row: drop both directions so no
+        // coordinator listing keeps pointing at an account that is gone.
+        appUserManagerLinkRepository.deleteByManagedUser_UserId(userId);
+        appUserManagerLinkRepository.deleteByManager_UserId(userId);
+        jwtService.revokeAllForUser(user);
+        return appUserRepository.save(user);
+    }
+
+    /**
      * ROOT-only mapping between an administrator and one of their coordinators.
      * A null managerUserId clears the link; otherwise the coordinator is
      * (re)assigned to the given administrator.
@@ -272,7 +368,7 @@ public class UserServiceImpl implements UserService {
     public Result<AppUserResponse> assignManager(Long userId, Long managerUserId) {
         if (actorRank() != ROOT_RANK)
             return forbidden();
-        AppUser user = appUserRepository.findById(userId).orElse(null);
+        AppUser user = appUserRepository.findActiveById(userId).orElse(null);
         if (user == null)
             return badRequest("User is not present.");
         if (rankOf(user) != COORDINATOR_RANK)
@@ -281,7 +377,7 @@ public class UserServiceImpl implements UserService {
             appUserManagerLinkRepository.deleteByManagedUser_UserId(userId);
             return okUser(user, null);
         }
-        AppUser manager = appUserRepository.findById(managerUserId).orElse(null);
+        AppUser manager = appUserRepository.findActiveById(managerUserId).orElse(null);
         if (manager == null || !hasRole(manager, RoleName.ADMINISTRATOR))
             return badRequest("Manager must be an administrator.");
         linkManager(user, manager);
@@ -315,7 +411,7 @@ public class UserServiceImpl implements UserService {
      * accounts. PLAYER accounts are never manageable targets.
      */
     private AppUser findManageableUser(Long userId) {
-        AppUser user = appUserRepository.findById(userId).orElse(null);
+        AppUser user = appUserRepository.findActiveById(userId).orElse(null);
         if (user == null || !canManageRank(rankOf(user)))
             return null;
         return user;
@@ -360,7 +456,7 @@ public class UserServiceImpl implements UserService {
     /** The logged-in user entity, resolved from the security context. */
     private AppUser actor() {
         String name = actorName();
-        return name.isBlank() ? null : appUserRepository.findByUsername(name).orElse(null);
+        return name.isBlank() ? null : appUserRepository.findActiveByUsername(name).orElse(null);
     }
 
     private boolean hasAuthority(Authentication authentication, String authority) {

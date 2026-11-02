@@ -74,7 +74,8 @@ public class JwtService {
             refreshTokenRepository.deleteByUser(stored.getUser());
             throw new IllegalArgumentException("Refresh token reuse detected");
         }
-        if (stored.getExpiresAt().isBefore(Instant.now()) || !stored.getUser().isActive()) {
+        if (stored.getExpiresAt().isBefore(Instant.now()) || !stored.getUser().isActive()
+                || stored.getUser().isDeleted()) {
             stored.setRevoked(true);
             throw new IllegalArgumentException("Refresh token expired");
         }

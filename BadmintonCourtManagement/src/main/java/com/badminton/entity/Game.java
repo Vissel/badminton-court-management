@@ -63,17 +63,12 @@ public class Game {
      * @param court
      * @param shuttleBall
      */
-    public Game(Court court, ShuttleBall shuttleBall) {
+    public Game(Court court) {
         this.court = court;
 //        this.shuttleBall = shuttleBall;
 //        this.shuttleNumber = 1;
 
         // default Not start
         this.state = GameState.NOT_START.getValue();
-
-        // Add game shuttle map with default quantity is 1
-        shuttleMap = new ArrayList<>();
-        GameShuttleMap gameBallMap = new GameShuttleMap(this, shuttleBall, 1);
-        shuttleMap.add(gameBallMap);
     }
 }

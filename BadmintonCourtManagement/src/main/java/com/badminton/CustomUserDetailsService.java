@@ -18,11 +18,13 @@ public class CustomUserDetailsService implements UserDetailsService {
 
 	@Override
 	public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-		AppUser user = userRepository.findByUsername(username)
+		// A soft-deleted account is reported as missing: removal must also lock
+		// out a user who has not logged out yet.
+		AppUser user = userRepository.findActiveByUsername(username)
 				.orElseThrow(() -> new UsernameNotFoundException("User not found with username: " + username));
 		return org.springframework.security.core.userdetails.User.withUsername(user.getUsername())
 				.password(user.getPassword())
-				.disabled(!user.isActive())
+				.disabled(!user.isActive() || user.isDeleted())
 				.authorities(user.getRoles().stream()
 						.map(role -> new SimpleGrantedAuthority("ROLE_" + role.getRoleName().name()))
 						.toList())

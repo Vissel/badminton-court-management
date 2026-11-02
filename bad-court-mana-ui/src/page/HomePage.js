@@ -211,13 +211,7 @@ function HomePage() {
               playerInArea: {},
             },
           ],
-        },
-        shuttleBalls: [
-          {
-            shuttleName: ball,
-            shuttleCost: cost,
-          },
-        ],
+        }
       };
 
       api.post(`/court-mana/addPlayerToCourt`, gameDTO).catch((error) => {
@@ -1494,6 +1488,12 @@ function HomePage() {
             show={receiptBillId != null}
             billId={receiptBillId}
             onClose={() => setReceiptBillId(null)}
+            onPrinted={() => {
+              // After the receipt is printed, drop every payment pop-up.
+              setReceiptBillId(null);
+              setShowPayConfirmDialog(false);
+              setShowDialog(false);
+            }}
           />
           <Snackbar
             open={paySuccess}

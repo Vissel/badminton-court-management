@@ -1,5 +1,12 @@
 use `bad-court-management-db`;
 use `badminton-qa`;
+GRANT SUPER ON *.* TO 'badmintonqa-user'@'localhost';
+FLUSH PRIVILEGES;
+
+-- verify 
+SELECT VERSION();                                   -- which block to use
+SHOW GRANTS FOR 'badmintonqa-user'@'localhost'; 
+
 use `badminton-db`;
 select * from rent_by_time;
 select * from available_player ;
